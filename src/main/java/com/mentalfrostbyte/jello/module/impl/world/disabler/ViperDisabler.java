@@ -1,0 +1,107 @@
+package com.mentalfrostbyte.jello.module.impl.world.disabler;
+
+import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
+import com.mentalfrostbyte.jello.module.Module;
+import com.mentalfrostbyte.jello.module.data.ModuleCategory;
+import net.minecraft.network.IPacket;
+import net.minecraft.network.play.client.CPlayerPacket;
+import net.minecraft.network.play.server.SConfirmTransactionPacket;
+import net.minecraft.network.play.server.SKeepAlivePacket;
+import team.sdhq.eventBus.annotations.EventTarget;
+
+/*
+*  very bad code
+*
+*
+* */
+
+import java.util.ArrayList;
+
+public class ViperDisabler extends Module {
+    private int tickCounter;
+    private final ArrayList<ViperEvent> pendingEvents = new ArrayList<>();
+
+    public ViperDisabler() {
+        super(ModuleCategory.EXPLOIT, "Viper", "Disabler for ViperMC");
+    }
+
+    @Override
+    public void onEnable() {
+        this.tickCounter = 0;
+    }
+
+    @EventTarget
+    public void onUpdate(EventMotion event) {
+        if (this.isEnabled() && mc.player != null) {
+            this.tickCounter++;
+            boolean isPlayerInAir = event.getY() > mc.player.getPosY() - 1.0E-6 && event.getY() < mc.player.getPosY() + 1.0E-6;
+            if (isPlayerInAir) {
+                event.setY(mc.player.getPosY() + 0.4);
+                event.setOnGround(false);
+            }
+
+            if (this.tickCounter > 60) {
+                event.setY(mc.player.getPosY() + 0.4);
+                event.setOnGround(false);
+            } else {
+                for (int i = 0; i < 10; i++) {
+                    boolean isMiddleIteration = i > 2 && i < 8;
+                    double verticalAdjustment = isMiddleIteration ? 0.2 : -0.2;
+                    CPlayerPacket.PositionPacket positionPacket = new CPlayerPacket.PositionPacket(
+                            mc.player.getPosX(), mc.player.getPosY() + verticalAdjustment, mc.player.getPosZ(), true
+                    );
+                    mc.getConnection().sendPacket(positionPacket);
+                }
+
+                mc.player.lastReportedPosY = 0.0;
+                if (mc.player.ticksExisted <= 1) {
+                    this.pendingEvents.clear();
+                }
+
+                if (!this.pendingEvents.isEmpty()) {
+                    for (ViperEvent e : this.pendingEvents) {
+                        if (e.shouldSendPacket()) {
+                            mc.getConnection().sendPacket(e.packet);
+                            this.pendingEvents.remove(e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @EventTarget
+    public void onReceivePacket(EventReceivePacket event) {
+        if (this.isEnabled()) {
+            var incomingPacket = event.packet;
+            if (incomingPacket instanceof SKeepAlivePacket) {
+                event.cancelled = true;
+            }
+
+            if (incomingPacket instanceof SConfirmTransactionPacket) {
+                event.cancelled = true;
+            }
+        }
+    }
+
+    public static class ViperEvent {
+        private final long timeToSendPacket;
+        private final IPacket<?> packet;
+        public final ViperDisabler instance;
+
+        public ViperEvent(ViperDisabler instance, IPacket<?> packet, long delay) {
+            this.instance = instance;
+            this.packet = packet;
+            this.timeToSendPacket = System.currentTimeMillis() + delay;
+        }
+
+        public boolean shouldSendPacket() {
+            return this.timeToSendPacket - System.currentTimeMillis() < 0L;
+        }
+
+        public IPacket<?> getPacket() {
+            return this.packet;
+        }
+    }
+}
