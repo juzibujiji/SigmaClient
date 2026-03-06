@@ -6,6 +6,8 @@ import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.network.youtube.ThumbnailUtil;
 
 import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.util.client.render.Resources;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +47,7 @@ public class Thumbnails {
                         String fileName = file.getName();
                         String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
                         String audioUri = file.toURI().toString();
-                        String imageUri = null;
+                        String imageUri = Resources.artworkPNG.toString();
 
                         File pngFile = new File(musicDir, baseName + ".png");
                         File jpgFile = new File(musicDir, baseName + ".jpg");
@@ -96,4 +98,4 @@ public class Thumbnails {
             return true;
         }
     }
-}
+}
