@@ -14,6 +14,7 @@ import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
 import com.mentalfrostbyte.jello.util.system.math.SmoothInterpolator;
+import org.lwjgl.glfw.GLFW;
 import org.newdawn.slick.TrueTypeFont;
 
 import java.io.IOException;
@@ -21,10 +22,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static com.mentalfrostbyte.jello.util.game.MinecraftUtil.mc;
+
 public class ChangelogScreen extends CustomGuiScreen {
     public Animation animation = new Animation(380, 200, Animation.Direction.BACKWARDS);
     public ScrollableContentPanel scrollPanel;
     private static JsonArray cachedChangelog;
+
+    private int opencount = 0;
+    private boolean wasHovered = false;
+    public static boolean isEasteregg = false;
 
     private static final Path LOCAL_CHANGELOG_FILE = Path.of("run", "changelog.json");
     private static final String DEFAULT_LOCAL_CHANGELOG = """
@@ -113,6 +120,10 @@ public class ChangelogScreen extends CustomGuiScreen {
                 versionText,
                 RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6f * partialTicks)
         );
+        if (opencount >= 10) {
+            GLFW.glfwSetWindowTitle(mc.getMainWindow().getHandle(), "Sigma Never Die!!!");
+            isEasteregg = true;
+        }
         super.draw(partialTicks);
     }
 
@@ -138,6 +149,15 @@ public class ChangelogScreen extends CustomGuiScreen {
             Client.logger.error("Failed to read local changelog file: " + LOCAL_CHANGELOG_FILE, e);
             return DEFAULT_LOCAL_CHANGELOG;
         }
+    }
+
+    @Override
+    public void setHovered(boolean hovered) {
+        if (hovered && !wasHovered) {
+            opencount++;
+        }
+        super.setHovered(hovered);
+        wasHovered = hovered;
     }
 
     private void ensureLocalChangelogFile() throws IOException {

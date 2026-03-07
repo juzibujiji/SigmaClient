@@ -4,9 +4,16 @@ import com.google.common.collect.Queues;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
+import com.viaversion.viabackwards.protocol.v1_19to1_18_2.Protocol1_19To1_18_2;
+import com.viaversion.viaversion.api.Via;
 import com.viaversion.viaversion.api.connection.UserConnection;
+import com.viaversion.viaversion.api.minecraft.BlockPosition;
+import com.viaversion.viaversion.api.protocol.packet.PacketWrapper;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import com.viaversion.viaversion.api.type.Types;
 import com.viaversion.viaversion.connection.UserConnectionImpl;
 import com.viaversion.viaversion.protocol.ProtocolPipelineImpl;
+import com.viaversion.viaversion.protocols.v1_18_2to1_19.packet.ServerboundPackets1_19;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import de.florianmichael.vialoadingbase.netty.event.CompressionReorderEvent;
 import de.florianmichael.viamcp.MCPVLBPipeline;
@@ -44,8 +51,13 @@ import javax.crypto.Cipher;
 
 import net.minecraft.network.login.ServerLoginNetHandler;
 import net.minecraft.network.play.ServerPlayNetHandler;
+import net.minecraft.network.play.client.CHeldItemChangePacket;
+import net.minecraft.network.play.client.CPlayerDiggingPacket;
+import net.minecraft.network.play.client.CPlayerTryUseItemOnBlockPacket;
+import net.minecraft.network.play.client.CPlayerTryUseItemPacket;
 import net.minecraft.network.play.server.SDisconnectPacket;
 import net.minecraft.util.LazyValue;
+import net.minecraft.util.math.BlockRayTraceResult;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TranslationTextComponent;
@@ -198,6 +210,17 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
         this.sendPacket(packetIn, null);
     }
 
+    //1.19+ c07 c08 fix
+    private static int count1_19 = 0;
+
+    private int AddCount1_19() {
+        return ++count1_19;
+    }
+
+    public static void setCount1_19(int count) {
+        count1_19 = count;
+    }
+
     public void sendPacket(IPacket<?> packetIn, @Nullable GenericFutureListener<? extends Future<? super Void>> p_201058_2_) {
         EventSendPacket event = new EventSendPacket(packetIn);
         EventBus.call(event);
@@ -205,7 +228,109 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
         if (event.cancelled) {
             return;
         }
+        IPacket<?> packet = event.packet;
+        UserConnection var4;
+        if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
+            if (packet instanceof CHeldItemChangePacket) {
+                UserConnection userConnection = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                PacketWrapper wrapper = PacketWrapper.create(ServerboundPackets1_19.SET_CARRIED_ITEM, userConnection);
+                wrapper.write(Types.SHORT, (short) ((CHeldItemChangePacket) packet).getSlotId());
+                wrapper.sendToServer(Protocol1_19To1_18_2.class);
+                return;
+            } else if (packet instanceof CPlayerTryUseItemPacket) {
+                var4 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM, var4);
+                var5.write(Types.VAR_INT, ((CPlayerTryUseItemPacket) packet).getHand().ordinal());
+                var5.write(Types.VAR_INT, AddCount1_19());
+                var5.sendToServer(Protocol1_19To1_18_2.class);
+                return;
+            } else if (packet instanceof CPlayerTryUseItemOnBlockPacket) {
+                UserConnection var14 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                PacketWrapper var16 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM_ON, var14);
+                //hand
+                var16.write(Types.VAR_INT, ((CPlayerTryUseItemOnBlockPacket) packet).getHand().ordinal());
+                //position
+                var16.write(Types.BLOCK_POSITION1_14, new BlockPosition(((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getPos().getX(), ((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getPos().getY(), ((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getPos().getZ()));
+                //blockface
+                var16.write(Types.VAR_INT, ((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getFace().getIndex());
 
+                //facing
+                BlockRayTraceResult hitResult = ((CPlayerTryUseItemOnBlockPacket) packet).func_218794_c();
+                float f = (float)(hitResult.getHitVec().x - hitResult.getPos().getX());
+                float f1 = (float)(hitResult.getHitVec().y - hitResult.getPos().getY());
+                float f2 = (float)(hitResult.getHitVec().z - hitResult.getPos().getZ());
+                var16.write(Types.FLOAT, f);
+                var16.write(Types.FLOAT, f1);
+                var16.write(Types.FLOAT, f2);
+
+                var16.write(Types.BOOLEAN, ((CPlayerTryUseItemOnBlockPacket) packet).func_218794_c().isInside());
+                var16.write(Types.VAR_INT, AddCount1_19());
+                var16.sendToServer(Protocol1_19To1_18_2.class);
+                return;
+            } else if (packet instanceof CPlayerDiggingPacket) {
+                if (((CPlayerDiggingPacket)packet).getAction() == CPlayerDiggingPacket.Action.START_DESTROY_BLOCK) {
+                    UserConnection var6 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                    PacketWrapper var7 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, var6);
+                    var7.write(Types.VAR_INT, CPlayerDiggingPacket.Action.START_DESTROY_BLOCK.ordinal());
+                    var7.write(Types.BLOCK_POSITION1_14, new BlockPosition(((CPlayerDiggingPacket)packet).getPosition().getX(), ((CPlayerDiggingPacket)packet).getPosition().getY(), ((CPlayerDiggingPacket)packet).getPosition().getZ()));
+                    var7.write(Types.BYTE, (byte)((CPlayerDiggingPacket)packet).getFacing().ordinal());
+                    var7.write(Types.VAR_INT, AddCount1_19());
+                    var7.sendToServer(Protocol1_19To1_18_2.class);
+                    return;
+                } else if (((CPlayerDiggingPacket)packet).getAction() == CPlayerDiggingPacket.Action.STOP_DESTROY_BLOCK) {
+                    var4 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                    PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, var4);
+                    var5.write(Types.VAR_INT, CPlayerDiggingPacket.Action.STOP_DESTROY_BLOCK.ordinal());
+                    var5.write(Types.BLOCK_POSITION1_14, new BlockPosition(((CPlayerDiggingPacket)packet).getPosition().getX(), ((CPlayerDiggingPacket)packet).getPosition().getY(), ((CPlayerDiggingPacket)packet).getPosition().getZ()));
+                    var5.write(Types.BYTE, (byte)((CPlayerDiggingPacket)packet).getFacing().ordinal());
+                    var5.write(Types.VAR_INT, AddCount1_19());
+                    var5.sendToServer(Protocol1_19To1_18_2.class);
+                    return;
+                }
+            } /*else if (packet instanceof CClickWindowPacket) {
+                int mode = ((CClickWindowPacket)packet).getClickType().ordinal();
+                int windowId = ((CClickWindowPacket)packet).getWindowId();
+                int slotId = ((CClickWindowPacket)packet).getSlotId();
+                int mouseButtonClicked = ((CClickWindowPacket)packet).getUsedButton();
+                if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19) && ViaLoadingBase.getInstance().getTargetVersion().olderThan(ProtocolVersion.v1_20_2) & (mode < 5 && mode > 0 || !(mc.currentScreen instanceof CraftingScreen) && !(mc.currentScreen instanceof InventoryScreen) && !(mc.currentScreen instanceof ChestScreen) && !(mc.currentScreen instanceof FurnaceScreen))) {
+                    UserConnection var9 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                    ProtocolInfo var10 = var9.getProtocolInfo();
+                    Class var11 = null;
+                    ProtocolVersion var12 = ViaLoadingBase.getInstance().getTargetVersion();
+                    PacketWrapperImpl var13 = null;
+                    if (var12 == ProtocolVersion.v1_20) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19_4.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_20To1_19_4.class;
+                    } else if (var12 == ProtocolVersion.v1_19_4) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19_4.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_19_4To1_19_3.class;
+                    } else if (var12 == ProtocolVersion.v1_19_3) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19_3.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_19_3To1_19_1.class;
+                    } else if (var12 == ProtocolVersion.v1_19_1) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19_1.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_19_1To1_19.class;
+                    } else if (var12 == ProtocolVersion.v1_19) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_19To1_18_2.class;
+                    }
+                    int var14 = VLBViaDecodeHandler.stateId;
+                    assert (var13 != null);
+                    var13.write(Types.BYTE, (byte)windowId);
+                    var13.write(Types.VAR_INT, var14);
+                    var13.write(Types.SHORT, (short)slotId);
+                    var13.write(Types.BYTE, (byte)mouseButtonClicked);
+                    var13.write(Types.VAR_INT, mode);
+                    var13.write(Types.VAR_INT, 0);
+                    var13.write(Types.BYTE, (byte)0);
+                    if (var10.getPipeline().contains(var11)) {
+                        //InventoryUtils.INSTANCE.getCLICK_TIMER().reset();
+                        var13.sendToServer(var11);
+                        return;
+                    }
+                }
+            }*/
+        }
         if (this.isChannelOpen()) {
             this.flushOutboundQueue();
             this.dispatchPacket(packetIn, p_201058_2_);
@@ -220,7 +345,109 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
 
     public void sendNoEventPacket(IPacket<?> packetIn, @Nullable GenericFutureListener<? extends Future<? super Void>> p_201058_2_) {
         if (this.isChannelOpen()) {
+            IPacket<?> packet = packetIn;
+            UserConnection var4;
+            if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
+                if (packet instanceof CHeldItemChangePacket) {
+                    UserConnection userConnection = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                    PacketWrapper wrapper = PacketWrapper.create(ServerboundPackets1_19.SET_CARRIED_ITEM, userConnection);
+                    wrapper.write(Types.SHORT, (short) ((CHeldItemChangePacket) packet).getSlotId());
+                    wrapper.sendToServer(Protocol1_19To1_18_2.class);
+                    return;
+                } else if (packet instanceof CPlayerTryUseItemPacket) {
+                    var4 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                    PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM, var4);
+                    var5.write(Types.VAR_INT, ((CPlayerTryUseItemPacket) packet).getHand().ordinal());
+                    var5.write(Types.VAR_INT, AddCount1_19());
+                    var5.sendToServer(Protocol1_19To1_18_2.class);
+                    return;
+                } else if (packet instanceof CPlayerTryUseItemOnBlockPacket) {
+                    UserConnection var14 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                    PacketWrapper var16 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM_ON, var14);
+                    //hand
+                    var16.write(Types.VAR_INT, ((CPlayerTryUseItemOnBlockPacket) packet).getHand().ordinal());
+                    //position
+                    var16.write(Types.BLOCK_POSITION1_14, new BlockPosition(((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getPos().getX(), ((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getPos().getY(), ((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getPos().getZ()));
+                    //blockface
+                    var16.write(Types.VAR_INT, ((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getFace().getIndex());
 
+                    //facing
+                    BlockRayTraceResult hitResult = ((CPlayerTryUseItemOnBlockPacket) packet).func_218794_c();
+                    float f = (float)(hitResult.getHitVec().x - hitResult.getPos().getX());
+                    float f1 = (float)(hitResult.getHitVec().y - hitResult.getPos().getY());
+                    float f2 = (float)(hitResult.getHitVec().z - hitResult.getPos().getZ());
+                    var16.write(Types.FLOAT, f);
+                    var16.write(Types.FLOAT, f1);
+                    var16.write(Types.FLOAT, f2);
+
+                    var16.write(Types.BOOLEAN, ((CPlayerTryUseItemOnBlockPacket) packet).func_218794_c().isInside());
+                    var16.write(Types.VAR_INT, AddCount1_19());
+                    var16.sendToServer(Protocol1_19To1_18_2.class);
+                    return;
+                } else if (packet instanceof CPlayerDiggingPacket) {
+                    if (((CPlayerDiggingPacket)packet).getAction() == CPlayerDiggingPacket.Action.START_DESTROY_BLOCK) {
+                        UserConnection var6 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                        PacketWrapper var7 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, var6);
+                        var7.write(Types.VAR_INT, CPlayerDiggingPacket.Action.START_DESTROY_BLOCK.ordinal());
+                        var7.write(Types.BLOCK_POSITION1_14, new BlockPosition(((CPlayerDiggingPacket)packet).getPosition().getX(), ((CPlayerDiggingPacket)packet).getPosition().getY(), ((CPlayerDiggingPacket)packet).getPosition().getZ()));
+                        var7.write(Types.BYTE, (byte)((CPlayerDiggingPacket)packet).getFacing().ordinal());
+                        var7.write(Types.VAR_INT, AddCount1_19());
+                        var7.sendToServer(Protocol1_19To1_18_2.class);
+                        return;
+                    } else if (((CPlayerDiggingPacket)packet).getAction() == CPlayerDiggingPacket.Action.STOP_DESTROY_BLOCK) {
+                        var4 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                        PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, var4);
+                        var5.write(Types.VAR_INT, CPlayerDiggingPacket.Action.STOP_DESTROY_BLOCK.ordinal());
+                        var5.write(Types.BLOCK_POSITION1_14, new BlockPosition(((CPlayerDiggingPacket)packet).getPosition().getX(), ((CPlayerDiggingPacket)packet).getPosition().getY(), ((CPlayerDiggingPacket)packet).getPosition().getZ()));
+                        var5.write(Types.BYTE, (byte)((CPlayerDiggingPacket)packet).getFacing().ordinal());
+                        var5.write(Types.VAR_INT, AddCount1_19());
+                        var5.sendToServer(Protocol1_19To1_18_2.class);
+                        return;
+                    }
+                } /*else if (packet instanceof CClickWindowPacket) {
+                int mode = ((CClickWindowPacket)packet).getClickType().ordinal();
+                int windowId = ((CClickWindowPacket)packet).getWindowId();
+                int slotId = ((CClickWindowPacket)packet).getSlotId();
+                int mouseButtonClicked = ((CClickWindowPacket)packet).getUsedButton();
+                if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19) && ViaLoadingBase.getInstance().getTargetVersion().olderThan(ProtocolVersion.v1_20_2) & (mode < 5 && mode > 0 || !(mc.currentScreen instanceof CraftingScreen) && !(mc.currentScreen instanceof InventoryScreen) && !(mc.currentScreen instanceof ChestScreen) && !(mc.currentScreen instanceof FurnaceScreen))) {
+                    UserConnection var9 = Via.getManager().getConnectionManager().getConnections().iterator().next();
+                    ProtocolInfo var10 = var9.getProtocolInfo();
+                    Class var11 = null;
+                    ProtocolVersion var12 = ViaLoadingBase.getInstance().getTargetVersion();
+                    PacketWrapperImpl var13 = null;
+                    if (var12 == ProtocolVersion.v1_20) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19_4.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_20To1_19_4.class;
+                    } else if (var12 == ProtocolVersion.v1_19_4) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19_4.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_19_4To1_19_3.class;
+                    } else if (var12 == ProtocolVersion.v1_19_3) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19_3.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_19_3To1_19_1.class;
+                    } else if (var12 == ProtocolVersion.v1_19_1) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19_1.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_19_1To1_19.class;
+                    } else if (var12 == ProtocolVersion.v1_19) {
+                        var13 = (PacketWrapperImpl)PacketWrapper.create(ServerboundPackets1_19.CONTAINER_CLICK, var9);
+                        var11 = Protocol1_19To1_18_2.class;
+                    }
+                    int var14 = VLBViaDecodeHandler.stateId;
+                    assert (var13 != null);
+                    var13.write(Types.BYTE, (byte)windowId);
+                    var13.write(Types.VAR_INT, var14);
+                    var13.write(Types.SHORT, (short)slotId);
+                    var13.write(Types.BYTE, (byte)mouseButtonClicked);
+                    var13.write(Types.VAR_INT, mode);
+                    var13.write(Types.VAR_INT, 0);
+                    var13.write(Types.BYTE, (byte)0);
+                    if (var10.getPipeline().contains(var11)) {
+                        //InventoryUtils.INSTANCE.getCLICK_TIMER().reset();
+                        var13.sendToServer(var11);
+                        return;
+                    }
+                }
+            }*/
+            }
             this.flushOutboundQueue();
             this.dispatchPacket(packetIn, p_201058_2_);
         } else {

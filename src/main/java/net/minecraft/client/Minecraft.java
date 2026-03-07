@@ -8,6 +8,7 @@ import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.EventRunLoop;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventPlace;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventUseItem;
+import com.mentalfrostbyte.jello.gui.impl.jello.mainmenu.ChangelogScreen;
 import com.mentalfrostbyte.jello.util.client.ClientMode;
 import com.mentalfrostbyte.jello.event.impl.game.action.EventClick;
 import com.mentalfrostbyte.jello.event.impl.game.EventRayTraceResult;
@@ -555,7 +556,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
             }
         }
 
-        return stringbuilder.toString();
+        return ChangelogScreen.isEasteregg ? ("Sigma Never Die!!!") : stringbuilder.toString();
     }
 
     private SocialInteractionsService func_244735_a(YggdrasilAuthenticationService p_244735_1_, GameConfiguration p_244735_2_) {

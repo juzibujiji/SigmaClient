@@ -224,10 +224,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     GL11.glTranslated(60.0, mc.getMainWindow().getHeight() - 55, 0.0);
                     GL11.glScalef(scale, scale, 0.0F);
                     GL11.glTranslated(-60.0, -(mc.getMainWindow().getHeight() - 55), 0.0);
-                    RenderUtil.drawImage(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F,
-                            this.notificationImage);
-                    RenderUtil.drawRoundedRect(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F,
-                            14.0F, 0.3F);
+                    RenderUtil.drawImage(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F, this.notificationImage);
+                    RenderUtil.drawRoundedRect(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F, 14.0F, 0.3F);
                     GL11.glPopMatrix();
                     String[] titleSplit = this.songTitle.split(" - ");
                     if (titleSplit.length <= 1) {
