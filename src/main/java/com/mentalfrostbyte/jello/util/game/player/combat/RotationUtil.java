@@ -21,10 +21,9 @@ public class RotationUtil {
     public static float field42014;
     public static long field42015;
 
-    public static float calculate(float current, float var1, float max) {
-        float wrapped = MathHelper.wrapDegrees(var1 - current);
-
-        return current + wrapped;
+    public static float wrap(float start, float end) {
+        float wrappedDelta = MathHelper.wrapDegrees(end - start);
+        return start + wrappedDelta;
     }
 
 //    public static float[] advancedRotation(LivingEntity var0, double var1, double var3, double var5) {
@@ -67,8 +66,8 @@ public class RotationUtil {
 
         // Calculate horizontal distance and yaw/pitch angles
         double horizontalDistance = MathHelper.sqrt(deltaX * deltaX + deltaZ * deltaZ);
-        float yaw = calculate(mc.player.rotationYaw, (float)(Math.atan2(deltaZ, deltaX) * 180.0 / Math.PI) - 90.0F, 360.0F);
-        float pitch = calculate(mc.player.rotationPitch, (float)(-(Math.atan2(deltaY, horizontalDistance) * 180.0 / Math.PI)), 360.0F);
+        float yaw = wrap(mc.player.rotationYaw, (float)(Math.atan2(deltaZ, deltaX) * 180.0 / Math.PI) - 90.0F);
+        float pitch = wrap(mc.player.rotationPitch, (float)(-(Math.atan2(deltaY, horizontalDistance) * 180.0 / Math.PI)));
 
         // Return the calculated yaw and pitch
         return new float[]{yaw, pitch};
@@ -79,8 +78,8 @@ public class RotationUtil {
         double var11 = var0.getPosY() - (double) mc.player.getEyeHeight() - 0.02F + (double)var0.getEyeHeight() - var3 - Math.random();
         double var13 = var0.getPosZ() - var5 + 0.25 - Math.random() * 0.5;
         double var15 = MathHelper.sqrt(var9 * var9 + var13 * var13);
-        float var17 = calculate(mc.player.rotationYaw, (float)(Math.atan2(var13, var9) * 180.0 / Math.PI) - 90.0F, 360.0F);
-        float var18 = calculate(mc.player.rotationPitch, (float)(-(Math.atan2(var11, var15) * 180.0 / Math.PI)), 360.0F);
+        float var17 = wrap(mc.player.rotationYaw, (float)(Math.atan2(var13, var9) * 180.0 / Math.PI) - 90.0F);
+        float var18 = wrap(mc.player.rotationPitch, (float)(-(Math.atan2(var11, var15) * 180.0 / Math.PI)));
         return new float[]{var17, var18};
     }
 
@@ -92,8 +91,8 @@ public class RotationUtil {
         double var17 = var0.getPosY() - var3 - (double) mc.player.getEyeHeight() + (double)var0.getEyeHeight() - 0.02F - 0.6F - var11;
         double var19 = var0.getPosZ() - var5 + var13;
         double var21 = MathHelper.sqrt(var15 * var15 + var19 * var19);
-        float var23 = calculate(mc.player.rotationYaw, (float)(Math.atan2(var19, var15) * 180.0 / Math.PI) - 90.0F, 360.0F);
-        float var24 = calculate(mc.player.rotationPitch, (float)(-(Math.atan2(var17, var21) * 180.0 / Math.PI)), 360.0F);
+        float var23 = wrap(mc.player.rotationYaw, (float)(Math.atan2(var19, var15) * 180.0 / Math.PI) - 90.0F);
+        float var24 = wrap(mc.player.rotationPitch, (float)(-(Math.atan2(var17, var21) * 180.0 / Math.PI)));
         return new float[]{var23, var24};
     }
 
@@ -118,8 +117,8 @@ public class RotationUtil {
                 double var19 = var0.getPosY() - var3 - (double) mc.player.getEyeHeight() + (double)var0.getEyeHeight() - 0.02F - 0.6F - var13;
                 double var21 = var0.getPosZ() - var5 + var15;
                 double var23 = MathHelper.sqrt(var17 * var17 + var21 * var21);
-                field42013 = calculate(mc.player.rotationYaw, (float)(Math.atan2(var21, var17) * 180.0 / Math.PI) - 90.0F, 360.0F);
-                field42014 = calculate(mc.player.rotationPitch, (float)(-(Math.atan2(var19, var23) * 180.0 / Math.PI)), 360.0F);
+                field42013 = wrap(mc.player.rotationYaw, (float)(Math.atan2(var21, var17) * 180.0 / Math.PI) - 90.0F);
+                field42014 = wrap(mc.player.rotationPitch, (float)(-(Math.atan2(var19, var23) * 180.0 / Math.PI)));
                 return new float[]{field42013, field42014};
             } else {
                 return new float[]{field42013, field42014};
@@ -161,8 +160,8 @@ public class RotationUtil {
         double var6 = var1.z - var0.z;
         double var8 = var1.y - var0.y;
         double var10 = MathHelper.sqrt(var4 * var4 + var6 * var6);
-        float var12 = calculate(0.0F, (float)(Math.atan2(var6, var4) * 180.0 / Math.PI) - 90.0F, 360.0F);
-        float var13 = calculate(mc.player.rotationPitch, (float)(-(Math.atan2(var8, var10) * 180.0 / Math.PI)), 360.0F);
+        float var12 = wrap(0.0F, (float)(Math.atan2(var6, var4) * 180.0 / Math.PI) - 90.0F);
+        float var13 = wrap(mc.player.rotationPitch, (float)(-(Math.atan2(var8, var10) * 180.0 / Math.PI)));
         return new float[]{var12, var13};
     }
 

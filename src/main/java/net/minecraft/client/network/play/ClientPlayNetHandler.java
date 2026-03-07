@@ -385,6 +385,10 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
         this.client.playerController = new PlayerController(this.client, this);
 
+        if (this.client.getCurrentServerData() != null) {
+            AutoReconnect.serverData = this.client.getCurrentServerData();
+        }
+
         if (!this.netManager.isLocalChannel()) {
             TagRegistryManager.fetchTags();
         }
@@ -906,8 +910,7 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
         if (this.guiScreenServer != null) {
             this.client.displayGuiScreen(new DisconnectedScreen(this.guiScreenServer, field_243491_b, reason));
             if (Client.getInstance().moduleManager.getModuleByClass(AutoReconnect.class).isEnabled()) {
-                ServerData serverData = ((AutoReconnect) (Client.getInstance().moduleManager
-                        .getModuleByClass(AutoReconnect.class))).serverData;
+                ServerData serverData = AutoReconnect.serverData;
                 if (serverData != null)
                     Minecraft.getInstance().displayGuiScreen(new ConnectingScreen(Minecraft.getInstance().currentScreen,
                             Minecraft.getInstance(), serverData));
@@ -922,8 +925,7 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
             this.client.displayGuiScreen(
                     new DisconnectedScreen(new MultiplayerScreen(new MainMenuHolder()), field_243491_b, reason));
             if (Client.getInstance().moduleManager.getModuleByClass(AutoReconnect.class).isEnabled()) {
-                ServerData serverData = ((AutoReconnect) (Client.getInstance().moduleManager
-                        .getModuleByClass(AutoReconnect.class))).serverData;
+                ServerData serverData = AutoReconnect.serverData;
                 if (serverData != null)
                     Minecraft.getInstance().displayGuiScreen(new ConnectingScreen(Minecraft.getInstance().currentScreen,
                             Minecraft.getInstance(), serverData));

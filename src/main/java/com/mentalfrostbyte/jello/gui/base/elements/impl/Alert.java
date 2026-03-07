@@ -155,6 +155,32 @@ public class Alert extends Element {
                                                 return null;
                                             });
                                 }
+                                case "Token login" -> {
+                                    this.inputMap = this.method13599();
+                                    String token = this.inputMap.get("Email");
+                                    if (token != null && !token.isEmpty()) {
+                                        new Thread(() -> {
+                                            Account account = new Account("Token Account", "Token ID", token);
+                                            try {
+                                                if (Client.getInstance().accountManager.login(account)) {
+                                                    if (!Client.getInstance().accountManager.containsAccount(account)) {
+                                                        Client.getInstance().accountManager.updateAccount(account);
+                                                    }
+                                                    Minecraft.getInstance().execute(() -> {
+                                                        this.method13603(false);
+                                                        AltManagerScreen.instance.updateAccountList(false);
+                                                    });
+                                                } else {
+                                                    Client.getInstance().soundManager.play("error");
+                                                }
+                                            } catch (Exception e) {
+                                                Client.getInstance().soundManager.play("error");
+                                            }
+                                        }).start();
+                                    } else {
+                                        Client.getInstance().soundManager.play("error");
+                                    }
+                                }
                                 default -> this.onButtonClick();
                             }
                         });
@@ -350,17 +376,6 @@ public class Alert extends Element {
         }
 
         this.setReAddChildren(var1);
-    }
-
-    @Override
-	protected void finalize() throws Throwable {
-        try {
-            if (this.field21281 != null) {
-                Client.getInstance().addTexture(this.field21281);
-            }
-        } finally {
-            super.finalize();
-        }
     }
 
     public final void method13604(Class9448 var1) {

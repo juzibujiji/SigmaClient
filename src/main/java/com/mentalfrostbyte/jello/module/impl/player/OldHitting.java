@@ -120,10 +120,7 @@ public class OldHitting extends Module {
         if (this.isEnabled() || mc.gameSettings.keyBindUseItem.isKeyDown() || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
             if (mc.player != null) {
                 if (event.packet instanceof SEntityEquipmentPacket pack) {
-                    pack.func_241790_c_().removeIf(pair -> pack.getEntityID() == mc.player.getEntityId()
-                            && pair.getFirst() == EquipmentSlotType.OFFHAND
-                            && pair.getSecond() != null
-                            && pair.getSecond().getItem() == Items.SHIELD);
+                    pack.func_241790_c_().removeIf(pair -> pack.getEntityID() == mc.player.getEntityId() && pair.getFirst() == EquipmentSlotType.OFFHAND && pair.getSecond() != null && pair.getSecond().getItem() == Items.SHIELD);
                 }
             }
         }
@@ -139,7 +136,10 @@ public class OldHitting extends Module {
             if (event.method13926() && event.getHand() == HandSide.LEFT && event.getItemStack().getItem() instanceof ShieldItem) {
                 event.renderBlocking(false);
             } else if (event.getHand() != HandSide.LEFT || !field23408) {
-                if (field23408 && event.method13926() && this.isEnabled() && event.getItemStack().getItem() instanceof SwordItem) {
+                if ((field23408 || Client.getInstance().moduleManager.getModuleByClass(KillAura.class).isEnabled()
+                        && KillAura.targetEntity != null
+                        && Client.getInstance().moduleManager.getModuleByClass(KillAura.class).getStringSettingValueByName("Autoblock Mode").equals("Fake")
+                ) && event.method13926() && this.isEnabled() && event.getItemStack().getItem() instanceof SwordItem) {
                     event.cancelled = true;
                     switch (this.getStringSettingValueByName("Animation")) {
                         case "Vanilla":

@@ -276,22 +276,22 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
             boolean onGround = event.isOnGround();
 
-            double newX = x - this.lastReportedPosX;
-            double newY = y - this.lastReportedPosY;
-            double newZ = z - this.lastReportedPosZ;
+            double deltaX = x - this.lastReportedPosX;
+            double deltaY = y - this.lastReportedPosY;
+            double deltaZ = z - this.lastReportedPosZ;
 
-            double newYaw = (double) (yaw - this.lastReportedYaw);
-            double newPitch = (double) (pitch - this.lastReportedPitch);
+            double deltaYaw = yaw - this.lastReportedYaw;
+            double deltaPitch = pitch - this.lastReportedPitch;
 
             ++this.positionUpdateTicks;
 
             final var targetVersion = JelloPortal.getVersion();
-            final var updateTicks = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_9) ? 19 : 20;
-            final var point3 = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_18_2) ? 4.0E-8D : 9.0E-4D;
+            final var isLegacy = targetVersion.equalTo(ProtocolVersion.v1_8);
+            final var minimumMovement = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_18_2) ? 4.0E-8D : 9.0E-4D;
 
-            boolean posMoved = newX * newX + newY * newY + newZ * newZ > point3
-                    || this.positionUpdateTicks >= updateTicks;
-            boolean rotMoved = newYaw != 0.0D || newPitch != 0.0D;
+            boolean posMoved = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ > minimumMovement
+                    || (isLegacy ? this.positionUpdateTicks >= 21 : this.positionUpdateTicks >= 19);
+            boolean rotMoved = deltaYaw != 0.0D || deltaPitch != 0.0D;
 
             if (this.isPassenger()) {
                 Vector3d vector3d = this.getMotion();
@@ -303,7 +303,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                 this.connection.sendPacket(new CPlayerPacket.PositionPacket(x, y, z, onGround));
             } else if (rotMoved) {
                 this.connection.sendPacket(new CPlayerPacket.RotationPacket(yaw, pitch, onGround));
-            } else if (this.prevOnGround != this.onGround || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
+            } else if (this.prevOnGround != this.onGround || isLegacy) {
                 this.connection.sendPacket(new CPlayerPacket(onGround));
             }
 
@@ -977,7 +977,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
         double d0 = this.getPosX();
         double d1 = this.getPosZ();
-        super.move(typeIn, pos);
+        super.move(typeIn, eventMove.vector);
         this.updateAutoJump((float) (this.getPosX() - d0), (float) (this.getPosZ() - d1));
     }
 

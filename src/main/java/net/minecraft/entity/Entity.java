@@ -6,6 +6,7 @@ import com.google.common.collect.Sets;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveFlying;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveRideable;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventStep;
+import com.mentalfrostbyte.jello.util.game.world.BoundingBox;
 import it.unimi.dsi.fastutil.objects.Object2DoubleArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2DoubleMap;
 
@@ -1334,6 +1335,24 @@ public abstract class Entity implements INameable, ICommandSource {
      * Returns the distance to the entity.
      */
 
+    public float getDistanceToEntityBox(Entity entityIn) {
+        Vector3d eyes = this.getEyePosition(1F);
+        Vector3d pos = getClosestPoint(eyes, entityIn.boundingBox);
+        double xDist = Math.abs(pos.x - eyes.x);
+        double yDist = Math.abs(pos.y - eyes.y);
+        double zDist = Math.abs(pos.z - eyes.z);
+        return (float) Math.sqrt(xDist * xDist + yDist * yDist + zDist * zDist);
+    }
+
+    public float getDistanceToEntityBox(BoundingBox boundingbox) {
+        Vector3d eyes = this.getEyePosition(1F);
+        Vector3d pos = getClosestPoint(eyes, new AxisAlignedBB(boundingbox.minX, boundingbox.minY, boundingbox.minZ, boundingbox.maxX, boundingbox.maxY, boundingbox.maxZ));
+        double xDist = Math.abs(pos.x - eyes.x);
+        double yDist = Math.abs(pos.y - eyes.y);
+        double zDist = Math.abs(pos.z - eyes.z);
+        return (float) Math.sqrt(xDist * xDist + yDist * yDist + zDist * zDist);
+    }
+
     public double getDistance(double x, double y, double z) {
         double d0 = this.getPosX() - x;
         double d1 = this.getPosY() - y;
@@ -1346,6 +1365,13 @@ public abstract class Entity implements INameable, ICommandSource {
         float f1 = (float) (this.getPosY() - entityIn.getPosY());
         float f2 = (float) (this.getPosZ() - entityIn.getPosZ());
         return MathHelper.sqrt(f * f + f1 * f1 + f2 * f2);
+    }
+
+    public static Vector3d getClosestPoint(final Vector3d start, final AxisAlignedBB boundingBox) {
+        final double closestX = start.x >= boundingBox.maxX ? boundingBox.maxX : start.x <= boundingBox.minX ? boundingBox.minX : boundingBox.minX + (start.x - boundingBox.minX);
+        final double closestY = start.y >= boundingBox.maxY ? boundingBox.maxY : start.y <= boundingBox.minY ? boundingBox.minY : boundingBox.minY + (start.y - boundingBox.minY);
+        final double closestZ = start.z >= boundingBox.maxZ ? boundingBox.maxZ : start.z <= boundingBox.minZ ? boundingBox.minZ : boundingBox.minZ + (start.z - boundingBox.minZ);
+        return new Vector3d(closestX, closestY, closestZ);
     }
 
     /**
