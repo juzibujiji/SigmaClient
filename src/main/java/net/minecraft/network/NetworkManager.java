@@ -254,7 +254,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
                 //blockface
                 var16.write(Types.VAR_INT, ((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getFace().getIndex());
 
-                //facing I don't know if this facing is written correctly, but it's roughly like this.
+                //facing
                 BlockRayTraceResult hitResult = ((CPlayerTryUseItemOnBlockPacket) packet).func_218794_c();
                 float f = (float)(hitResult.getHitVec().x - hitResult.getPos().getX());
                 float f1 = (float)(hitResult.getHitVec().y - hitResult.getPos().getY());
@@ -371,7 +371,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
                     //blockface
                     var16.write(Types.VAR_INT, ((CPlayerTryUseItemOnBlockPacket)packet).func_218794_c().getFace().getIndex());
 
-                    //facing I don't know if this facing is written correctly, but it's roughly like this.
+                    //facing
                     BlockRayTraceResult hitResult = ((CPlayerTryUseItemOnBlockPacket) packet).func_218794_c();
                     float f = (float)(hitResult.getHitVec().x - hitResult.getPos().getX());
                     float f1 = (float)(hitResult.getHitVec().y - hitResult.getPos().getY());
