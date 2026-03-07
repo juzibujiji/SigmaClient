@@ -2,6 +2,8 @@ package com.mentalfrostbyte.jello.module.impl.combat.killaura;
 
 import com.mentalfrostbyte.jello.module.impl.combat.KillAura;
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.network.play.client.CAnimateHandPacket;
@@ -38,14 +40,21 @@ public class AttackRunnable implements Runnable, MinecraftUtil {
                 if (killAura.getBooleanValueFromSettingName("Raytrace")) {
                     mc.clickMouse();
                 } else {
-                    mc.playerController.attackEntity(mc.player, entity);
+                    if (ViaLoadingBase.getInstance().getTargetVersion().newerThan(ProtocolVersion.v1_8)) {
+                        mc.playerController.attackEntity(mc.player, entity);
+                    }
 
-                    boolean packetSwing = killAura.isEnabled() && killAura.getBooleanValueFromSettingName("No swing") && KillAura.targetEntity != null;
+                    boolean packetSwing = killAura.isEnabled() && killAura.getBooleanValueFromSettingName("No swing")
+                            && KillAura.targetEntity != null;
 
                     if (packetSwing) {
                         mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
                     } else {
                         mc.player.swingArm(Hand.MAIN_HAND);
+                    }
+
+                    if (ViaLoadingBase.getInstance().getTargetVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)) {
+                        mc.playerController.attackEntity(mc.player, entity);
                     }
                 }
             }
@@ -55,10 +64,11 @@ public class AttackRunnable implements Runnable, MinecraftUtil {
             }
         }
 
-        if (KillAura.targetEntity != null && KillAura.autoBlock.canAutoBlock() && this.killAura.getStringSettingValueByName("Autoblock Mode").equals("Basic1")) {
+        if (KillAura.targetEntity != null && KillAura.autoBlock.canAutoBlock()
+                && this.killAura.getStringSettingValueByName("Autoblock Mode").equals("Basic1")) {
             KillAura.autoBlock
-                    .performAutoBlock(KillAura.targetEntity, KillAura.getCurrentRotation(this.killAura).yaw, KillAura.getCurrentRotation(this.killAura).pitch);
+                    .performAutoBlock(KillAura.targetEntity, KillAura.getCurrentRotation(this.killAura).yaw,
+                            KillAura.getCurrentRotation(this.killAura).pitch);
         }
     }
 }
-

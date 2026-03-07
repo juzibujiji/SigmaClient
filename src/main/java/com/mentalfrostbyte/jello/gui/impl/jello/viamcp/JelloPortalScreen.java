@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.gui.impl.jello.viamcp;
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.managers.GuiManager;
+import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
@@ -37,11 +38,11 @@ public class JelloPortalScreen extends MultiplayerScreen {
                 0.0,
                 this.getAvailableVersions().size() - 1,
                 1.0F,
-                (var1) -> (double) getCurrentVersionIndex(),
+                (options) -> (double) getCurrentVersionIndex(),
                 this::onSliderChange,
-                (settings, slider) -> new StringTextComponent(getVersion(getCurrentVersionIndex()).getName())
-        );
-        this.versionSelectorWidget = this.addButton(versionSelector.createWidget(this.minecraft.gameSettings, this.width / 2 + 40, 7, 114));
+                (settings, slider) -> new StringTextComponent(getVersion(getCurrentVersionIndex()).getName()));
+        this.versionSelectorWidget = this
+                .addButton(versionSelector.createWidget(this.minecraft.gameSettings, this.width / 2 + 40, 7, 114));
     }
 
     private void onSliderChange(GameSettings settings, Double aDouble) {
@@ -56,13 +57,15 @@ public class JelloPortalScreen extends MultiplayerScreen {
     public void render(MatrixStack matrices, int mouseX, int mouseY, float delta) {
         super.render(matrices, mouseX, mouseY, delta);
         RenderUtil.drawBlurredBackground(
-                0, 0, Minecraft.getInstance().getMainWindow().getWidth(), (int)(30.0 * Minecraft.getInstance().getMainWindow().getGuiScaleFactor() / (double) GuiManager.scaleFactor)
-        );
+                0, 0, Minecraft.getInstance().getMainWindow().getWidth(),
+                (int) (30.0 * Minecraft.getInstance().getMainWindow().getGuiScaleFactor()
+                        / (double) GuiManager.scaleFactor));
         this.renderBackground(matrices);
         RenderUtil.restoreScissor();
         this.versionSelectorWidget.render(matrices, mouseX, mouseY, delta);
         drawString(matrices, this.font, this.getTitle().getString(), this.width / 2 - 146, 13, 16777215);
-        minecraft.fontRenderer.drawStringWithShadow(matrices, "Jello Portal:", (float) this.width / 2 - 30, 13, -1);
+        minecraft.fontRenderer.drawStringWithShadow(matrices, "Jello Portal:", (float) this.width / 2 - 30, 13,
+                RenderUtil.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.5F));
     }
 
     private int getCurrentVersionIndex() {

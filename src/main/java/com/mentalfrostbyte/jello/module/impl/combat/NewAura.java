@@ -21,6 +21,7 @@ import com.mentalfrostbyte.jello.util.game.world.EntityUtil;
 import com.mentalfrostbyte.jello.util.system.math.counter.Counter;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 
+import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.merchant.villager.VillagerEntity;
@@ -36,10 +37,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class NewAura extends Module {
-    private final ModeSetting sortMode = new ModeSetting("Sort mode", "In what order should entities be sorted in?", 0, "Range", "Health", "Armor", "Ticks");
+    private final ModeSetting sortMode = new ModeSetting("Sort mode", "In what order should entities be sorted in?", 0,
+            "Range", "Health", "Armor", "Ticks");
 
     private final ClickDelayCalculator delayCalculator = new ClickDelayCalculator(9, 11);
-    private final ModeSetting clickMode = new ModeSetting("Click mode", "What should be the clicking mode?", 0, "CPS", "1.9");
+    private final ModeSetting clickMode = new ModeSetting("Click mode", "What should be the clicking mode?", 0, "CPS",
+            "1.9");
 
     private final NumberSetting<Long> minCPS = new NumberSetting<>("Min CPS", "Minimal CPS?", 10L, 1L, 20L, 1.0f) {
         @Override
@@ -83,17 +86,24 @@ public class NewAura extends Module {
         }
     };
 
-    private final NumberSetting<Float> searchRange = new NumberSetting<>("Search range", "What should be the search range for entities?", 4, 1, 7, 0.1f);
-    private final NumberSetting<Float> attackRange = new NumberSetting<>("Attack range", "What should be the attack range for entities?", 3.4f, 1, 6, 0.1f);
+    private final NumberSetting<Float> searchRange = new NumberSetting<>("Search range",
+            "What should be the search range for entities?", 4, 1, 7, 0.1f);
+    private final NumberSetting<Float> attackRange = new NumberSetting<>("Attack range",
+            "What should be the attack range for entities?", 3.4f, 1, 6, 0.1f);
 
     private final BooleanSetting players = new BooleanSetting("Players", "Should aura attack players?", true);
     private final BooleanSetting monsters = new BooleanSetting("Monsters", "Should aura target monsters?", false);
     private final BooleanSetting animals = new BooleanSetting("Animals", "Should aura target animals?", false);
-    private final BooleanSetting invisibles = new BooleanSetting("Invisibles", "Should aura target invisible entities?", false);
-    private final BooleanSetting throughWalls = new BooleanSetting("Through walls", "Should aura attack entities through walls?", false);
-    private final BooleanSetting raycast = new BooleanSetting("Raycast", "Should aura raycast a line to each target?", true);
-    private final BooleanSetting keepSprint = new BooleanSetting("Keep sprint", "Should aura keep sprinting while attacking?", false);
-    private final BooleanSetting sprintFix = new BooleanSetting("Sprint fix", "Should sprint be fixed? (disables Keep sprint)", true);
+    private final BooleanSetting invisibles = new BooleanSetting("Invisibles", "Should aura target invisible entities?",
+            false);
+    private final BooleanSetting throughWalls = new BooleanSetting("Through walls",
+            "Should aura attack entities through walls?", false);
+    private final BooleanSetting raycast = new BooleanSetting("Raycast", "Should aura raycast a line to each target?",
+            true);
+    private final BooleanSetting keepSprint = new BooleanSetting("Keep sprint",
+            "Should aura keep sprinting while attacking?", false);
+    private final BooleanSetting sprintFix = new BooleanSetting("Sprint fix",
+            "Should sprint be fixed? (disables Keep sprint)", true);
 
     public NewAura() {
         super(ModuleCategory.COMBAT, "NewAura", "Attacks entities.");
@@ -134,8 +144,7 @@ public class NewAura extends Module {
                 delayPatterns, delayPattern1, delayPattern2, delayPattern3,
                 searchRange, attackRange,
                 players, monsters, animals, invisibles,
-                throughWalls, raycast, keepSprint, sprintFix
-        );
+                throughWalls, raycast, keepSprint, sprintFix);
     }
 
     private final Counter attackCounter = new Counter();
@@ -175,17 +184,22 @@ public class NewAura extends Module {
 
         targets.clear();
         for (Entity entity : PlayerUtil.getAllEntitiesInWorld()) {
-            if (!(entity instanceof LivingEntity living)) continue;
+            if (!(entity instanceof LivingEntity living))
+                continue;
 
             boolean valid = false;
-            if (players.currentValue && entity instanceof PlayerEntity) valid = true;
+            if (players.currentValue && entity instanceof PlayerEntity)
+                valid = true;
             if (animals.currentValue && (entity instanceof AnimalEntity || entity instanceof VillagerEntity))
                 valid = true;
-            if (monsters.currentValue && entity instanceof MonsterEntity) valid = true;
-            if (!valid) continue;
+            if (monsters.currentValue && entity instanceof MonsterEntity)
+                valid = true;
+            if (!valid)
+                continue;
 
             double distance = mc.player.getDistance(entity);
-            if (distance > searchRange.currentValue) continue;
+            if (distance > searchRange.currentValue)
+                continue;
 
             if (!living.isAlive()
                     || entity == mc.player
@@ -193,7 +207,8 @@ public class NewAura extends Module {
                     || entity.getName() == null
                     || entity.getDisplayName() == null
                     || Client.getInstance().friendManager.isFriend(entity)
-                    || Client.getInstance().botManager.isBot(entity)) continue;
+                    || Client.getInstance().botManager.isBot(entity))
+                continue;
 
             targets.add(living);
         }
@@ -207,44 +222,46 @@ public class NewAura extends Module {
                 // Add non-linear rotation changes to avoid Aim K detection
                 float yawDifference = MathHelper.wrapAngleTo180_float(calculatedRot.yaw - rots.yaw);
                 float pitchDifference = calculatedRot.pitch - rots.pitch;
-                
+
                 // Dynamic rotation speed with non-linear factors
                 float distanceFactor = (float) Math.pow(Math.min(1.0f, 3.0f / target.getDistance(mc.player)), 1.3);
                 float baseSpeed = 8.0f + (distanceFactor * 7.0f);
-                
+
                 // Non-linear randomization to break patterns
-                float randomFactor = 0.85f + (float)(Math.random() * 0.3f);
+                float randomFactor = 0.85f + (float) (Math.random() * 0.3f);
                 if (Math.random() > 0.7) {
-                    randomFactor *= 0.92f + (float)(Math.random() * 0.16f);
+                    randomFactor *= 0.92f + (float) (Math.random() * 0.16f);
                 }
-                
+
                 // Apply non-linear smoothing
-                float yawSpeed = Math.min(baseSpeed * randomFactor, Math.abs(yawDifference) * (0.4f + (float)(Math.random() * 0.2f)));
-                float pitchSpeed = Math.min(baseSpeed * 0.8f * randomFactor, Math.abs(pitchDifference) * (0.4f + (float)(Math.random() * 0.2f)));
-                
+                float yawSpeed = Math.min(baseSpeed * randomFactor,
+                        Math.abs(yawDifference) * (0.4f + (float) (Math.random() * 0.2f)));
+                float pitchSpeed = Math.min(baseSpeed * 0.8f * randomFactor,
+                        Math.abs(pitchDifference) * (0.4f + (float) (Math.random() * 0.2f)));
+
                 // Ensure we never exceed the Vulcan threshold
                 yawSpeed = Math.min(yawSpeed, 19.0f);
                 pitchSpeed = Math.min(pitchSpeed, 19.0f);
-                
+
                 // Apply the rotation changes with non-linear adjustments
                 if (Math.abs(yawDifference) > 0.1f) {
                     // Non-linear application to break GCD patterns
                     float appliedYaw = Math.signum(yawDifference) * yawSpeed;
                     if (Math.random() > 0.8) {
-                        appliedYaw *= 0.94f + (float)(Math.random() * 0.12f);
+                        appliedYaw *= 0.94f + (float) (Math.random() * 0.12f);
                     }
                     rots.yaw += appliedYaw;
                 }
-                
+
                 if (Math.abs(pitchDifference) > 0.1f) {
                     // Non-linear application to break GCD patterns
                     float appliedPitch = Math.signum(pitchDifference) * pitchSpeed;
                     if (Math.random() > 0.8) {
-                        appliedPitch *= 0.94f + (float)(Math.random() * 0.12f);
+                        appliedPitch *= 0.94f + (float) (Math.random() * 0.12f);
                     }
                     rots.pitch += appliedPitch;
                 }
-                
+
                 // Ensure pitch stays within bounds
                 rots.pitch = MathHelper.clamp(rots.pitch, -90.0F, 90.0F);
             }
@@ -261,9 +278,8 @@ public class NewAura extends Module {
 
         if (target != null) {
             float[] fixedRotations = RotationUtils.gcdFix(
-                    new float[]{rots.yaw, rots.pitch},
-                    new float[]{mc.player.rotationYaw, mc.player.rotationPitch}
-            );
+                    new float[] { rots.yaw, rots.pitch },
+                    new float[] { mc.player.rotationYaw, mc.player.rotationPitch });
 
             event.setYaw(fixedRotations[0]);
             event.setPitch(fixedRotations[1]);
@@ -308,13 +324,12 @@ public class NewAura extends Module {
     }
 
     private void attackEntity(LivingEntity entity) {
-        var viaversion = JelloPortal.getVersion();
-        if(viaversion.newerThanOrEqualTo(ProtocolVersion.v1_9)){
-            mc.playerController.attackEntity(mc.player, entity);
-            mc.player.swingArm(Hand.MAIN_HAND);
-        }else{
+        if (ViaLoadingBase.getInstance().getTargetVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)) {
             mc.player.swingArm(Hand.MAIN_HAND);
             mc.playerController.attackEntity(mc.player, entity);
+        } else {
+            mc.playerController.attackEntity(mc.player, entity);
+            mc.player.swingArm(Hand.MAIN_HAND);
         }
     }
 }

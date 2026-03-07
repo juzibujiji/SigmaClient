@@ -1,6 +1,25 @@
 {
   "mods": [
     {
+      "name": "ActiveMods",
+      "enabled": true,
+      "allowed": true,
+      "options": [
+        {
+          "name": "Size",
+          "value": "Normal"
+        },
+        {
+          "name": "Animations",
+          "value": true
+        },
+        {
+          "name": "Sound",
+          "value": true
+        }
+      ]
+    },
+    {
       "sub-options": {
         "Basic": [
           {
@@ -560,6 +579,12 @@
       ]
     },
     {
+      "name": "BrainFreeze",
+      "enabled": false,
+      "allowed": true,
+      "options": []
+    },
+    {
       "name": "Breadcrumbs",
       "enabled": false,
       "allowed": true,
@@ -752,6 +777,18 @@
           "value": "1939Games"
         }
       ]
+    },
+    {
+      "name": "Compass",
+      "enabled": false,
+      "allowed": true,
+      "options": []
+    },
+    {
+      "name": "Coords",
+      "enabled": false,
+      "allowed": true,
+      "options": []
     },
     {
       "name": "CorrectMovement",
@@ -987,6 +1024,51 @@
         {
           "name": "Type",
           "value": "PingSpoof"
+        }
+      ]
+    },
+    {
+      "sub-options": {
+        "Shadow": [
+          {
+            "name": "Color",
+            "value": -65794,
+            "rainbow": false
+          }
+        ],
+        "Sims": [],
+        "Box Outline": [
+          {
+            "name": "Color",
+            "value": -65794,
+            "rainbow": false
+          }
+        ],
+        "Vanilla": []
+      },
+      "name": "ESP",
+      "enabled": false,
+      "allowed": true,
+      "options": [
+        {
+          "name": "Type",
+          "value": "Shadow"
+        },
+        {
+          "name": "Show Players",
+          "value": true
+        },
+        {
+          "name": "Show Mobs",
+          "value": false
+        },
+        {
+          "name": "Show Passives",
+          "value": false
+        },
+        {
+          "name": "Show Invisibles",
+          "value": true
         }
       ]
     },
@@ -1516,6 +1598,29 @@
       ]
     },
     {
+      "name": "Info HUD",
+      "enabled": false,
+      "allowed": true,
+      "options": [
+        {
+          "name": "Cords",
+          "value": "Normal"
+        },
+        {
+          "name": "Show Player",
+          "value": true
+        },
+        {
+          "name": "Show Armor",
+          "value": true
+        },
+        {
+          "name": "Move chat up",
+          "value": true
+        }
+      ]
+    },
+    {
       "name": "InteractRange",
       "enabled": false,
       "allowed": true,
@@ -1644,6 +1749,12 @@
           "value": true
         }
       ]
+    },
+    {
+      "name": "KeyStrokes",
+      "enabled": true,
+      "allowed": true,
+      "options": []
     },
     {
       "name": "KillAura",
@@ -1805,6 +1916,12 @@
       "options": []
     },
     {
+      "name": "MiniMap",
+      "enabled": false,
+      "allowed": true,
+      "options": []
+    },
+    {
       "name": "Murderer",
       "enabled": false,
       "allowed": true,
@@ -1820,6 +1937,12 @@
       ]
     },
     {
+      "name": "MusicParticles",
+      "enabled": true,
+      "allowed": true,
+      "options": []
+    },
+    {
       "name": "NameProtect",
       "enabled": false,
       "allowed": true,
@@ -1827,6 +1950,25 @@
         {
           "name": "Username",
           "value": "Me"
+        }
+      ]
+    },
+    {
+      "name": "NameTags",
+      "enabled": false,
+      "allowed": true,
+      "options": [
+        {
+          "name": "Magnify",
+          "value": true
+        },
+        {
+          "name": "Furnaces",
+          "value": true
+        },
+        {
+          "name": "Mob Owners",
+          "value": true
         }
       ]
     },
@@ -2100,6 +2242,25 @@
       "options": []
     },
     {
+      "name": "RearView",
+      "enabled": false,
+      "allowed": true,
+      "options": [
+        {
+          "name": "Show in GUI",
+          "value": false
+        },
+        {
+          "name": "Smart Visibility",
+          "value": false
+        },
+        {
+          "name": "Size",
+          "value": 400.0
+        }
+      ]
+    },
+    {
       "name": "Regen",
       "enabled": false,
       "allowed": true,
@@ -2158,6 +2319,12 @@
           "value": "Flying Enabled"
         }
       ]
+    },
+    {
+      "name": "ShulkerInfo",
+      "enabled": false,
+      "allowed": true,
+      "options": []
     },
     {
       "name": "Sneak",
@@ -2521,6 +2688,12 @@
       ]
     },
     {
+      "name": "TabGUI",
+      "enabled": true,
+      "allowed": true,
+      "options": []
+    },
+    {
       "name": "TargetStrafe",
       "enabled": false,
       "allowed": true,
@@ -2609,6 +2782,17 @@
         {
           "name": "Type",
           "value": "Normal"
+        }
+      ]
+    },
+    {
+      "name": "Waypoints",
+      "enabled": false,
+      "allowed": true,
+      "options": [
+        {
+          "name": "Unspawn Positions",
+          "value": false
         }
       ]
     },

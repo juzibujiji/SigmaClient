@@ -6,6 +6,7 @@ import com.google.common.collect.Sets;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveFlying;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveRideable;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventStep;
+import com.mentalfrostbyte.jello.util.game.world.BoundingBox;
 import it.unimi.dsi.fastutil.objects.Object2DoubleArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2DoubleMap;
 
@@ -172,10 +173,14 @@ public abstract class Entity implements INameable, ICommandSource {
     protected final EntityDataManager dataManager;
     protected static final DataParameter<Byte> FLAGS = EntityDataManager.createKey(Entity.class, DataSerializers.BYTE);
     private static final DataParameter<Integer> AIR = EntityDataManager.createKey(Entity.class, DataSerializers.VARINT);
-    private static final DataParameter<Optional<ITextComponent>> CUSTOM_NAME = EntityDataManager.createKey(Entity.class, DataSerializers.OPTIONAL_TEXT_COMPONENT);
-    public static final DataParameter<Boolean> CUSTOM_NAME_VISIBLE = EntityDataManager.createKey(Entity.class, DataSerializers.BOOLEAN);
-    private static final DataParameter<Boolean> SILENT = EntityDataManager.createKey(Entity.class, DataSerializers.BOOLEAN);
-    private static final DataParameter<Boolean> NO_GRAVITY = EntityDataManager.createKey(Entity.class, DataSerializers.BOOLEAN);
+    private static final DataParameter<Optional<ITextComponent>> CUSTOM_NAME = EntityDataManager.createKey(Entity.class,
+            DataSerializers.OPTIONAL_TEXT_COMPONENT);
+    public static final DataParameter<Boolean> CUSTOM_NAME_VISIBLE = EntityDataManager.createKey(Entity.class,
+            DataSerializers.BOOLEAN);
+    private static final DataParameter<Boolean> SILENT = EntityDataManager.createKey(Entity.class,
+            DataSerializers.BOOLEAN);
+    private static final DataParameter<Boolean> NO_GRAVITY = EntityDataManager.createKey(Entity.class,
+            DataSerializers.BOOLEAN);
     protected static final DataParameter<Pose> POSE = EntityDataManager.createKey(Entity.class, DataSerializers.POSE);
     public boolean addedToChunk;
     public int chunkCoordX;
@@ -195,7 +200,7 @@ public abstract class Entity implements INameable, ICommandSource {
     protected boolean glowing;
     private final Set<String> tags = Sets.newHashSet();
     private boolean isPositionDirty;
-    private final double[] pistonDeltas = new double[]{0.0D, 0.0D, 0.0D};
+    private final double[] pistonDeltas = new double[] { 0.0D, 0.0D, 0.0D };
     private long pistonDeltasGameTime;
     private EntitySize size;
     public float eyeHeight;
@@ -221,8 +226,10 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public boolean func_242278_a(BlockPos p_242278_1_, BlockState p_242278_2_) {
-        VoxelShape voxelshape = p_242278_2_.getCollisionShape(this.world, p_242278_1_, ISelectionContext.forEntity(this));
-        VoxelShape voxelshape1 = voxelshape.withOffset((double) p_242278_1_.getX(), (double) p_242278_1_.getY(), (double) p_242278_1_.getZ());
+        VoxelShape voxelshape = p_242278_2_.getCollisionShape(this.world, p_242278_1_,
+                ISelectionContext.forEntity(this));
+        VoxelShape voxelshape1 = voxelshape.withOffset((double) p_242278_1_.getX(), (double) p_242278_1_.getY(),
+                (double) p_242278_1_.getZ());
         return VoxelShapes.compare(voxelshape1, VoxelShapes.create(this.getBoundingBox()), IBooleanFunction.AND);
     }
 
@@ -310,7 +317,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Keeps moving the entity up so it isn't colliding with blocks and other requirements for this entity to be spawned
+     * Keeps moving the entity up so it isn't colliding with blocks and other
+     * requirements for this entity to be spawned
      * (only actually used on players though its also on Entity)
      */
     protected void preparePlayerToSpawn() {
@@ -359,7 +367,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Sets the x,y,z of the entity from the given parameters. Also seems to set up a bounding box.
+     * Sets the x,y,z of the entity from the given parameters. Also seems to set up
+     * a bounding box.
      */
     public void setPosition(double x, double y, double z) {
         this.setRawPosition(x, y, z);
@@ -367,7 +376,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Recomputes this entity's bounding box so that it is positioned at this entity's X/Y/Z.
+     * Recomputes this entity's bounding box so that it is positioned at this
+     * entity's X/Y/Z.
      */
     protected void recenterBoundingBox() {
         this.setPosition(this.positionVec.x, this.positionVec.y, this.positionVec.z);
@@ -470,7 +480,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Decrements the counter for the remaining time until the entity may use a portal again.
+     * Decrements the counter for the remaining time until the entity may use a
+     * portal again.
      */
     protected void decrementTimeUntilPortal() {
         if (this.func_242280_ah()) {
@@ -479,7 +490,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Return the amount of time this entity should stay in a portal before being transported.
+     * Return the amount of time this entity should stay in a portal before being
+     * transported.
      */
     public int getMaxInPortalTime() {
         return 0;
@@ -496,7 +508,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Sets entity to burn for x amount of seconds, cannot lower amount of existing fire.
+     * Sets entity to burn for x amount of seconds, cannot lower amount of existing
+     * fire.
      */
     public void setFire(int seconds) {
         int i = seconds * 20;
@@ -533,7 +546,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Checks if the offset position from the entity's current position is inside of a liquid.
+     * Checks if the offset position from the entity's current position is inside of
+     * a liquid.
      */
     public boolean isOffsetPositionInLiquid(double x, double y, double z) {
         return this.isLiquidPresentInAABB(this.getBoundingBox().offset(x, y, z));
@@ -596,7 +610,8 @@ public abstract class Entity implements INameable, ICommandSource {
 
             this.world.getProfiler().endSection();
             this.world.getProfiler().startSection("rest");
-            this.collidedHorizontally = !MathHelper.epsilonEquals(pos.x, vector3d.x) || !MathHelper.epsilonEquals(pos.z, vector3d.z);
+            this.collidedHorizontally = !MathHelper.epsilonEquals(pos.x, vector3d.x)
+                    || !MathHelper.epsilonEquals(pos.z, vector3d.z);
             this.collidedVertically = pos.y != vector3d.y;
             this.onGround = this.collidedVertically && pos.y < 0.0D;
             BlockPos blockpos = this.getOnPosition();
@@ -631,17 +646,22 @@ public abstract class Entity implements INameable, ICommandSource {
                     d1 = 0.0D;
                 }
 
-                this.distanceWalkedModified = (float) ((double) this.distanceWalkedModified + (double) MathHelper.sqrt(horizontalMag(vector3d)) * 0.6D);
-                this.distanceWalkedOnStepModified = (float) ((double) this.distanceWalkedOnStepModified + (double) MathHelper.sqrt(d0 * d0 + d1 * d1 + d2 * d2) * 0.6D);
+                this.distanceWalkedModified = (float) ((double) this.distanceWalkedModified
+                        + (double) MathHelper.sqrt(horizontalMag(vector3d)) * 0.6D);
+                this.distanceWalkedOnStepModified = (float) ((double) this.distanceWalkedOnStepModified
+                        + (double) MathHelper.sqrt(d0 * d0 + d1 * d1 + d2 * d2) * 0.6D);
 
                 if (this.distanceWalkedOnStepModified > this.nextStepDistance && !blockstate.isAir()) {
                     this.nextStepDistance = this.determineNextStepDistance();
 
                     if (this.isInWater()) {
-                        Entity entity = this.isBeingRidden() && this.getControllingPassenger() != null ? this.getControllingPassenger() : this;
+                        Entity entity = this.isBeingRidden() && this.getControllingPassenger() != null
+                                ? this.getControllingPassenger()
+                                : this;
                         float f = entity == this ? 0.35F : 0.4F;
                         Vector3d vector3d2 = entity.getMotion();
-                        float f1 = MathHelper.sqrt(vector3d2.x * vector3d2.x * (double) 0.2F + vector3d2.y * vector3d2.y + vector3d2.z * vector3d2.z * (double) 0.2F) * f;
+                        float f1 = MathHelper.sqrt(vector3d2.x * vector3d2.x * (double) 0.2F + vector3d2.y * vector3d2.y
+                                + vector3d2.z * vector3d2.z * (double) 0.2F) * f;
 
                         if (f1 > 1.0F) {
                             f1 = 1.0F;
@@ -651,7 +671,8 @@ public abstract class Entity implements INameable, ICommandSource {
                     } else {
                         this.playStepSound(blockpos, blockstate);
                     }
-                } else if (this.distanceWalkedOnStepModified > this.nextFlap && this.makeFlySound() && blockstate.isAir()) {
+                } else if (this.distanceWalkedOnStepModified > this.nextFlap && this.makeFlySound()
+                        && blockstate.isAir()) {
                     this.nextFlap = this.playFlySound(this.distanceWalkedOnStepModified);
                 }
             }
@@ -660,7 +681,8 @@ public abstract class Entity implements INameable, ICommandSource {
                 this.doBlockCollisions();
             } catch (Throwable throwable) {
                 CrashReport crashreport = CrashReport.makeCrashReport(throwable, "Checking entity block collision");
-                CrashReportCategory crashreportcategory = crashreport.makeCategory("Entity being checked for collision");
+                CrashReportCategory crashreportcategory = crashreport
+                        .makeCategory("Entity being checked for collision");
                 this.fillCrashReport(crashreportcategory);
                 throw new ReportedException(crashreport);
             }
@@ -668,15 +690,15 @@ public abstract class Entity implements INameable, ICommandSource {
             float f2 = this.getSpeedFactor();
             this.setMotion(this.getMotion().mul((double) f2, 1.0D, (double) f2));
 
-            if (this.world.getStatesInArea(this.getBoundingBox().shrink(0.001D)).noneMatch((p_233572_0_) ->
-            {
+            if (this.world.getStatesInArea(this.getBoundingBox().shrink(0.001D)).noneMatch((p_233572_0_) -> {
                 return p_233572_0_.isIn(BlockTags.FIRE) || p_233572_0_.isIn(Blocks.LAVA);
             }) && this.fire <= 0) {
                 this.forceFireTicks(-this.getFireImmuneTicks());
             }
 
             if (this.isInWaterRainOrBubbleColumn() && this.isBurning()) {
-                this.playSound(SoundEvents.ENTITY_GENERIC_EXTINGUISH_FIRE, 0.7F, 1.6F + (this.rand.nextFloat() - this.rand.nextFloat()) * 0.4F);
+                this.playSound(SoundEvents.ENTITY_GENERIC_EXTINGUISH_FIRE, 0.7F,
+                        1.6F + (this.rand.nextFloat() - this.rand.nextFloat()) * 0.4F);
                 this.forceFireTicks(-this.getFireImmuneTicks());
             }
 
@@ -714,7 +736,9 @@ public abstract class Entity implements INameable, ICommandSource {
         float f = block.getSpeedFactor();
 
         if (block != Blocks.WATER && block != Blocks.BUBBLE_COLUMN) {
-            return (double) f == 1.0D ? this.world.getBlockState(this.getPositionUnderneath()).getBlock().getSpeedFactor() : f;
+            return (double) f == 1.0D
+                    ? this.world.getBlockState(this.getPositionUnderneath()).getBlock().getSpeedFactor()
+                    : f;
         } else {
             return f;
         }
@@ -763,34 +787,44 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Given a motion vector, return an updated vector that takes into account restrictions such as collisions (from all
+     * Given a motion vector, return an updated vector that takes into account
+     * restrictions such as collisions (from all
      * directions) and step-up from stepHeight
      */
     public Vector3d getAllowedMovement(Vector3d vec) {
         AxisAlignedBB axisalignedbb = this.getBoundingBox();
         ISelectionContext iselectioncontext = ISelectionContext.forEntity(this);
         VoxelShape voxelshape = this.world.getWorldBorder().getShape();
-        Stream<VoxelShape> stream = VoxelShapes.compare(voxelshape, VoxelShapes.create(axisalignedbb.shrink(1.0E-7D)), IBooleanFunction.AND) ? Stream.empty() : Stream.of(voxelshape);
-        Stream<VoxelShape> stream1 = this.world.func_230318_c_(this, axisalignedbb.expand(vec), (p_233561_0_) ->
-        {
+        Stream<VoxelShape> stream = VoxelShapes.compare(voxelshape, VoxelShapes.create(axisalignedbb.shrink(1.0E-7D)),
+                IBooleanFunction.AND) ? Stream.empty() : Stream.of(voxelshape);
+        Stream<VoxelShape> stream1 = this.world.func_230318_c_(this, axisalignedbb.expand(vec), (p_233561_0_) -> {
             return true;
         });
         ReuseableStream<VoxelShape> reuseablestream = new ReuseableStream<>(Stream.concat(stream1, stream));
-        Vector3d vector3d = vec.lengthSquared() == 0.0D ? vec : collideBoundingBoxHeuristically(this, vec, axisalignedbb, this.world, iselectioncontext, reuseablestream);
+        Vector3d vector3d = vec.lengthSquared() == 0.0D ? vec
+                : collideBoundingBoxHeuristically(this, vec, axisalignedbb, this.world, iselectioncontext,
+                        reuseablestream);
         boolean flag = vec.x != vector3d.x;
         boolean flag1 = vec.y != vector3d.y;
         boolean flag2 = vec.z != vector3d.z;
         boolean flag3 = this.onGround || flag1 && vec.y < 0.0D;
 
         if (this.stepHeight > 0.0F && flag3 && (flag || flag2)) {
-            Vector3d vector3d1 = collideBoundingBoxHeuristically(this, new Vector3d(vec.x, (double) this.stepHeight, vec.z), axisalignedbb, this.world, iselectioncontext, reuseablestream);
-            Vector3d vector3d2 = collideBoundingBoxHeuristically(this, new Vector3d(0.0D, (double) this.stepHeight, 0.0D), axisalignedbb.expand(vec.x, 0.0D, vec.z), this.world, iselectioncontext, reuseablestream);
+            Vector3d vector3d1 = collideBoundingBoxHeuristically(this,
+                    new Vector3d(vec.x, (double) this.stepHeight, vec.z), axisalignedbb, this.world, iselectioncontext,
+                    reuseablestream);
+            Vector3d vector3d2 = collideBoundingBoxHeuristically(this,
+                    new Vector3d(0.0D, (double) this.stepHeight, 0.0D), axisalignedbb.expand(vec.x, 0.0D, vec.z),
+                    this.world, iselectioncontext, reuseablestream);
 
             double height = !(this instanceof ClientPlayerEntity)
                     ? 0.0
-                    : collideBoundingBoxHeuristically(this, new Vector3d(0.0, -vector3d1.y, 0.0), axisalignedbb.offset(vector3d1), this.world, iselectioncontext, reuseablestream).y + vector3d1.y;
+                    : collideBoundingBoxHeuristically(this, new Vector3d(0.0, -vector3d1.y, 0.0),
+                            axisalignedbb.offset(vector3d1), this.world, iselectioncontext, reuseablestream).y
+                            + vector3d1.y;
 
-            // MODIFICATION START: add cancelled boolean so we can access it from outside the step height check
+            // MODIFICATION START: add cancelled boolean so we can access it from outside
+            // the step height check
             boolean cancelled = false;
             if (height != 0.0) {
                 EventStep event = new EventStep(height, vector3d);
@@ -799,7 +833,8 @@ public abstract class Entity implements INameable, ICommandSource {
             }
             // MODIFICATION END
             if (vector3d2.y < (double) this.stepHeight) {
-                Vector3d vector3d3 = collideBoundingBoxHeuristically(this, new Vector3d(vec.x, 0.0D, vec.z), axisalignedbb.offset(vector3d2), this.world, iselectioncontext, reuseablestream).add(vector3d2);
+                Vector3d vector3d3 = collideBoundingBoxHeuristically(this, new Vector3d(vec.x, 0.0D, vec.z),
+                        axisalignedbb.offset(vector3d2), this.world, iselectioncontext, reuseablestream).add(vector3d2);
 
                 if (horizontalMag(vector3d3) > horizontalMag(vector3d1)) {
                     vector3d1 = vector3d3;
@@ -808,7 +843,9 @@ public abstract class Entity implements INameable, ICommandSource {
 
             // MODIFICATION START: only enter this branch if the event wasn't cancelled
             if (horizontalMag(vector3d1) > horizontalMag(vector3d) && !cancelled) {
-                return vector3d1.add(collideBoundingBoxHeuristically(this, new Vector3d(0.0D, -vector3d1.y + vec.y, 0.0D), axisalignedbb.offset(vector3d1), this.world, iselectioncontext, reuseablestream));
+                return vector3d1
+                        .add(collideBoundingBoxHeuristically(this, new Vector3d(0.0D, -vector3d1.y + vec.y, 0.0D),
+                                axisalignedbb.offset(vector3d1), this.world, iselectioncontext, reuseablestream));
             }
             // MODIFICATION END
         }
@@ -820,20 +857,24 @@ public abstract class Entity implements INameable, ICommandSource {
         return vec.x * vec.x + vec.z * vec.z;
     }
 
-    public static Vector3d collideBoundingBoxHeuristically(@Nullable Entity entity, Vector3d vec, AxisAlignedBB collisionBox, World world, ISelectionContext context, ReuseableStream<VoxelShape> potentialHits) {
+    public static Vector3d collideBoundingBoxHeuristically(@Nullable Entity entity, Vector3d vec,
+            AxisAlignedBB collisionBox, World world, ISelectionContext context,
+            ReuseableStream<VoxelShape> potentialHits) {
         boolean flag = vec.x == 0.0D;
         boolean flag1 = vec.y == 0.0D;
         boolean flag2 = vec.z == 0.0D;
 
         if ((!flag || !flag1) && (!flag || !flag2) && (!flag1 || !flag2)) {
-            ReuseableStream<VoxelShape> reuseablestream = new ReuseableStream<>(Stream.concat(potentialHits.createStream(), world.getCollisionShapes(entity, collisionBox.expand(vec))));
+            ReuseableStream<VoxelShape> reuseablestream = new ReuseableStream<>(Stream
+                    .concat(potentialHits.createStream(), world.getCollisionShapes(entity, collisionBox.expand(vec))));
             return collideBoundingBox(vec, collisionBox, reuseablestream);
         } else {
             return getAllowedMovement(vec, collisionBox, world, context, potentialHits);
         }
     }
 
-    public static Vector3d collideBoundingBox(Vector3d vec, AxisAlignedBB collisionBox, ReuseableStream<VoxelShape> potentialHits) {
+    public static Vector3d collideBoundingBox(Vector3d vec, AxisAlignedBB collisionBox,
+            ReuseableStream<VoxelShape> potentialHits) {
         double d0 = vec.x;
         double d1 = vec.y;
         double d2 = vec.z;
@@ -871,13 +912,15 @@ public abstract class Entity implements INameable, ICommandSource {
         return new Vector3d(d0, d1, d2);
     }
 
-    public static Vector3d getAllowedMovement(Vector3d vec, AxisAlignedBB collisionBox, IWorldReader worldIn, ISelectionContext selectionContext, ReuseableStream<VoxelShape> potentialHits) {
+    public static Vector3d getAllowedMovement(Vector3d vec, AxisAlignedBB collisionBox, IWorldReader worldIn,
+            ISelectionContext selectionContext, ReuseableStream<VoxelShape> potentialHits) {
         double d0 = vec.x;
         double d1 = vec.y;
         double d2 = vec.z;
 
         if (d1 != 0.0D) {
-            d1 = VoxelShapes.getAllowedOffset(Direction.Axis.Y, collisionBox, worldIn, d1, selectionContext, potentialHits.createStream());
+            d1 = VoxelShapes.getAllowedOffset(Direction.Axis.Y, collisionBox, worldIn, d1, selectionContext,
+                    potentialHits.createStream());
 
             if (d1 != 0.0D) {
                 collisionBox = collisionBox.offset(0.0D, d1, 0.0D);
@@ -887,7 +930,8 @@ public abstract class Entity implements INameable, ICommandSource {
         boolean flag = Math.abs(d0) < Math.abs(d2);
 
         if (flag && d2 != 0.0D) {
-            d2 = VoxelShapes.getAllowedOffset(Direction.Axis.Z, collisionBox, worldIn, d2, selectionContext, potentialHits.createStream());
+            d2 = VoxelShapes.getAllowedOffset(Direction.Axis.Z, collisionBox, worldIn, d2, selectionContext,
+                    potentialHits.createStream());
 
             if (d2 != 0.0D) {
                 collisionBox = collisionBox.offset(0.0D, 0.0D, d2);
@@ -895,7 +939,8 @@ public abstract class Entity implements INameable, ICommandSource {
         }
 
         if (d0 != 0.0D) {
-            d0 = VoxelShapes.getAllowedOffset(Direction.Axis.X, collisionBox, worldIn, d0, selectionContext, potentialHits.createStream());
+            d0 = VoxelShapes.getAllowedOffset(Direction.Axis.X, collisionBox, worldIn, d0, selectionContext,
+                    potentialHits.createStream());
 
             if (!flag && d0 != 0.0D) {
                 collisionBox = collisionBox.offset(d0, 0.0D, 0.0D);
@@ -903,7 +948,8 @@ public abstract class Entity implements INameable, ICommandSource {
         }
 
         if (!flag && d2 != 0.0D) {
-            d2 = VoxelShapes.getAllowedOffset(Direction.Axis.Z, collisionBox, worldIn, d2, selectionContext, potentialHits.createStream());
+            d2 = VoxelShapes.getAllowedOffset(Direction.Axis.Z, collisionBox, worldIn, d2, selectionContext,
+                    potentialHits.createStream());
         }
 
         return new Vector3d(d0, d1, d2);
@@ -914,11 +960,13 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Resets the entity's position to the center (planar) and bottom (vertical) points of its bounding box.
+     * Resets the entity's position to the center (planar) and bottom (vertical)
+     * points of its bounding box.
      */
     public void resetPositionToBB() {
         AxisAlignedBB axisalignedbb = this.getBoundingBox();
-        this.setRawPosition((axisalignedbb.minX + axisalignedbb.maxX) / 2.0D, axisalignedbb.minY, (axisalignedbb.minZ + axisalignedbb.maxZ) / 2.0D);
+        this.setRawPosition((axisalignedbb.minX + axisalignedbb.maxX) / 2.0D, axisalignedbb.minY,
+                (axisalignedbb.minZ + axisalignedbb.maxZ) / 2.0D);
     }
 
     protected SoundEvent getSwimSound() {
@@ -935,8 +983,10 @@ public abstract class Entity implements INameable, ICommandSource {
 
     protected void doBlockCollisions() {
         AxisAlignedBB axisalignedbb = this.getBoundingBox();
-        BlockPos blockpos = new BlockPos(axisalignedbb.minX + 0.001D, axisalignedbb.minY + 0.001D, axisalignedbb.minZ + 0.001D);
-        BlockPos blockpos1 = new BlockPos(axisalignedbb.maxX - 0.001D, axisalignedbb.maxY - 0.001D, axisalignedbb.maxZ - 0.001D);
+        BlockPos blockpos = new BlockPos(axisalignedbb.minX + 0.001D, axisalignedbb.minY + 0.001D,
+                axisalignedbb.minZ + 0.001D);
+        BlockPos blockpos1 = new BlockPos(axisalignedbb.maxX - 0.001D, axisalignedbb.maxY - 0.001D,
+                axisalignedbb.maxZ - 0.001D);
         BlockPos.Mutable blockpos$mutable = new BlockPos.Mutable();
 
         if (this.world.isAreaLoaded(blockpos, blockpos1)) {
@@ -950,8 +1000,10 @@ public abstract class Entity implements INameable, ICommandSource {
                             blockstate.onEntityCollision(this.world, blockpos$mutable, this);
                             this.onInsideBlock(blockstate);
                         } catch (Throwable throwable) {
-                            CrashReport crashreport = CrashReport.makeCrashReport(throwable, "Colliding entity with block");
-                            CrashReportCategory crashreportcategory = crashreport.makeCategory("Block being collided with");
+                            CrashReport crashreport = CrashReport.makeCrashReport(throwable,
+                                    "Colliding entity with block");
+                            CrashReportCategory crashreportcategory = crashreport
+                                    .makeCategory("Block being collided with");
                             CrashReportCategory.addBlockInfo(crashreportcategory, blockpos$mutable, blockstate);
                             throw new ReportedException(crashreport);
                         }
@@ -986,7 +1038,8 @@ public abstract class Entity implements INameable, ICommandSource {
 
     public void playSound(SoundEvent soundIn, float volume, float pitch) {
         if (!this.isSilent()) {
-            this.world.playSound((PlayerEntity) null, this.getPosX(), this.getPosY(), this.getPosZ(), soundIn, this.getSoundCategory(), volume, pitch);
+            this.world.playSound((PlayerEntity) null, this.getPosX(), this.getPosY(), this.getPosZ(), soundIn,
+                    this.getSoundCategory(), volume, pitch);
         }
     }
 
@@ -1043,7 +1096,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Checks if this entity is inside water (if inWater field is true as a result of handleWaterMovement() returning
+     * Checks if this entity is inside water (if inWater field is true as a result
+     * of handleWaterMovement() returning
      * true)
      */
     public boolean isInWater() {
@@ -1052,7 +1106,8 @@ public abstract class Entity implements INameable, ICommandSource {
 
     private boolean isInRain() {
         BlockPos blockpos = this.getPosition();
-        return this.world.isRainingAt(blockpos) || this.world.isRainingAt(new BlockPos((double) blockpos.getX(), this.getBoundingBox().maxY, (double) blockpos.getZ()));
+        return this.world.isRainingAt(blockpos) || this.world.isRainingAt(
+                new BlockPos((double) blockpos.getX(), this.getBoundingBox().maxY, (double) blockpos.getZ()));
     }
 
     private boolean isInBubbleColumn() {
@@ -1060,7 +1115,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Checks if this entity is either in water or on an open air block in rain (used in wolves).
+     * Checks if this entity is either in water or on an open air block in rain
+     * (used in wolves).
      */
     public boolean isWet() {
         return this.isInWater() || this.isInRain();
@@ -1119,7 +1175,8 @@ public abstract class Entity implements INameable, ICommandSource {
         if (entity instanceof BoatEntity) {
             BoatEntity boatentity = (BoatEntity) entity;
 
-            if (!boatentity.canSwim() && boatentity.getBoundingBox().maxY >= d0 && boatentity.getBoundingBox().minY <= d0) {
+            if (!boatentity.canSwim() && boatentity.getBoundingBox().maxY >= d0
+                    && boatentity.getBoundingBox().minY <= d0) {
                 return;
             }
         }
@@ -1144,10 +1201,12 @@ public abstract class Entity implements INameable, ICommandSource {
      * Plays the {@link #getSplashSound() splash sound}
      */
     protected void doWaterSplashEffect() {
-        Entity entity = this.isBeingRidden() && this.getControllingPassenger() != null ? this.getControllingPassenger() : this;
+        Entity entity = this.isBeingRidden() && this.getControllingPassenger() != null ? this.getControllingPassenger()
+                : this;
         float f = entity == this ? 0.2F : 0.9F;
         Vector3d vector3d = entity.getMotion();
-        float f1 = MathHelper.sqrt(vector3d.x * vector3d.x * (double) 0.2F + vector3d.y * vector3d.y + vector3d.z * vector3d.z * (double) 0.2F) * f;
+        float f1 = MathHelper.sqrt(vector3d.x * vector3d.x * (double) 0.2F + vector3d.y * vector3d.y
+                + vector3d.z * vector3d.z * (double) 0.2F) * f;
 
         if (f1 > 1.0F) {
             f1 = 1.0F;
@@ -1156,7 +1215,8 @@ public abstract class Entity implements INameable, ICommandSource {
         if ((double) f1 < 0.25D) {
             this.playSound(this.getSplashSound(), f1, 1.0F + (this.rand.nextFloat() - this.rand.nextFloat()) * 0.4F);
         } else {
-            this.playSound(this.getHighspeedSplashSound(), f1, 1.0F + (this.rand.nextFloat() - this.rand.nextFloat()) * 0.4F);
+            this.playSound(this.getHighspeedSplashSound(), f1,
+                    1.0F + (this.rand.nextFloat() - this.rand.nextFloat()) * 0.4F);
         }
 
         float f2 = (float) MathHelper.floor(this.getPosY());
@@ -1164,13 +1224,15 @@ public abstract class Entity implements INameable, ICommandSource {
         for (int i = 0; (float) i < 1.0F + this.size.width * 20.0F; ++i) {
             double d0 = (this.rand.nextDouble() * 2.0D - 1.0D) * (double) this.size.width;
             double d1 = (this.rand.nextDouble() * 2.0D - 1.0D) * (double) this.size.width;
-            this.world.addParticle(ParticleTypes.BUBBLE, this.getPosX() + d0, (double) (f2 + 1.0F), this.getPosZ() + d1, vector3d.x, vector3d.y - this.rand.nextDouble() * (double) 0.2F, vector3d.z);
+            this.world.addParticle(ParticleTypes.BUBBLE, this.getPosX() + d0, (double) (f2 + 1.0F), this.getPosZ() + d1,
+                    vector3d.x, vector3d.y - this.rand.nextDouble() * (double) 0.2F, vector3d.z);
         }
 
         for (int j = 0; (float) j < 1.0F + this.size.width * 20.0F; ++j) {
             double d2 = (this.rand.nextDouble() * 2.0D - 1.0D) * (double) this.size.width;
             double d3 = (this.rand.nextDouble() * 2.0D - 1.0D) * (double) this.size.width;
-            this.world.addParticle(ParticleTypes.SPLASH, this.getPosX() + d2, (double) (f2 + 1.0F), this.getPosZ() + d3, vector3d.x, vector3d.y, vector3d.z);
+            this.world.addParticle(ParticleTypes.SPLASH, this.getPosX() + d2, (double) (f2 + 1.0F), this.getPosZ() + d3,
+                    vector3d.x, vector3d.y, vector3d.z);
         }
     }
 
@@ -1179,7 +1241,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public boolean func_230269_aK_() {
-        return this.isSprinting() && !this.isInWater() && !this.isSpectator() && !this.isCrouching() && !this.isInLava() && this.isAlive();
+        return this.isSprinting() && !this.isInWater() && !this.isSpectator() && !this.isCrouching() && !this.isInLava()
+                && this.isAlive();
     }
 
     protected void func_233569_aL_() {
@@ -1191,15 +1254,20 @@ public abstract class Entity implements INameable, ICommandSource {
 
         if (blockstate.getRenderType() != BlockRenderType.INVISIBLE) {
             Vector3d vector3d = this.getMotion();
-            this.world.addParticle(new BlockParticleData(ParticleTypes.BLOCK, blockstate), this.getPosX() + (this.rand.nextDouble() - 0.5D) * (double) this.size.width, this.getPosY() + 0.1D, this.getPosZ() + (this.rand.nextDouble() - 0.5D) * (double) this.size.width, vector3d.x * -4.0D, 1.5D, vector3d.z * -4.0D);
+            this.world.addParticle(new BlockParticleData(ParticleTypes.BLOCK, blockstate),
+                    this.getPosX() + (this.rand.nextDouble() - 0.5D) * (double) this.size.width, this.getPosY() + 0.1D,
+                    this.getPosZ() + (this.rand.nextDouble() - 0.5D) * (double) this.size.width, vector3d.x * -4.0D,
+                    1.5D, vector3d.z * -4.0D);
         }
     }
 
     public RayTraceResult customPick(double rayTraceDistance, float partialTicks, float yaw, float pitch) {
         Vector3d vector3d = this.getEyePosition(partialTicks);
         Vector3d vector3d1 = this.getLookCustom(partialTicks, yaw, pitch);
-        Vector3d vector3d2 = vector3d.add(vector3d1.x * rayTraceDistance, vector3d1.y * rayTraceDistance, vector3d1.z * rayTraceDistance);
-        return this.world.rayTraceBlocks(new RayTraceContext(vector3d, vector3d2, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, this));
+        Vector3d vector3d2 = vector3d.add(vector3d1.x * rayTraceDistance, vector3d1.y * rayTraceDistance,
+                vector3d1.z * rayTraceDistance);
+        return this.world.rayTraceBlocks(new RayTraceContext(vector3d, vector3d2, RayTraceContext.BlockMode.OUTLINE,
+                RayTraceContext.FluidMode.NONE, this));
     }
 
     public boolean areEyesInFluid(ITag<Fluid> tagIn) {
@@ -1212,7 +1280,8 @@ public abstract class Entity implements INameable, ICommandSource {
 
     public void moveRelative(float friction, Vector3d relative) {
         if (this instanceof ClientPlayerEntity) {
-            EventMoveFlying event = new EventMoveFlying(this.rotationYaw, (float) relative.x, (float) relative.z, friction);
+            EventMoveFlying event = new EventMoveFlying(this.rotationYaw, (float) relative.x, (float) relative.z,
+                    friction);
             EventBus.call(event);
 
             if (event.cancelled) {
@@ -1245,7 +1314,8 @@ public abstract class Entity implements INameable, ICommandSource {
             Vector3d vector3d = (d0 > 1.0D ? relative.normalize() : relative).scale((double) p_213299_1_);
             float f = MathHelper.sin(facing * ((float) Math.PI / 180F));
             float f1 = MathHelper.cos(facing * ((float) Math.PI / 180F));
-            return new Vector3d(vector3d.x * (double) f1 - vector3d.z * (double) f, vector3d.y, vector3d.z * (double) f1 + vector3d.x * (double) f);
+            return new Vector3d(vector3d.x * (double) f1 - vector3d.z * (double) f, vector3d.y,
+                    vector3d.z * (double) f1 + vector3d.x * (double) f);
         }
     }
 
@@ -1271,7 +1341,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Sets position and rotation, clamping and wrapping params to valid values. Used by network code.
+     * Sets position and rotation, clamping and wrapping params to valid values.
+     * Used by network code.
      */
     public void setPositionAndRotation(double x, double y, double z, float yaw, float pitch) {
         this.func_242281_f(x, y, z);
@@ -1299,7 +1370,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public void moveToBlockPosAndAngles(BlockPos pos, float rotationYawIn, float rotationPitchIn) {
-        this.setLocationAndAngles((double) pos.getX() + 0.5D, (double) pos.getY(), (double) pos.getZ() + 0.5D, rotationYawIn, rotationPitchIn);
+        this.setLocationAndAngles((double) pos.getX() + 0.5D, (double) pos.getY(), (double) pos.getZ() + 0.5D,
+                rotationYawIn, rotationPitchIn);
     }
 
     /**
@@ -1313,8 +1385,10 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Like {@link #setRawPosition}, but also sets {@link #prevPosX}/Y/Z and {@link #lastTickPosX}/Y/Z. {@link
-     * #setLocationAndAngles} does the same thing, except it also updates the bounding box.
+     * Like {@link #setRawPosition}, but also sets {@link #prevPosX}/Y/Z and
+     * {@link #lastTickPosX}/Y/Z. {@link
+     * #setLocationAndAngles} does the same thing, except it also updates the
+     * bounding box.
      */
     public void forceSetPosition(double x, double y, double z) {
         this.setRawPosition(x, y, z);
@@ -1334,6 +1408,25 @@ public abstract class Entity implements INameable, ICommandSource {
      * Returns the distance to the entity.
      */
 
+    public float getDistanceToEntityBox(Entity entityIn) {
+        Vector3d eyes = this.getEyePosition(1F);
+        Vector3d pos = getClosestPoint(eyes, entityIn.boundingBox);
+        double xDist = Math.abs(pos.x - eyes.x);
+        double yDist = Math.abs(pos.y - eyes.y);
+        double zDist = Math.abs(pos.z - eyes.z);
+        return (float) Math.sqrt(xDist * xDist + yDist * yDist + zDist * zDist);
+    }
+
+    public float getDistanceToEntityBox(BoundingBox boundingbox) {
+        Vector3d eyes = this.getEyePosition(1F);
+        Vector3d pos = getClosestPoint(eyes, new AxisAlignedBB(boundingbox.minX, boundingbox.minY, boundingbox.minZ,
+                boundingbox.maxX, boundingbox.maxY, boundingbox.maxZ));
+        double xDist = Math.abs(pos.x - eyes.x);
+        double yDist = Math.abs(pos.y - eyes.y);
+        double zDist = Math.abs(pos.z - eyes.z);
+        return (float) Math.sqrt(xDist * xDist + yDist * yDist + zDist * zDist);
+    }
+
     public double getDistance(double x, double y, double z) {
         double d0 = this.getPosX() - x;
         double d1 = this.getPosY() - y;
@@ -1346,6 +1439,16 @@ public abstract class Entity implements INameable, ICommandSource {
         float f1 = (float) (this.getPosY() - entityIn.getPosY());
         float f2 = (float) (this.getPosZ() - entityIn.getPosZ());
         return MathHelper.sqrt(f * f + f1 * f1 + f2 * f2);
+    }
+
+    public static Vector3d getClosestPoint(final Vector3d start, final AxisAlignedBB boundingBox) {
+        final double closestX = start.x >= boundingBox.maxX ? boundingBox.maxX
+                : start.x <= boundingBox.minX ? boundingBox.minX : boundingBox.minX + (start.x - boundingBox.minX);
+        final double closestY = start.y >= boundingBox.maxY ? boundingBox.maxY
+                : start.y <= boundingBox.minY ? boundingBox.minY : boundingBox.minY + (start.y - boundingBox.minY);
+        final double closestZ = start.z >= boundingBox.maxZ ? boundingBox.maxZ
+                : start.z <= boundingBox.minZ ? boundingBox.minZ : boundingBox.minZ + (start.z - boundingBox.minZ);
+        return new Vector3d(closestX, closestY, closestZ);
     }
 
     /**
@@ -1418,7 +1521,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Adds to the current velocity of the entity, and sets {@link #isAirBorne} to true.
+     * Adds to the current velocity of the entity, and sets {@link #isAirBorne} to
+     * true.
      */
     public void addVelocity(double x, double y, double z) {
         this.setMotion(this.getMotion().add(x, y, z));
@@ -1426,7 +1530,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Marks this entity's velocity as changed, so that it can be re-synced with the client later
+     * Marks this entity's velocity as changed, so that it can be re-synced with the
+     * client later
      */
     protected void markVelocityChanged() {
         this.velocityChanged = true;
@@ -1455,14 +1560,16 @@ public abstract class Entity implements INameable, ICommandSource {
      * Gets the current pitch of the entity.
      */
     public float getPitch(float partialTicks) {
-        return partialTicks == 1.0F ? this.rotationPitch : MathHelper.lerp(partialTicks, this.prevRotationPitch, this.rotationPitch);
+        return partialTicks == 1.0F ? this.rotationPitch
+                : MathHelper.lerp(partialTicks, this.prevRotationPitch, this.rotationPitch);
     }
 
     /**
      * Gets the current yaw of the entity
      */
     public float getYaw(float partialTicks) {
-        return partialTicks == 1.0F ? this.rotationYaw : MathHelper.lerp(partialTicks, this.prevRotationYaw, this.rotationYaw);
+        return partialTicks == 1.0F ? this.rotationYaw
+                : MathHelper.lerp(partialTicks, this.prevRotationYaw, this.rotationYaw);
     }
 
     /**
@@ -1491,7 +1598,8 @@ public abstract class Entity implements INameable, ICommandSource {
             return new Vector3d(this.getPosX(), this.getPosYEye(), this.getPosZ());
         } else {
             double d0 = MathHelper.lerp((double) partialTicks, this.prevPosX, this.getPosX());
-            double d1 = MathHelper.lerp((double) partialTicks, this.prevPosY, this.getPosY()) + (double) this.getEyeHeight();
+            double d1 = MathHelper.lerp((double) partialTicks, this.prevPosY, this.getPosY())
+                    + (double) this.getEyeHeight();
             double d2 = MathHelper.lerp((double) partialTicks, this.prevPosZ, this.getPosZ());
             return new Vector3d(d0, d1, d2);
         }
@@ -1511,19 +1619,23 @@ public abstract class Entity implements INameable, ICommandSource {
     public RayTraceResult pick(double rayTraceDistance, float partialTicks, boolean p_213324_4_) {
         Vector3d vector3d = this.getEyePosition(partialTicks);
         Vector3d vector3d1 = this.getLook(partialTicks);
-        Vector3d vector3d2 = vector3d.add(vector3d1.x * rayTraceDistance, vector3d1.y * rayTraceDistance, vector3d1.z * rayTraceDistance);
-        return this.world.rayTraceBlocks(new RayTraceContext(vector3d, vector3d2, RayTraceContext.BlockMode.OUTLINE, p_213324_4_ ? RayTraceContext.FluidMode.ANY : RayTraceContext.FluidMode.NONE, this));
+        Vector3d vector3d2 = vector3d.add(vector3d1.x * rayTraceDistance, vector3d1.y * rayTraceDistance,
+                vector3d1.z * rayTraceDistance);
+        return this.world.rayTraceBlocks(new RayTraceContext(vector3d, vector3d2, RayTraceContext.BlockMode.OUTLINE,
+                p_213324_4_ ? RayTraceContext.FluidMode.ANY : RayTraceContext.FluidMode.NONE, this));
     }
 
     /**
-     * Returns true if other Entities should be prevented from moving through this Entity.
+     * Returns true if other Entities should be prevented from moving through this
+     * Entity.
      */
     public boolean canBeCollidedWith() {
         return false;
     }
 
     /**
-     * Returns true if this entity should push and be pushed by other entities when colliding.
+     * Returns true if this entity should push and be pushed by other entities when
+     * colliding.
      */
     public boolean canBePushed() {
         return false;
@@ -1558,13 +1670,16 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Writes this entity to NBT, unless it has been removed. Also writes this entity's passengers, and the entity type
+     * Writes this entity to NBT, unless it has been removed. Also writes this
+     * entity's passengers, and the entity type
      * ID (so the produced NBT is sufficient to recreate the entity).
      * <p>
-     * Generally, {@link #writeUnlessPassenger} or {@link #writeWithoutTypeId} should be used instead of this method.
+     * Generally, {@link #writeUnlessPassenger} or {@link #writeWithoutTypeId}
+     * should be used instead of this method.
      *
-     * @return True if the entity was written (and the passed compound should be saved); false if the entity was not
-     * written.
+     * @return True if the entity was written (and the passed compound should be
+     *         saved); false if the entity was not
+     *         written.
      */
     public boolean writeUnlessRemoved(CompoundNBT compound) {
         String s = this.getEntityString();
@@ -1579,25 +1694,31 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Writes this entity to NBT, unless it has been removed or it is a passenger. Also writes this entity's passengers,
-     * and the entity type ID (so the produced NBT is sufficient to recreate the entity).
+     * Writes this entity to NBT, unless it has been removed or it is a passenger.
+     * Also writes this entity's passengers,
+     * and the entity type ID (so the produced NBT is sufficient to recreate the
+     * entity).
      * To always write the entity, use {@link #writeWithoutTypeId}.
      *
-     * @return True if the entity was written (and the passed compound should be saved); false if the entity was not
-     * written.
+     * @return True if the entity was written (and the passed compound should be
+     *         saved); false if the entity was not
+     *         written.
      */
     public boolean writeUnlessPassenger(CompoundNBT compound) {
         return this.isPassenger() ? false : this.writeUnlessRemoved(compound);
     }
 
     /**
-     * Writes this entity, including passengers, to NBT, regardless as to whether or not it is removed or a passenger.
-     * Does <b>not</b> include the entity's type ID, so the NBT is insufficient to recreate the entity
+     * Writes this entity, including passengers, to NBT, regardless as to whether or
+     * not it is removed or a passenger.
+     * Does <b>not</b> include the entity's type ID, so the NBT is insufficient to
+     * recreate the entity
      */
     public CompoundNBT writeWithoutTypeId(CompoundNBT compound) {
         try {
             if (this.ridingEntity != null) {
-                compound.put("Pos", this.newDoubleNBTList(this.ridingEntity.getPosX(), this.getPosY(), this.ridingEntity.getPosZ()));
+                compound.put("Pos", this.newDoubleNBTList(this.ridingEntity.getPosX(), this.getPosY(),
+                        this.ridingEntity.getPosZ()));
             } else {
                 compound.put("Pos", this.newDoubleNBTList(this.getPosX(), this.getPosY(), this.getPosZ()));
             }
@@ -1672,7 +1793,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Reads the entity from NBT (calls an abstract helper method to read specialized data)
+     * Reads the entity from NBT (calls an abstract helper method to read
+     * specialized data)
      */
     public void read(CompoundNBT compound) {
         try {
@@ -1682,7 +1804,8 @@ public abstract class Entity implements INameable, ICommandSource {
             double d0 = listnbt1.getDouble(0);
             double d1 = listnbt1.getDouble(1);
             double d2 = listnbt1.getDouble(2);
-            this.setMotion(Math.abs(d0) > 10.0D ? 0.0D : d0, Math.abs(d1) > 10.0D ? 0.0D : d1, Math.abs(d2) > 10.0D ? 0.0D : d2);
+            this.setMotion(Math.abs(d0) > 10.0D ? 0.0D : d0, Math.abs(d1) > 10.0D ? 0.0D : d1,
+                    Math.abs(d2) > 10.0D ? 0.0D : d2);
             this.forceSetPosition(listnbt.getDouble(0), listnbt.getDouble(1), listnbt.getDouble(2));
             this.rotationYaw = listnbt2.getFloat(0);
             this.rotationPitch = listnbt2.getFloat(1);
@@ -1825,7 +1948,8 @@ public abstract class Entity implements INameable, ICommandSource {
         } else if (this.world.isRemote) {
             return null;
         } else {
-            ItemEntity itementity = new ItemEntity(this.world, this.getPosX(), this.getPosY() + (double) offsetY, this.getPosZ(), stack);
+            ItemEntity itementity = new ItemEntity(this.world, this.getPosX(), this.getPosY() + (double) offsetY,
+                    this.getPosZ(), stack);
             itementity.setDefaultPickupDelay();
             this.world.addEntity(itementity);
             return itementity;
@@ -1848,9 +1972,9 @@ public abstract class Entity implements INameable, ICommandSource {
         } else {
             float f = 0.1F;
             float f1 = this.size.width * 0.8F;
-            AxisAlignedBB axisalignedbb = AxisAlignedBB.withSizeAtOrigin((double) f1, (double) 0.1F, (double) f1).offset(this.getPosX(), this.getPosYEye(), this.getPosZ());
-            return this.world.func_241457_a_(this, axisalignedbb, (p_241338_1_, p_241338_2_) ->
-            {
+            AxisAlignedBB axisalignedbb = AxisAlignedBB.withSizeAtOrigin((double) f1, (double) 0.1F, (double) f1)
+                    .offset(this.getPosX(), this.getPosYEye(), this.getPosZ());
+            return this.world.func_241457_a_(this, axisalignedbb, (p_241338_1_, p_241338_2_) -> {
                 return p_241338_1_.isSuffocating(this.world, p_241338_2_);
             }).findAny().isPresent();
         }
@@ -1892,7 +2016,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Applies this entity's orientation (pitch/yaw) to another entity. Used to update passenger orientation.
+     * Applies this entity's orientation (pitch/yaw) to another entity. Used to
+     * update passenger orientation.
      */
     public void applyOrientationToEntity(Entity entityToUpdate) {
     }
@@ -1905,7 +2030,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Returns the Y offset from the entity's position for any entity riding this one.
+     * Returns the Y offset from the entity's position for any entity riding this
+     * one.
      */
     public double getMountedYOffset() {
         return (double) this.size.height * 0.75D;
@@ -1976,7 +2102,8 @@ public abstract class Entity implements INameable, ICommandSource {
         if (passenger.getRidingEntity() != this) {
             throw new IllegalStateException("Use x.startRiding(y), not y.addPassenger(x)");
         } else {
-            if (!this.world.isRemote && passenger instanceof PlayerEntity && !(this.getControllingPassenger() instanceof PlayerEntity)) {
+            if (!this.world.isRemote && passenger instanceof PlayerEntity
+                    && !(this.getControllingPassenger() instanceof PlayerEntity)) {
                 this.passengers.add(0, passenger);
             } else {
                 this.passengers.add(passenger);
@@ -2000,7 +2127,8 @@ public abstract class Entity implements INameable, ICommandSource {
     /**
      * Sets a target for the client to interpolate towards over the next few ticks
      */
-    public void setPositionAndRotationDirect(double x, double y, double z, float yaw, float pitch, int posRotationIncrements, boolean teleport) {
+    public void setPositionAndRotationDirect(double x, double y, double z, float yaw, float pitch,
+            int posRotationIncrements, boolean teleport) {
         this.setPosition(x, y, z);
         this.setRotation(yaw, pitch);
     }
@@ -2032,7 +2160,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Marks the entity as being inside a portal, activating teleportation logic in onEntityUpdate() in the following
+     * Marks the entity as being inside a portal, activating teleportation logic in
+     * onEntityUpdate() in the following
      * tick(s).
      */
     public void setPortal(BlockPos pos) {
@@ -2054,10 +2183,12 @@ public abstract class Entity implements INameable, ICommandSource {
 
             if (this.inPortal) {
                 MinecraftServer minecraftserver = serverworld.getServer();
-                RegistryKey<World> registrykey = this.world.getDimensionKey() == World.THE_NETHER ? World.OVERWORLD : World.THE_NETHER;
+                RegistryKey<World> registrykey = this.world.getDimensionKey() == World.THE_NETHER ? World.OVERWORLD
+                        : World.THE_NETHER;
                 ServerWorld serverworld1 = minecraftserver.getWorld(registrykey);
 
-                if (serverworld1 != null && minecraftserver.getAllowNether() && !this.isPassenger() && this.portalCounter++ >= i) {
+                if (serverworld1 != null && minecraftserver.getAllowNether() && !this.isPassenger()
+                        && this.portalCounter++ >= i) {
                     this.world.getProfiler().startSection("portal");
                     this.portalCounter = i;
                     this.func_242279_ag();
@@ -2107,7 +2238,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Setups the entity to do the hurt animation. Only used by packets in multiplayer.
+     * Setups the entity to do the hurt animation. Only used by packets in
+     * multiplayer.
      */
     public void performHurtAnimation() {
     }
@@ -2128,7 +2260,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Returns true if the entity is on fire. Used by render to add the fire effect on rendering.
+     * Returns true if the entity is on fire. Used by render to add the fire effect
+     * on rendering.
      */
     public boolean isBurning() {
         boolean flag = this.world != null && this.world.isRemote;
@@ -2226,15 +2359,19 @@ public abstract class Entity implements INameable, ICommandSource {
 
     /**
      * Only used by renderer in EntityLivingBase subclasses.
-     * Determines if an entity is visible or not to a specific player, if the entity is normally invisible.
-     * For EntityLivingBase subclasses, returning false when invisible will render the entity semi-transparent.
+     * Determines if an entity is visible or not to a specific player, if the entity
+     * is normally invisible.
+     * For EntityLivingBase subclasses, returning false when invisible will render
+     * the entity semi-transparent.
      */
     public boolean isInvisibleToPlayer(PlayerEntity player) {
         if (player.isSpectator()) {
             return false;
         } else {
             Team team = this.getTeam();
-            return team != null && player != null && player.getTeam() == team && team.getSeeFriendlyInvisiblesEnabled() ? false : this.isInvisible();
+            return team != null && player != null && player.getTeam() == team && team.getSeeFriendlyInvisiblesEnabled()
+                    ? false
+                    : this.isInvisible();
         }
     }
 
@@ -2262,7 +2399,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Returns true if the flag is active for the entity. Known flags: 0: burning; 1: sneaking; 2: unused; 3: sprinting;
+     * Returns true if the flag is active for the entity. Known flags: 0: burning;
+     * 1: sneaking; 2: unused; 3: sprinting;
      * 4: swimming; 5: invisible; 6: glowing; 7: elytra flying
      */
     public boolean getFlag(int flag) {
@@ -2336,12 +2474,14 @@ public abstract class Entity implements INameable, ICommandSource {
 
     protected void pushOutOfBlocks(double x, double y, double z) {
         BlockPos blockpos = new BlockPos(x, y, z);
-        Vector3d vector3d = new Vector3d(x - (double) blockpos.getX(), y - (double) blockpos.getY(), z - (double) blockpos.getZ());
+        Vector3d vector3d = new Vector3d(x - (double) blockpos.getX(), y - (double) blockpos.getY(),
+                z - (double) blockpos.getZ());
         BlockPos.Mutable blockpos$mutable = new BlockPos.Mutable();
         Direction direction = Direction.UP;
         double d0 = Double.MAX_VALUE;
 
-        for (Direction direction1 : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST, Direction.UP}) {
+        for (Direction direction1 : new Direction[] { Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST,
+                Direction.UP }) {
             blockpos$mutable.setAndMove(blockpos, direction1);
 
             if (!this.world.getBlockState(blockpos$mutable).hasOpaqueCollisionShape(this.world, blockpos$mutable)) {
@@ -2373,7 +2513,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     private static ITextComponent func_233573_b_(ITextComponent p_233573_0_) {
-        IFormattableTextComponent iformattabletextcomponent = p_233573_0_.copyRaw().setStyle(p_233573_0_.getStyle().setClickEvent((ClickEvent) null));
+        IFormattableTextComponent iformattabletextcomponent = p_233573_0_.copyRaw()
+                .setStyle(p_233573_0_.getStyle().setClickEvent((ClickEvent) null));
 
         for (ITextComponent itextcomponent : p_233573_0_.getSiblings()) {
             iformattabletextcomponent.append(func_233573_b_(itextcomponent));
@@ -2422,14 +2563,17 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Called when a player attacks an entity. If this returns true the attack will not happen.
+     * Called when a player attacks an entity. If this returns true the attack will
+     * not happen.
      */
     public boolean hitByEntity(Entity entityIn) {
         return false;
     }
 
     public String toString() {
-        return String.format(Locale.ROOT, "%s['%s'/%d, l='%s', x=%.2f, y=%.2f, z=%.2f]", this.getClass().getSimpleName(), this.getName().getString(), this.entityId, this.world == null ? "~NULL~" : this.world.toString(), this.getPosX(), this.getPosY(), this.getPosZ());
+        return String.format(Locale.ROOT, "%s['%s'/%d, l='%s', x=%.2f, y=%.2f, z=%.2f]",
+                this.getClass().getSimpleName(), this.getName().getString(), this.entityId,
+                this.world == null ? "~NULL~" : this.world.toString(), this.getPosX(), this.getPosY(), this.getPosZ());
     }
 
     /**
@@ -2451,14 +2595,17 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Sets this entity's location and angles to the location and angles of the passed in entity.
+     * Sets this entity's location and angles to the location and angles of the
+     * passed in entity.
      */
     public void copyLocationAndAnglesFrom(Entity entityIn) {
-        this.setLocationAndAngles(entityIn.getPosX(), entityIn.getPosY(), entityIn.getPosZ(), entityIn.rotationYaw, entityIn.rotationPitch);
+        this.setLocationAndAngles(entityIn.getPosX(), entityIn.getPosY(), entityIn.getPosZ(), entityIn.rotationYaw,
+                entityIn.rotationPitch);
     }
 
     /**
-     * Prepares this entity in new dimension by copying NBT data from entity in old dimension
+     * Prepares this entity in new dimension by copying NBT data from entity in old
+     * dimension
      */
     public void copyDataFromOld(Entity entityIn) {
         CompoundNBT compoundnbt = entityIn.writeWithoutTypeId(new CompoundNBT());
@@ -2484,7 +2631,8 @@ public abstract class Entity implements INameable, ICommandSource {
 
                 if (entity != null) {
                     entity.copyDataFromOld(this);
-                    entity.setLocationAndAngles(portalinfo.pos.x, portalinfo.pos.y, portalinfo.pos.z, portalinfo.rotationYaw, entity.rotationPitch);
+                    entity.setLocationAndAngles(portalinfo.pos.x, portalinfo.pos.y, portalinfo.pos.z,
+                            portalinfo.rotationYaw, entity.rotationPitch);
                     entity.setMotion(portalinfo.motion);
                     server.addFromAnotherDimension(entity);
 
@@ -2511,7 +2659,8 @@ public abstract class Entity implements INameable, ICommandSource {
 
     @Nullable
     protected PortalInfo func_241829_a(ServerWorld p_241829_1_) {
-        boolean flag = this.world.getDimensionKey() == World.THE_END && p_241829_1_.getDimensionKey() == World.OVERWORLD;
+        boolean flag = this.world.getDimensionKey() == World.THE_END
+                && p_241829_1_.getDimensionKey() == World.OVERWORLD;
         boolean flag1 = p_241829_1_.getDimensionKey() == World.THE_END;
 
         if (!flag && !flag1) {
@@ -2525,27 +2674,30 @@ public abstract class Entity implements INameable, ICommandSource {
                 double d1 = Math.max(-2.9999872E7D, worldborder.minZ() + 16.0D);
                 double d2 = Math.min(2.9999872E7D, worldborder.maxX() - 16.0D);
                 double d3 = Math.min(2.9999872E7D, worldborder.maxZ() - 16.0D);
-                double d4 = DimensionType.getCoordinateDifference(this.world.getDimensionType(), p_241829_1_.getDimensionType());
-                BlockPos blockpos1 = new BlockPos(MathHelper.clamp(this.getPosX() * d4, d0, d2), this.getPosY(), MathHelper.clamp(this.getPosZ() * d4, d1, d3));
-                return this.func_241830_a(p_241829_1_, blockpos1, flag2).map((p_242275_2_) ->
-                {
+                double d4 = DimensionType.getCoordinateDifference(this.world.getDimensionType(),
+                        p_241829_1_.getDimensionType());
+                BlockPos blockpos1 = new BlockPos(MathHelper.clamp(this.getPosX() * d4, d0, d2), this.getPosY(),
+                        MathHelper.clamp(this.getPosZ() * d4, d1, d3));
+                return this.func_241830_a(p_241829_1_, blockpos1, flag2).map((p_242275_2_) -> {
                     BlockState blockstate = this.world.getBlockState(this.field_242271_ac);
                     Direction.Axis direction$axis;
                     Vector3d vector3d;
 
                     if (blockstate.hasProperty(BlockStateProperties.HORIZONTAL_AXIS)) {
                         direction$axis = blockstate.get(BlockStateProperties.HORIZONTAL_AXIS);
-                        TeleportationRepositioner.Result teleportationrepositioner$result = TeleportationRepositioner.findLargestRectangle(this.field_242271_ac, direction$axis, 21, Direction.Axis.Y, 21, (p_242276_2_) ->
-                        {
-                            return this.world.getBlockState(p_242276_2_) == blockstate;
-                        });
+                        TeleportationRepositioner.Result teleportationrepositioner$result = TeleportationRepositioner
+                                .findLargestRectangle(this.field_242271_ac, direction$axis, 21, Direction.Axis.Y, 21,
+                                        (p_242276_2_) -> {
+                                            return this.world.getBlockState(p_242276_2_) == blockstate;
+                                        });
                         vector3d = this.func_241839_a(direction$axis, teleportationrepositioner$result);
                     } else {
                         direction$axis = Direction.Axis.X;
                         vector3d = new Vector3d(0.5D, 0.0D, 0.0D);
                     }
 
-                    return PortalSize.func_242963_a(p_241829_1_, p_242275_2_, direction$axis, vector3d, this.getSize(this.getPose()), this.getMotion(), this.rotationYaw, this.rotationPitch);
+                    return PortalSize.func_242963_a(p_241829_1_, p_242275_2_, direction$axis, vector3d,
+                            this.getSize(this.getPose()), this.getMotion(), this.rotationYaw, this.rotationPitch);
                 }).orElse((PortalInfo) null);
             }
         } else {
@@ -2557,7 +2709,8 @@ public abstract class Entity implements INameable, ICommandSource {
                 blockpos = p_241829_1_.getHeight(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, p_241829_1_.getSpawnPoint());
             }
 
-            return new PortalInfo(new Vector3d((double) blockpos.getX() + 0.5D, (double) blockpos.getY(), (double) blockpos.getZ() + 0.5D), this.getMotion(), this.rotationYaw, this.rotationPitch);
+            return new PortalInfo(new Vector3d((double) blockpos.getX() + 0.5D, (double) blockpos.getY(),
+                    (double) blockpos.getZ() + 0.5D), this.getMotion(), this.rotationYaw, this.rotationPitch);
         }
     }
 
@@ -2565,7 +2718,8 @@ public abstract class Entity implements INameable, ICommandSource {
         return PortalSize.func_242973_a(result, axis, this.getPositionVec(), this.getSize(this.getPose()));
     }
 
-    protected Optional<TeleportationRepositioner.Result> func_241830_a(ServerWorld p_241830_1_, BlockPos p_241830_2_, boolean p_241830_3_) {
+    protected Optional<TeleportationRepositioner.Result> func_241830_a(ServerWorld p_241830_1_, BlockPos p_241830_2_,
+            boolean p_241830_3_) {
         return p_241830_1_.getDefaultTeleporter().getExistingPortal(p_241830_2_, p_241830_3_);
     }
 
@@ -2579,16 +2733,19 @@ public abstract class Entity implements INameable, ICommandSource {
     /**
      * Explosion resistance of a block relative to this entity
      */
-    public float getExplosionResistance(Explosion explosionIn, IBlockReader worldIn, BlockPos pos, BlockState blockStateIn, FluidState fluidState, float explosionPower) {
+    public float getExplosionResistance(Explosion explosionIn, IBlockReader worldIn, BlockPos pos,
+            BlockState blockStateIn, FluidState fluidState, float explosionPower) {
         return explosionPower;
     }
 
-    public boolean canExplosionDestroyBlock(Explosion explosionIn, IBlockReader worldIn, BlockPos pos, BlockState blockStateIn, float explosionPower) {
+    public boolean canExplosionDestroyBlock(Explosion explosionIn, IBlockReader worldIn, BlockPos pos,
+            BlockState blockStateIn, float explosionPower) {
         return true;
     }
 
     /**
-     * The maximum height from where the entity is alowed to jump (used in pathfinder)
+     * The maximum height from where the entity is alowed to jump (used in
+     * pathfinder)
      */
     public int getMaxFallHeight() {
         return 3;
@@ -2602,25 +2759,24 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public void fillCrashReport(CrashReportCategory category) {
-        category.addDetail("Entity Type", () ->
-        {
+        category.addDetail("Entity Type", () -> {
             return EntityType.getKey(this.getType()) + " (" + this.getClass().getCanonicalName() + ")";
         });
         category.addDetail("Entity ID", this.entityId);
-        category.addDetail("Entity Name", () ->
-        {
+        category.addDetail("Entity Name", () -> {
             return this.getName().getString();
         });
-        category.addDetail("Entity's Exact location", String.format(Locale.ROOT, "%.2f, %.2f, %.2f", this.getPosX(), this.getPosY(), this.getPosZ()));
-        category.addDetail("Entity's Block location", CrashReportCategory.getCoordinateInfo(MathHelper.floor(this.getPosX()), MathHelper.floor(this.getPosY()), MathHelper.floor(this.getPosZ())));
+        category.addDetail("Entity's Exact location",
+                String.format(Locale.ROOT, "%.2f, %.2f, %.2f", this.getPosX(), this.getPosY(), this.getPosZ()));
+        category.addDetail("Entity's Block location", CrashReportCategory.getCoordinateInfo(
+                MathHelper.floor(this.getPosX()), MathHelper.floor(this.getPosY()), MathHelper.floor(this.getPosZ())));
         Vector3d vector3d = this.getMotion();
-        category.addDetail("Entity's Momentum", String.format(Locale.ROOT, "%.2f, %.2f, %.2f", vector3d.x, vector3d.y, vector3d.z));
-        category.addDetail("Entity's Passengers", () ->
-        {
+        category.addDetail("Entity's Momentum",
+                String.format(Locale.ROOT, "%.2f, %.2f, %.2f", vector3d.x, vector3d.y, vector3d.z));
+        category.addDetail("Entity's Passengers", () -> {
             return this.getPassengers().toString();
         });
-        category.addDetail("Entity's Vehicle", () ->
-        {
+        category.addDetail("Entity's Vehicle", () -> {
             return this.getRidingEntity().toString();
         });
     }
@@ -2649,7 +2805,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Returns a String to use as this entity's name in the scoreboard/entity selector systems
+     * Returns a String to use as this entity's name in the scoreboard/entity
+     * selector systems
      */
     public String getScoreboardName() {
         return this.cachedUniqueIdString;
@@ -2668,8 +2825,7 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public ITextComponent getDisplayName() {
-        return ScorePlayerTeam.func_237500_a_(this.getTeam(), this.getName()).modifyStyle((p_211516_1_) ->
-        {
+        return ScorePlayerTeam.func_237500_a_(this.getTeam(), this.getName()).modifyStyle((p_211516_1_) -> {
             return p_211516_1_.setHoverEvent(this.getHoverEvent()).setInsertion(this.getCachedUniqueIdString());
         });
     }
@@ -2701,7 +2857,8 @@ public abstract class Entity implements INameable, ICommandSource {
     public final void teleportKeepLoaded(double x, double y, double z) {
         if (this.world instanceof ServerWorld) {
             ChunkPos chunkpos = new ChunkPos(new BlockPos(x, y, z));
-            ((ServerWorld) this.world).getChunkProvider().registerTicket(TicketType.POST_TELEPORT, chunkpos, 0, this.getEntityId());
+            ((ServerWorld) this.world).getChunkProvider().registerTicket(TicketType.POST_TELEPORT, chunkpos, 0,
+                    this.getEntityId());
             this.world.getChunk(chunkpos.x, chunkpos.z);
             this.setPositionAndUpdate(x, y, z);
         }
@@ -2714,8 +2871,7 @@ public abstract class Entity implements INameable, ICommandSource {
         if (this.world instanceof ServerWorld) {
             ServerWorld serverworld = (ServerWorld) this.world;
             this.setLocationAndAngles(x, y, z, this.rotationYaw, this.rotationPitch);
-            this.getSelfAndPassengers().forEach((p_233565_1_) ->
-            {
+            this.getSelfAndPassengers().forEach((p_233565_1_) -> {
                 serverworld.chunkCheck(p_233565_1_);
                 p_233565_1_.isPositionDirty = true;
 
@@ -2745,10 +2901,13 @@ public abstract class Entity implements INameable, ICommandSource {
 
         if (entitysize1.width < entitysize.width) {
             double d0 = (double) entitysize1.width / 2.0D;
-            this.setBoundingBox(new AxisAlignedBB(this.getPosX() - d0, this.getPosY(), this.getPosZ() - d0, this.getPosX() + d0, this.getPosY() + (double) entitysize1.height, this.getPosZ() + d0));
+            this.setBoundingBox(new AxisAlignedBB(this.getPosX() - d0, this.getPosY(), this.getPosZ() - d0,
+                    this.getPosX() + d0, this.getPosY() + (double) entitysize1.height, this.getPosZ() + d0));
         } else {
             AxisAlignedBB axisalignedbb = this.getBoundingBox();
-            this.setBoundingBox(new AxisAlignedBB(axisalignedbb.minX, axisalignedbb.minY, axisalignedbb.minZ, axisalignedbb.minX + (double) entitysize1.width, axisalignedbb.minY + (double) entitysize1.height, axisalignedbb.minZ + (double) entitysize1.width));
+            this.setBoundingBox(new AxisAlignedBB(axisalignedbb.minX, axisalignedbb.minY, axisalignedbb.minZ,
+                    axisalignedbb.minX + (double) entitysize1.width, axisalignedbb.minY + (double) entitysize1.height,
+                    axisalignedbb.minZ + (double) entitysize1.width));
 
             if (entitysize1.width > entitysize.width && !this.firstUpdate && !this.world.isRemote) {
                 float f = entitysize.width - entitysize1.width;
@@ -2765,7 +2924,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Gets the horizontal facing direction of this Entity, adjusted to take specially-treated entity types into
+     * Gets the horizontal facing direction of this Entity, adjusted to take
+     * specially-treated entity types into
      * account.
      */
     public Direction getAdjustedHorizontalFacing() {
@@ -2773,7 +2933,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     protected HoverEvent getHoverEvent() {
-        return new HoverEvent(HoverEvent.Action.SHOW_ENTITY, new HoverEvent.EntityHover(this.getType(), this.getUniqueID(), this.getName()));
+        return new HoverEvent(HoverEvent.Action.SHOW_ENTITY,
+                new HoverEvent.EntityHover(this.getType(), this.getUniqueID(), this.getName()));
     }
 
     public boolean isSpectatedByPlayer(ServerPlayerEntity player) {
@@ -2785,7 +2946,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Gets the bounding box of this Entity, adjusted to take auxiliary entities into account (e.g. the tile contained
+     * Gets the bounding box of this Entity, adjusted to take auxiliary entities
+     * into account (e.g. the tile contained
      * by a minecart, such as a command block).
      */
     public AxisAlignedBB getRenderBoundingBox() {
@@ -2796,7 +2958,8 @@ public abstract class Entity implements INameable, ICommandSource {
         EntitySize entitysize = this.getSize(pose);
         float f = entitysize.width / 2.0F;
         Vector3d vector3d = new Vector3d(this.getPosX() - (double) f, this.getPosY(), this.getPosZ() - (double) f);
-        Vector3d vector3d1 = new Vector3d(this.getPosX() + (double) f, this.getPosY() + (double) entitysize.height, this.getPosZ() + (double) f);
+        Vector3d vector3d1 = new Vector3d(this.getPosX() + (double) f, this.getPosY() + (double) entitysize.height,
+                this.getPosZ() + (double) f);
         return new AxisAlignedBB(vector3d, vector3d1);
     }
 
@@ -2831,7 +2994,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Get the world, if available. <b>{@code null} is not allowed!</b> If you are not an entity in the world, return
+     * Get the world, if available. <b>{@code null} is not allowed!</b> If you are
+     * not an entity in the world, return
      * the overworld
      */
     public World getEntityWorld() {
@@ -2867,21 +3031,24 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Add the given player to the list of players tracking this entity. For instance, a player may track a boss in
+     * Add the given player to the list of players tracking this entity. For
+     * instance, a player may track a boss in
      * order to view its associated boss bar.
      */
     public void addTrackingPlayer(ServerPlayerEntity player) {
     }
 
     /**
-     * Removes the given player from the list of players tracking this entity. See {@link Entity#addTrackingPlayer} for
+     * Removes the given player from the list of players tracking this entity. See
+     * {@link Entity#addTrackingPlayer} for
      * more information on tracking.
      */
     public void removeTrackingPlayer(ServerPlayerEntity player) {
     }
 
     /**
-     * Transforms the entity's current yaw with the given Rotation and returns it. This does not have a side-effect.
+     * Transforms the entity's current yaw with the given Rotation and returns it.
+     * This does not have a side-effect.
      */
     public float getRotatedYaw(Rotation transformRotation) {
         float f = MathHelper.wrapDegrees(this.rotationYaw);
@@ -2902,7 +3069,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Transforms the entity's current yaw with the given Mirror and returns it. This does not have a side-effect.
+     * Transforms the entity's current yaw with the given Mirror and returns it.
+     * This does not have a side-effect.
      */
     public float getMirroredYaw(Mirror transformMirror) {
         float f = MathHelper.wrapDegrees(this.rotationYaw);
@@ -2920,12 +3088,20 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Checks if players can use this entity to access operator (permission level 2) commands either directly or
-     * indirectly, such as give or setblock. A similar method exists for entities at {@link
-     * net.minecraft.tileentity.TileEntity#onlyOpsCanSetNbt()}.<p>For example, {@link
-     * net.minecraft.entity.item.EntityMinecartCommandBlock#ignoreItemEntityData() command block minecarts} and {@link
-     * net.minecraft.entity.item.EntityMinecartMobSpawner#ignoreItemEntityData() mob spawner minecarts} (spawning
-     * command block minecarts or drops) are considered accessible.</p>@return true if this entity offers ways for
+     * Checks if players can use this entity to access operator (permission level 2)
+     * commands either directly or
+     * indirectly, such as give or setblock. A similar method exists for entities at
+     * {@link
+     * net.minecraft.tileentity.TileEntity#onlyOpsCanSetNbt()}.
+     * <p>
+     * For example, {@link
+     * net.minecraft.entity.item.EntityMinecartCommandBlock#ignoreItemEntityData()
+     * command block minecarts} and {@link
+     * net.minecraft.entity.item.EntityMinecartMobSpawner#ignoreItemEntityData() mob
+     * spawner minecarts} (spawning
+     * command block minecarts or drops) are considered accessible.
+     * </p>
+     * @return true if this entity offers ways for
      * unauthorized players to use restricted commands
      */
     public boolean ignoreItemEntityData() {
@@ -2947,7 +3123,8 @@ public abstract class Entity implements INameable, ICommandSource {
     @Nullable
 
     /**
-     * For vehicles, the first passenger is generally considered the controller and "drives" the vehicle. For example,
+     * For vehicles, the first passenger is generally considered the controller and
+     * "drives" the vehicle. For example,
      * Pigs, Horses, and Boats are generally "steered" by the controlling passenger.
      */
     public Entity getControllingPassenger() {
@@ -2955,7 +3132,8 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public List<Entity> getPassengers() {
-        return (List<Entity>) (this.passengers.isEmpty() ? Collections.emptyList() : Lists.newArrayList(this.passengers));
+        return (List<Entity>) (this.passengers.isEmpty() ? Collections.emptyList()
+                : Lists.newArrayList(this.passengers));
     }
 
     public boolean isPassenger(Entity entityIn) {
@@ -3080,7 +3258,9 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public CommandSource getCommandSource() {
-        return new CommandSource(this, this.getPositionVec(), this.getPitchYaw(), this.world instanceof ServerWorld ? (ServerWorld) this.world : null, this.getPermissionLevel(), this.getName().getString(), this.getDisplayName(), this.world.getServer(), this);
+        return new CommandSource(this, this.getPositionVec(), this.getPitchYaw(),
+                this.world instanceof ServerWorld ? (ServerWorld) this.world : null, this.getPermissionLevel(),
+                this.getName().getString(), this.getDisplayName(), this.world.getServer(), this);
     }
 
     protected int getPermissionLevel() {
@@ -3109,8 +3289,10 @@ public abstract class Entity implements INameable, ICommandSource {
         double d1 = target.y - vector3d.y;
         double d2 = target.z - vector3d.z;
         double d3 = (double) MathHelper.sqrt(d0 * d0 + d2 * d2);
-        this.rotationPitch = MathHelper.wrapDegrees((float) (-(MathHelper.atan2(d1, d3) * (double) (180F / (float) Math.PI))));
-        this.rotationYaw = MathHelper.wrapDegrees((float) (MathHelper.atan2(d2, d0) * (double) (180F / (float) Math.PI)) - 90.0F);
+        this.rotationPitch = MathHelper
+                .wrapDegrees((float) (-(MathHelper.atan2(d1, d3) * (double) (180F / (float) Math.PI))));
+        this.rotationYaw = MathHelper
+                .wrapDegrees((float) (MathHelper.atan2(d2, d0) * (double) (180F / (float) Math.PI)) - 90.0F);
         this.setRotationYawHead(this.rotationYaw);
         this.prevRotationPitch = this.rotationPitch;
         this.prevRotationYaw = this.rotationYaw;
@@ -3142,7 +3324,8 @@ public abstract class Entity implements INameable, ICommandSource {
                         FluidState fluidstate = this.world.getFluidState(blockpos$mutable);
 
                         if (fluidstate.isTagged(fluidTag)) {
-                            double d1 = (double) ((float) i2 + fluidstate.getActualHeight(this.world, blockpos$mutable));
+                            double d1 = (double) ((float) i2
+                                    + fluidstate.getActualHeight(this.world, blockpos$mutable));
 
                             if (d1 >= axisalignedbb.minY) {
                                 flag1 = true;
@@ -3177,7 +3360,8 @@ public abstract class Entity implements INameable, ICommandSource {
                 vector3d = vector3d.scale(p_210500_2_ * 1.0D);
                 double d2 = 0.003D;
 
-                if (Math.abs(vector3d2.x) < 0.003D && Math.abs(vector3d2.z) < 0.003D && vector3d.length() < 0.0045000000000000005D) {
+                if (Math.abs(vector3d2.x) < 0.003D && Math.abs(vector3d2.z) < 0.003D
+                        && vector3d.length() < 0.0045000000000000005D) {
                     vector3d = vector3d.normalize().scale(0.0045000000000000005D);
                 }
 
@@ -3272,8 +3456,10 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     /**
-     * Directly updates the {@link #posX}, {@link posY}, and {@link posZ} fields, without performing any collision
-     * checks, updating the bounding box position, or sending any packets. In general, this is not what you want and
+     * Directly updates the {@link #posX}, {@link posY}, and {@link posZ} fields,
+     * without performing any collision
+     * checks, updating the bounding box position, or sending any packets. In
+     * general, this is not what you want and
      * {@link #setPosition} is better, as that handles the bounding box.
      */
     public void setRawPosition(double x, double y, double z) {

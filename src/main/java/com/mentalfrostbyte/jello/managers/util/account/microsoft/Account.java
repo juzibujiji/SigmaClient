@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.managers.util.account.microsoft;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.util.system.network.ImageUtil;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
@@ -17,8 +18,11 @@ import org.apache.commons.io.output.ByteArrayOutputStream;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -240,17 +244,6 @@ public class Account {
         return this.head != null ? this.head : Resources.head;
     }
 
-    @Override
-    protected void finalize() throws Throwable {
-        try {
-            if (this.head != null) {
-                Client.getInstance().addTexture(this.head);
-            }
-        } finally {
-            super.finalize();
-        }
-    }
-
     public void updateSkin() {
         if (!this.getUUID().contains("8667ba71-b85a-4004-af54-457a9734eed7") && this.skinUpdateThread == null) {
             this.skinUpdateThread = new Thread(() -> {
@@ -268,6 +261,20 @@ public class Account {
     }
 
     public Session login() throws MicrosoftAuthenticationException {
+        if (this.token != null && !this.token.isEmpty()) {
+            try {
+                JsonObject profile = fetchProfile(this.token);
+                if (profile != null) {
+                    this.knownName = profile.get("name").getAsString();
+                    this.uuid = fixUUID(profile.get("id").getAsString());
+                    this.updateSkin();
+                    this.lastUsed = System.currentTimeMillis();
+                    return new Session(this.knownName, this.uuid.replace("-", ""), this.token, "mojang");
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
         if (!this.isEmailAValidEmailFormat()) {
             MicrosoftAuthenticator authenticator = new MicrosoftAuthenticator();
             MicrosoftAuthResult result = authenticator.loginWithCredentials(email, password);
@@ -380,5 +387,29 @@ public class Account {
 
         Pattern var3 = Pattern.compile("[a-zA-Z0-9_]{2,16}");
         return var3.matcher(this.getEmail()).matches();
+    }
+
+    private JsonObject fetchProfile(String accessToken) {
+        try {
+            URL url = new URL("https://api.minecraftservices.com/minecraft/profile");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+            connection.setRequestProperty("Content-Type", "application/json");
+
+            if (connection.getResponseCode() == 200) {
+                BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                in.close();
+                return JsonParser.parseString(response.toString()).getAsJsonObject();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }

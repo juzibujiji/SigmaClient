@@ -48,7 +48,8 @@ public class Alert extends Element {
     public List<Button> buttons = new ArrayList<>();
 
     public Alert(CustomGuiScreen screen, String iconName, boolean var3, String name, AlertComponent... var5) {
-        super(screen, iconName, 0, 0, Minecraft.getInstance().getMainWindow().getWidth(), Minecraft.getInstance().getMainWindow().getHeight(), false);
+        super(screen, iconName, 0, 0, Minecraft.getInstance().getMainWindow().getWidth(),
+                Minecraft.getInstance().getMainWindow().getHeight(), false);
         this.field21283 = var3;
         this.alertName = name;
         this.setHovered(false);
@@ -64,9 +65,8 @@ public class Alert extends Element {
         this.field21285 -= 10;
         this.addToList(
                 this.screen = new CustomGuiScreen(
-                        this, "modalContent", (this.widthA - this.field21284) / 2, (this.heightA - this.field21285) / 2, this.field21284, this.field21285
-                )
-        );
+                        this, "modalContent", (this.widthA - this.field21284) / 2, (this.heightA - this.field21285) / 2,
+                        this.field21284, this.field21285));
         int var17 = 0;
         int var18 = 0;
 
@@ -89,16 +89,14 @@ public class Alert extends Element {
                                                             ClientColors.DEEP_TEAL.getColor(),
                                                             ClientColors.DEEP_TEAL.getColor(),
                                                             ClientColors.DEEP_TEAL.getColor(),
-                                                            ClientColors.DEEP_TEAL.getColor()
-                                                    ),
+                                                            ClientColors.DEEP_TEAL.getColor()),
                                                     component.text,
-                                                    ResourceRegistry.JelloLightFont36
-                                            )
-                                    );
+                                                    ResourceRegistry.JelloLightFont36));
                         }
                     } else {
                         Button button;
-                        this.screen.addToList(button = new Button(this.screen, "Item" + var17, 0, var18, this.field21284, component.field44773, ColorHelper.field27961, component.text));
+                        this.screen.addToList(button = new Button(this.screen, "Item" + var17, 0, var18,
+                                this.field21284, component.field44773, ColorHelper.field27961, component.text));
                         this.buttons.add(button);
                         button.field20586 = 4;
                         button.onClick((var1x, var2x) -> {
@@ -115,7 +113,8 @@ public class Alert extends Element {
                                                 return;
                                             }
 
-                                            Account account = new Account(session.username, session.playerID, session.token);
+                                            Account account = new Account(session.username, session.playerID,
+                                                    session.token);
                                             if (!Client.getInstance().accountManager.containsAccount(account)) {
                                                 Client.getInstance().accountManager.updateAccount(account);
                                             }
@@ -133,13 +132,20 @@ public class Alert extends Element {
                                 case "Web login" -> {
                                     ExecutorService executor = Executors.newSingleThreadExecutor();
                                     MicrosoftLoginUtil.acquireMSAuthCode(executor)
-                                            .thenComposeAsync(msAuthCode -> MicrosoftLoginUtil.acquireMSAccessToken(msAuthCode, executor), executor)
-                                            .thenComposeAsync(msAccessToken -> MicrosoftLoginUtil.acquireXboxAccessToken(msAccessToken, executor), executor)
-                                            .thenComposeAsync(xboxAccessToken -> MicrosoftLoginUtil.acquireXboxXstsToken(xboxAccessToken, executor), executor)
-                                            .thenComposeAsync(xboxXstsData -> MicrosoftLoginUtil.acquireMCAccessToken(xboxXstsData.get("Token"), xboxXstsData.get("uhs"), executor), executor)
-                                            .thenComposeAsync(mcToken -> MicrosoftLoginUtil.login(mcToken, executor), executor)
+                                            .thenComposeAsync(msAuthCode -> MicrosoftLoginUtil
+                                                    .acquireMSAccessToken(msAuthCode, executor), executor)
+                                            .thenComposeAsync(msAccessToken -> MicrosoftLoginUtil
+                                                    .acquireXboxAccessToken(msAccessToken, executor), executor)
+                                            .thenComposeAsync(xboxAccessToken -> MicrosoftLoginUtil
+                                                    .acquireXboxXstsToken(xboxAccessToken, executor), executor)
+                                            .thenComposeAsync(xboxXstsData -> MicrosoftLoginUtil.acquireMCAccessToken(
+                                                    xboxXstsData.get("Token"), xboxXstsData.get("uhs"), executor),
+                                                    executor)
+                                            .thenComposeAsync(mcToken -> MicrosoftLoginUtil.login(mcToken, executor),
+                                                    executor)
                                             .thenAccept(session -> {
-                                                Account account = new Account(session.username, session.playerID, session.token);
+                                                Account account = new Account(session.username, session.playerID,
+                                                        session.token);
                                                 if (!Client.getInstance().accountManager.containsAccount(account)) {
                                                     Client.getInstance().accountManager.updateAccount(account);
                                                 }
@@ -155,6 +161,32 @@ public class Alert extends Element {
                                                 return null;
                                             });
                                 }
+                                case "Token login" -> {
+                                    this.inputMap = this.method13599();
+                                    String token = this.inputMap.get("Email");
+                                    if (token != null && !token.isEmpty()) {
+                                        new Thread(() -> {
+                                            Account account = new Account("Token Account", "Token ID", token);
+                                            try {
+                                                if (Client.getInstance().accountManager.login(account)) {
+                                                    if (!Client.getInstance().accountManager.containsAccount(account)) {
+                                                        Client.getInstance().accountManager.updateAccount(account);
+                                                    }
+                                                    Minecraft.getInstance().execute(() -> {
+                                                        this.method13603(false);
+                                                        AltManagerScreen.instance.updateAccountList(false);
+                                                    });
+                                                } else {
+                                                    Client.getInstance().soundManager.play("error");
+                                                }
+                                            } catch (Exception e) {
+                                                Client.getInstance().soundManager.play("error");
+                                            }
+                                        }).start();
+                                    } else {
+                                        Client.getInstance().soundManager.play("error");
+                                    }
+                                }
                                 default -> this.onButtonClick();
                             }
                         });
@@ -164,9 +196,8 @@ public class Alert extends Element {
                     this.screen
                             .addToList(
                                     var22 = new TextField(
-                                            this.screen, "Item" + var17, 0, var18, this.field21284, component.field44773, TextField.field20741, "", component.text
-                                    )
-                            );
+                                            this.screen, "Item" + var17, 0, var18, this.field21284,
+                                            component.field44773, TextField.field20741, "", component.text));
                     if (!component.text.contains("Password")) {
                         if (component.text.contains("Email")) {
                             var8 = var22;
@@ -187,12 +218,10 @@ public class Alert extends Element {
                                         this.field21284,
                                         component.field44773,
                                         new ColorHelper(
-                                                ClientColors.MID_GREY.getColor(), ClientColors.MID_GREY.getColor(), ClientColors.MID_GREY.getColor(), ClientColors.MID_GREY.getColor()
-                                        ),
+                                                ClientColors.MID_GREY.getColor(), ClientColors.MID_GREY.getColor(),
+                                                ClientColors.MID_GREY.getColor(), ClientColors.MID_GREY.getColor()),
                                         component.text,
-                                        ResourceRegistry.JelloLightFont20
-                                )
-                        );
+                                        ResourceRegistry.JelloLightFont20));
             }
 
             var18 += component.field44773 + 10;
@@ -240,7 +269,7 @@ public class Alert extends Element {
         for (CustomGuiScreen var5 : this.screen.getChildren()) {
             AnimatedIconPanel var6 = (AnimatedIconPanel) var5;
             if (var6 instanceof TextField var7) {
-				var3.put(var7.getPlaceholder(), var7.getText());
+                var3.put(var7.getPlaceholder(), var7.getText());
             }
         }
 
@@ -264,7 +293,8 @@ public class Alert extends Element {
 
     public float method13602(float var1, float var2) {
         return this.field21282.getDirection() != Animation.Direction.BACKWARDS
-                ? (float) (Math.pow(2.0, -10.0F * var1) * Math.sin((double) (var1 - var2 / 4.0F) * (Math.PI * 2) / (double) var2) + 1.0)
+                ? (float) (Math.pow(2.0, -10.0F * var1)
+                        * Math.sin((double) (var1 - var2 / 4.0F) * (Math.PI * 2) / (double) var2) + 1.0)
                 : 0.5F + QuadraticEasing.easeOutQuad(var1, 0.0F, 1.0F, 1.0F) * 0.5F;
     }
 
@@ -273,7 +303,8 @@ public class Alert extends Element {
         if (this.field21282.calcPercent() != 0.0F) {
             int var4 = this.field21284 + 60;
             int var5 = this.field21285 + 60;
-            float var7 = !this.isHovered() ? this.field21282.calcPercent() : Math.min(this.field21282.calcPercent() / 0.25F, 1.0F);
+            float var7 = !this.isHovered() ? this.field21282.calcPercent()
+                    : Math.min(this.field21282.calcPercent() / 0.25F, 1.0F);
             float var8 = this.method13602(this.field21282.calcPercent(), 1.0F);
             var4 = (int) ((float) var4 * var8);
             var5 = (int) ((float) var5 * var8);
@@ -283,15 +314,14 @@ public class Alert extends Element {
                     (float) (this.getWidthA() + 10),
                     (float) (this.getHeightA() + 10),
                     this.field21281,
-                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var7)
-            );
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var7));
             RenderUtil.drawRoundedRect(
-                    0.0F, 0.0F, (float) this.getWidthA(), (float) this.getHeightA(), RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.1F * var7)
-            );
+                    0.0F, 0.0F, (float) this.getWidthA(), (float) this.getHeightA(),
+                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.1F * var7));
             if (var4 > 0) {
                 RenderUtil.method11465(
-                        (this.widthA - var4) / 2, (this.heightA - var5) / 2, var4, var5, RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var7)
-                );
+                        (this.widthA - var4) / 2, (this.heightA - var5) / 2, var4, var5,
+                        RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var7));
             }
 
             super.method13279(var8, var8);
@@ -333,8 +363,8 @@ public class Alert extends Element {
                 }
 
                 this.field21281 = BufferedImageUtil.getTexture(
-                        "blur", ImageUtil.method35036(0, 0, this.getWidthA(), this.getHeightA(), 5, 10, ClientColors.LIGHT_GREYISH_BLUE.getColor(), true)
-                );
+                        "blur", ImageUtil.method35036(0, 0, this.getWidthA(), this.getHeightA(), 5, 10,
+                                ClientColors.LIGHT_GREYISH_BLUE.getColor(), true));
             } catch (IOException var5) {
                 Client.getInstance().logger.error(var5.getMessage());
             }
@@ -350,17 +380,6 @@ public class Alert extends Element {
         }
 
         this.setReAddChildren(var1);
-    }
-
-    @Override
-	protected void finalize() throws Throwable {
-        try {
-            if (this.field21281 != null) {
-                Client.getInstance().addTexture(this.field21281);
-            }
-        } finally {
-            super.finalize();
-        }
     }
 
     public final void method13604(Class9448 var1) {

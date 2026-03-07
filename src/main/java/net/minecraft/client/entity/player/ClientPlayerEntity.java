@@ -64,31 +64,36 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     private int permissionLevel = 0;
 
     /**
-     * The last X position which was transmitted to the server, used to determine when the X position changes and needs
+     * The last X position which was transmitted to the server, used to determine
+     * when the X position changes and needs
      * to be re-trasmitted
      */
     public double lastReportedPosX;
 
     /**
-     * The last Y position which was transmitted to the server, used to determine when the Y position changes and needs
+     * The last Y position which was transmitted to the server, used to determine
+     * when the Y position changes and needs
      * to be re-transmitted
      */
     public double lastReportedPosY;
 
     /**
-     * The last Z position which was transmitted to the server, used to determine when the Z position changes and needs
+     * The last Z position which was transmitted to the server, used to determine
+     * when the Z position changes and needs
      * to be re-transmitted
      */
     public double lastReportedPosZ;
 
     /**
-     * The last yaw value which was transmitted to the server, used to determine when the yaw changes and needs to be
+     * The last yaw value which was transmitted to the server, used to determine
+     * when the yaw changes and needs to be
      * re-transmitted
      */
     public float lastReportedYaw;
 
     /**
-     * The last pitch value which was transmitted to the server, used to determine when the pitch changes and needs to
+     * The last pitch value which was transmitted to the server, used to determine
+     * when the pitch changes and needs to
      * be re-transmitted
      */
     public float lastReportedPitch;
@@ -102,7 +107,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     public boolean serverSprintState;
 
     /**
-     * Reset to 0 every time position is sent to the server, used to send periodic updates every 20 ticks even when the
+     * Reset to 0 every time position is sent to the server, used to send periodic
+     * updates every 20 ticks even when the
      * player is not moving.
      */
     private int positionUpdateTicks;
@@ -129,7 +135,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     private int counterInWater;
     private boolean showDeathScreen = true;
 
-    public ClientPlayerEntity(Minecraft mc, ClientWorld world, ClientPlayNetHandler connection, StatisticsManager stats, ClientRecipeBook recipeBook, boolean clientSneakState, boolean clientSprintState) {
+    public ClientPlayerEntity(Minecraft mc, ClientWorld world, ClientPlayNetHandler connection, StatisticsManager stats,
+            ClientRecipeBook recipeBook, boolean clientSneakState, boolean clientSprintState) {
         super(world, connection.getGameProfile());
         this.mc = mc;
         this.connection = connection;
@@ -160,7 +167,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             return false;
         } else {
             if (entityIn instanceof AbstractMinecartEntity) {
-                this.mc.getSoundHandler().play(new RidingMinecartTickableSound(this, (AbstractMinecartEntity) entityIn));
+                this.mc.getSoundHandler()
+                        .play(new RidingMinecartTickableSound(this, (AbstractMinecartEntity) entityIn));
             }
 
             if (entityIn instanceof BoatEntity) {
@@ -215,8 +223,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             super.tick();
 
             if (this.isPassenger()) {
-                this.connection.sendPacket(new CPlayerPacket.RotationPacket(this.rotationYaw, this.rotationPitch, this.onGround));
-                this.connection.sendPacket(new CInputPacket(this.moveStrafing, this.moveForward, this.movementInput.jump, this.movementInput.sneaking));
+                this.connection.sendPacket(
+                        new CPlayerPacket.RotationPacket(this.rotationYaw, this.rotationPitch, this.onGround));
+                this.connection.sendPacket(new CInputPacket(this.moveStrafing, this.moveForward,
+                        this.movementInput.jump, this.movementInput.sneaking));
                 Entity entity = this.getLowestRidingEntity();
 
                 if (entity != this && entity.canPassengerSteer()) {
@@ -243,17 +253,21 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     /**
-     * called every tick when the player is on foot. Performs all the things that normally happen during movement.
+     * called every tick when the player is on foot. Performs all the things that
+     * normally happen during movement.
      */
     protected void onUpdateWalkingPlayer() {
         AxisAlignedBB bounds = this.getBoundingBox();
-        EventMotion event = new EventMotion(this.getPosX(), bounds.minY, this.getPosZ(), this.rotationYaw, this.rotationPitch, this.onGround);
+        EventMotion event = new EventMotion(this.getPosX(), bounds.minY, this.getPosZ(), this.rotationYaw,
+                this.rotationPitch, this.onGround);
         EventBus.call(event);
-        if (event.cancelled) return;
+        if (event.cancelled)
+            return;
         boolean flag = this.isSprinting();
 
         if (flag != this.serverSprintState) {
-            CEntityActionPacket.Action centityactionpacket$action = flag ? CEntityActionPacket.Action.START_SPRINTING : CEntityActionPacket.Action.STOP_SPRINTING;
+            CEntityActionPacket.Action centityactionpacket$action = flag ? CEntityActionPacket.Action.START_SPRINTING
+                    : CEntityActionPacket.Action.STOP_SPRINTING;
             this.connection.sendPacket(new CEntityActionPacket(this, centityactionpacket$action));
             this.serverSprintState = flag;
         }
@@ -261,7 +275,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         boolean flag3 = this.isSneaking();
 
         if (flag3 != this.clientSneakState) {
-            CEntityActionPacket.Action centityactionpacket$action1 = flag3 ? CEntityActionPacket.Action.PRESS_SHIFT_KEY : CEntityActionPacket.Action.RELEASE_SHIFT_KEY;
+            CEntityActionPacket.Action centityactionpacket$action1 = flag3 ? CEntityActionPacket.Action.PRESS_SHIFT_KEY
+                    : CEntityActionPacket.Action.RELEASE_SHIFT_KEY;
             this.connection.sendPacket(new CEntityActionPacket(this, centityactionpacket$action1));
             this.clientSneakState = flag3;
         }
@@ -276,26 +291,27 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
             boolean onGround = event.isOnGround();
 
-            double newX = x - this.lastReportedPosX;
-            double newY = y - this.lastReportedPosY;
-            double newZ = z - this.lastReportedPosZ;
+            double deltaX = x - this.lastReportedPosX;
+            double deltaY = y - this.lastReportedPosY;
+            double deltaZ = z - this.lastReportedPosZ;
 
-            double newYaw = (double) (yaw - this.lastReportedYaw);
-            double newPitch = (double) (pitch - this.lastReportedPitch);
+            double deltaYaw = yaw - this.lastReportedYaw;
+            double deltaPitch = pitch - this.lastReportedPitch;
 
             ++this.positionUpdateTicks;
 
             final var targetVersion = JelloPortal.getVersion();
-            final var updateTicks = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_9) ? 19 : 20;
-            final var point3 = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_18_2) ? 4.0E-8D : 9.0E-4D;
+            final var isLegacy = targetVersion.equalTo(ProtocolVersion.v1_8);
+            final var minimumMovement = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_18_2) ? 4.0E-8D : 9.0E-4D;
 
-            boolean posMoved = newX * newX + newY * newY + newZ * newZ > point3
-                    || this.positionUpdateTicks >= updateTicks;
-            boolean rotMoved = newYaw != 0.0D || newPitch != 0.0D;
+            boolean posMoved = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ > minimumMovement
+                    || (isLegacy ? this.positionUpdateTicks >= 21 : this.positionUpdateTicks >= 19);
+            boolean rotMoved = deltaYaw != 0.0D || deltaPitch != 0.0D;
 
             if (this.isPassenger()) {
                 Vector3d vector3d = this.getMotion();
-                this.connection.sendPacket(new CPlayerPacket.PositionRotationPacket(vector3d.x, -999.0, vector3d.z, yaw, pitch, onGround));
+                this.connection.sendPacket(
+                        new CPlayerPacket.PositionRotationPacket(vector3d.x, -999.0, vector3d.z, yaw, pitch, onGround));
                 posMoved = false;
             } else if (posMoved && rotMoved) {
                 this.connection.sendPacket(new CPlayerPacket.PositionRotationPacket(x, y, z, yaw, pitch, onGround));
@@ -303,7 +319,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                 this.connection.sendPacket(new CPlayerPacket.PositionPacket(x, y, z, onGround));
             } else if (rotMoved) {
                 this.connection.sendPacket(new CPlayerPacket.RotationPacket(yaw, pitch, onGround));
-            } else if (this.prevOnGround != this.onGround || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
+            } else if (this.prevOnGround != this.onGround || isLegacy) {
                 this.connection.sendPacket(new CPlayerPacket(onGround));
             }
 
@@ -332,9 +348,14 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     public boolean drop(boolean p_225609_1_) {
-        CPlayerDiggingPacket.Action cplayerdiggingpacket$action = p_225609_1_ ? CPlayerDiggingPacket.Action.DROP_ALL_ITEMS : CPlayerDiggingPacket.Action.DROP_ITEM;
-        this.connection.sendPacket(new CPlayerDiggingPacket(cplayerdiggingpacket$action, BlockPos.ZERO, Direction.DOWN));
-        return this.inventory.decrStackSize(this.inventory.currentItem, p_225609_1_ && !this.inventory.getCurrentItem().isEmpty() ? this.inventory.getCurrentItem().getCount() : 1) != ItemStack.EMPTY;
+        CPlayerDiggingPacket.Action cplayerdiggingpacket$action = p_225609_1_
+                ? CPlayerDiggingPacket.Action.DROP_ALL_ITEMS
+                : CPlayerDiggingPacket.Action.DROP_ITEM;
+        this.connection
+                .sendPacket(new CPlayerDiggingPacket(cplayerdiggingpacket$action, BlockPos.ZERO, Direction.DOWN));
+        return this.inventory.decrStackSize(this.inventory.currentItem,
+                p_225609_1_ && !this.inventory.getCurrentItem().isEmpty() ? this.inventory.getCurrentItem().getCount()
+                        : 1) != ItemStack.EMPTY;
     }
 
     /**
@@ -354,7 +375,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     /**
-     * Deals damage to the entity. This will take the armor of the entity into consideration before damaging the health
+     * Deals damage to the entity. This will take the armor of the entity into
+     * consideration before damaging the health
      * bar.
      */
     protected void damageEntity(DamageSource damageSrc, float damageAmount) {
@@ -431,7 +453,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     protected void sendHorseJump() {
-        this.connection.sendPacket(new CEntityActionPacket(this, CEntityActionPacket.Action.START_RIDING_JUMP, MathHelper.floor(this.getHorseJumpPower() * 100.0F)));
+        this.connection.sendPacket(new CEntityActionPacket(this, CEntityActionPacket.Action.START_RIDING_JUMP,
+                MathHelper.floor(this.getHorseJumpPower() * 100.0F)));
     }
 
     public void sendHorseInventory() {
@@ -439,7 +462,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     /**
-     * Sets the brand of the currently connected server. Server brand information is sent over the {@code MC|Brand}
+     * Sets the brand of the currently connected server. Server brand information is
+     * sent over the {@code MC|Brand}
      * plugin channel, and is used to identify modded servers in crash reports.
      */
     public void setServerBrand(String brand) {
@@ -447,8 +471,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     /**
-     * Gets the brand of the currently connected server. May be null if the server hasn't yet sent brand information.
-     * Server brand information is sent over the {@code MC|Brand} plugin channel, and is used to identify modded servers
+     * Gets the brand of the currently connected server. May be null if the server
+     * hasn't yet sent brand information.
+     * Server brand information is sent over the {@code MC|Brand} plugin channel,
+     * and is used to identify modded servers
      * in crash reports.
      */
     public String getServerBrand() {
@@ -494,7 +520,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             double d1 = z - (double) blockpos.getZ();
             Direction direction = null;
             double d2 = Double.MAX_VALUE;
-            Direction[] adirection = new Direction[]{Direction.WEST, Direction.EAST, Direction.NORTH, Direction.SOUTH};
+            Direction[] adirection = new Direction[] { Direction.WEST, Direction.EAST, Direction.NORTH,
+                    Direction.SOUTH };
 
             for (Direction direction1 : adirection) {
                 double d3 = direction1.getAxis().getCoordinate(d0, 0.0D, d1);
@@ -520,9 +547,9 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
     private boolean shouldBlockPushPlayer(BlockPos pos) {
         AxisAlignedBB axisalignedbb = this.getBoundingBox();
-        AxisAlignedBB axisalignedbb1 = (new AxisAlignedBB((double) pos.getX(), axisalignedbb.minY, (double) pos.getZ(), (double) pos.getX() + 1.0D, axisalignedbb.maxY, (double) pos.getZ() + 1.0D)).shrink(1.0E-7D);
-        return !this.world.func_242405_a(this, axisalignedbb1, (state, pos2) ->
-        {
+        AxisAlignedBB axisalignedbb1 = (new AxisAlignedBB((double) pos.getX(), axisalignedbb.minY, (double) pos.getZ(),
+                (double) pos.getX() + 1.0D, axisalignedbb.maxY, (double) pos.getZ() + 1.0D)).shrink(1.0E-7D);
+        return !this.world.func_242405_a(this, axisalignedbb1, (state, pos2) -> {
             return state.isSuffocating(this.world, pos2);
         });
     }
@@ -571,11 +598,13 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     public void playSound(SoundEvent soundIn, float volume, float pitch) {
-        this.world.playSound(this.getPosX(), this.getPosY(), this.getPosZ(), soundIn, this.getSoundCategory(), volume, pitch, false);
+        this.world.playSound(this.getPosX(), this.getPosY(), this.getPosZ(), soundIn, this.getSoundCategory(), volume,
+                pitch, false);
     }
 
     public void playSound(SoundEvent p_213823_1_, SoundCategory p_213823_2_, float p_213823_3_, float p_213823_4_) {
-        this.world.playSound(this.getPosX(), this.getPosY(), this.getPosZ(), p_213823_1_, p_213823_2_, p_213823_3_, p_213823_4_, false);
+        this.world.playSound(this.getPosX(), this.getPosY(), this.getPosZ(), p_213823_1_, p_213823_2_, p_213823_3_,
+                p_213823_4_, false);
     }
 
     /**
@@ -697,8 +726,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             this.isJumping = this.movementInput.jump;
             this.prevRenderArmYaw = this.renderArmYaw;
             this.prevRenderArmPitch = this.renderArmPitch;
-            this.renderArmPitch = (float) ((double) this.renderArmPitch + (double) (this.rotationPitch - this.renderArmPitch) * 0.5D);
-            this.renderArmYaw = (float) ((double) this.renderArmYaw + (double) (this.rotationYaw - this.renderArmYaw) * 0.5D);
+            this.renderArmPitch = (float) ((double) this.renderArmPitch
+                    + (double) (this.rotationPitch - this.renderArmPitch) * 0.5D);
+            this.renderArmYaw = (float) ((double) this.renderArmYaw
+                    + (double) (this.rotationYaw - this.renderArmYaw) * 0.5D);
         }
     }
 
@@ -707,7 +738,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     /**
-     * Called frequently so the entity can update its state every tick as required. For example, zombies and skeletons
+     * Called frequently so the entity can update its state every tick as required.
+     * For example, zombies and skeletons
      * use this to react to sunlight and start to burn.
      */
     public void livingTick() {
@@ -721,7 +753,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         boolean flag = this.movementInput.jump;
         boolean flag1 = this.movementInput.sneaking;
         boolean flag2 = this.isUsingSwimmingAnimation();
-        this.isCrouching = !this.abilities.isFlying && !this.isSwimming() && this.isPoseClear(Pose.CROUCHING) && (this.isSneaking() || !this.isSleeping() && !this.isPoseClear(Pose.STANDING));
+        this.isCrouching = !this.abilities.isFlying && !this.isSwimming() && this.isPoseClear(Pose.CROUCHING)
+                && (this.isSneaking() || !this.isSleeping() && !this.isPoseClear(Pose.STANDING));
         this.movementInput.tickMovement(this.isForcedDown());
 
         if (this.isHandActive() && !this.isPassenger()) {
@@ -744,10 +777,14 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         }
 
         if (!this.noClip) {
-            this.setPlayerOffsetMotion(this.getPosX() - (double) this.getWidth() * 0.35D, this.getPosZ() + (double) this.getWidth() * 0.35D);
-            this.setPlayerOffsetMotion(this.getPosX() - (double) this.getWidth() * 0.35D, this.getPosZ() - (double) this.getWidth() * 0.35D);
-            this.setPlayerOffsetMotion(this.getPosX() + (double) this.getWidth() * 0.35D, this.getPosZ() - (double) this.getWidth() * 0.35D);
-            this.setPlayerOffsetMotion(this.getPosX() + (double) this.getWidth() * 0.35D, this.getPosZ() + (double) this.getWidth() * 0.35D);
+            this.setPlayerOffsetMotion(this.getPosX() - (double) this.getWidth() * 0.35D,
+                    this.getPosZ() + (double) this.getWidth() * 0.35D);
+            this.setPlayerOffsetMotion(this.getPosX() - (double) this.getWidth() * 0.35D,
+                    this.getPosZ() - (double) this.getWidth() * 0.35D);
+            this.setPlayerOffsetMotion(this.getPosX() + (double) this.getWidth() * 0.35D,
+                    this.getPosZ() - (double) this.getWidth() * 0.35D);
+            this.setPlayerOffsetMotion(this.getPosX() + (double) this.getWidth() * 0.35D,
+                    this.getPosZ() + (double) this.getWidth() * 0.35D);
         }
 
         boolean flag4 = (float) this.getFoodStats().getFoodLevel() > 6.0F || this.abilities.allowFlying;
@@ -762,7 +799,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             this.movementInput.moveForward = 0;
         }
 
-        if ((this.onGround || this.canSwim()) && !flag1 && !flag2 && this.isUsingSwimmingAnimation() && !this.isSprinting() && flag4 && !this.isHandActive() && !this.isPotionActive(Effects.BLINDNESS)) {
+        if ((this.onGround || this.canSwim()) && !flag1 && !flag2 && this.isUsingSwimmingAnimation()
+                && !this.isSprinting() && flag4 && !this.isHandActive() && !this.isPotionActive(Effects.BLINDNESS)) {
             if (this.sprintToggleTimer <= 0 && !this.mc.gameSettings.keyBindSprint.isKeyDown()) {
                 this.sprintToggleTimer = 7;
             } else {
@@ -770,7 +808,9 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             }
         }
 
-        if (!this.isSprinting() && (!this.isInWater() || this.canSwim()) && this.isUsingSwimmingAnimation() && flag4 && !this.isHandActive() && !this.isPotionActive(Effects.BLINDNESS) && this.mc.gameSettings.keyBindSprint.isKeyDown()) {
+        if (!this.isSprinting() && (!this.isInWater() || this.canSwim()) && this.isUsingSwimmingAnimation() && flag4
+                && !this.isHandActive() && !this.isPotionActive(Effects.BLINDNESS)
+                && this.mc.gameSettings.keyBindSprint.isKeyDown()) {
             this.setSprinting(true);
         }
 
@@ -812,7 +852,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             }
         }
 
-        if (this.movementInput.jump && !flag7 && !flag && !this.abilities.isFlying && !this.isPassenger() && !this.isOnLadder()) {
+        if (this.movementInput.jump && !flag7 && !flag && !this.abilities.isFlying && !this.isPassenger()
+                && !this.isOnLadder()) {
             ItemStack itemstack = this.getItemStackFromSlot(EquipmentSlotType.CHEST);
 
             if (itemstack.getItem() == Items.ELYTRA && ElytraItem.isUsable(itemstack) && this.tryToStartFallFlying()) {
@@ -846,7 +887,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             }
 
             if (j != 0) {
-                this.setMotion(this.getMotion().add(0.0D, (double) ((float) j * this.abilities.getFlySpeed() * 3.0F), 0.0D));
+                this.setMotion(
+                        this.getMotion().add(0.0D, (double) ((float) j * this.abilities.getFlySpeed() * 3.0F), 0.0D));
             }
         }
 
@@ -902,7 +944,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             }
 
             if (this.timeInPortal == 0.0F) {
-                this.mc.getSoundHandler().play(SimpleSound.ambientWithoutAttenuation(SoundEvents.BLOCK_PORTAL_TRIGGER, this.rand.nextFloat() * 0.4F + 0.8F, 0.25F));
+                this.mc.getSoundHandler().play(SimpleSound.ambientWithoutAttenuation(SoundEvents.BLOCK_PORTAL_TRIGGER,
+                        this.rand.nextFloat() * 0.4F + 0.8F, 0.25F));
             }
 
             this.timeInPortal += 0.0125F;
@@ -912,7 +955,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             }
 
             this.inPortal = false;
-        } else if (this.isPotionActive(Effects.NAUSEA) && this.getActivePotionEffect(Effects.NAUSEA).getDuration() > 60) {
+        } else if (this.isPotionActive(Effects.NAUSEA)
+                && this.getActivePotionEffect(Effects.NAUSEA).getDuration() > 60) {
             this.timeInPortal += 0.006666667F;
 
             if (this.timeInPortal > 1.0F) {
@@ -940,8 +984,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
         if (this.getRidingEntity() instanceof BoatEntity) {
             BoatEntity boatentity = (BoatEntity) this.getRidingEntity();
-            boatentity.updateInputs(this.movementInput.leftKeyDown, this.movementInput.rightKeyDown, this.movementInput.forwardKeyDown, this.movementInput.backKeyDown);
-            this.rowingBoat |= this.movementInput.leftKeyDown || this.movementInput.rightKeyDown || this.movementInput.forwardKeyDown || this.movementInput.backKeyDown;
+            boatentity.updateInputs(this.movementInput.leftKeyDown, this.movementInput.rightKeyDown,
+                    this.movementInput.forwardKeyDown, this.movementInput.backKeyDown);
+            this.rowingBoat |= this.movementInput.leftKeyDown || this.movementInput.rightKeyDown
+                    || this.movementInput.forwardKeyDown || this.movementInput.backKeyDown;
         }
     }
 
@@ -952,7 +998,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     @Nullable
 
     /**
-     * Removes the given potion effect from the active potion map and returns it. Does not call cleanup callbacks for
+     * Removes the given potion effect from the active potion map and returns it.
+     * Does not call cleanup callbacks for
      * the end of the potion effect.
      */
     public EffectInstance removeActivePotionEffect(@Nullable Effect potioneffectin) {
@@ -977,7 +1024,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
         double d0 = this.getPosX();
         double d1 = this.getPosZ();
-        super.move(typeIn, pos);
+        super.move(typeIn, eventMove.vector);
         this.updateAutoJump((float) (this.getPosX() - d0), (float) (this.getPosZ() - d1));
     }
 
@@ -1033,7 +1080,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                         Vector3d vector3d4 = vector3d1.add(vector3d12.scale((double) f8));
                         float f9 = this.getWidth();
                         float f10 = this.getHeight();
-                        AxisAlignedBB axisalignedbb = (new AxisAlignedBB(vector3d, vector3d4.add(0.0D, (double) f10, 0.0D))).grow((double) f9, 0.0D, (double) f9);
+                        AxisAlignedBB axisalignedbb = (new AxisAlignedBB(vector3d,
+                                vector3d4.add(0.0D, (double) f10, 0.0D))).grow((double) f9, 0.0D, (double) f9);
                         Vector3d lvt_19_1_ = vector3d.add(0.0D, (double) 0.51F, 0.0D);
                         vector3d4 = vector3d4.add(0.0D, (double) 0.51F, 0.0D);
                         Vector3d vector3d5 = vector3d12.crossProduct(new Vector3d(0.0D, 1.0D, 0.0D));
@@ -1042,11 +1090,9 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                         Vector3d vector3d8 = vector3d4.subtract(vector3d6);
                         Vector3d vector3d9 = lvt_19_1_.add(vector3d6);
                         Vector3d vector3d10 = vector3d4.add(vector3d6);
-                        Iterator<AxisAlignedBB> iterator = this.world.func_234867_d_(this, axisalignedbb, (entity) ->
-                        {
+                        Iterator<AxisAlignedBB> iterator = this.world.func_234867_d_(this, axisalignedbb, (entity) -> {
                             return true;
-                        }).flatMap((shape) ->
-                        {
+                        }).flatMap((shape) -> {
                             return shape.toBoundingBoxList().stream();
                         }).iterator();
                         float f11 = Float.MIN_VALUE;
@@ -1054,7 +1100,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                         while (iterator.hasNext()) {
                             AxisAlignedBB axisalignedbb1 = iterator.next();
 
-                            if (axisalignedbb1.intersects(vector3d7, vector3d8) || axisalignedbb1.intersects(vector3d9, vector3d10)) {
+                            if (axisalignedbb1.intersects(vector3d7, vector3d8)
+                                    || axisalignedbb1.intersects(vector3d9, vector3d10)) {
                                 f11 = (float) axisalignedbb1.maxY;
                                 Vector3d vector3d11 = axisalignedbb1.getCenter();
                                 BlockPos blockpos1 = new BlockPos(vector3d11);
@@ -1064,7 +1111,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                                     BlockState blockstate2 = this.world.getBlockState(blockpos2);
                                     VoxelShape voxelshape;
 
-                                    if (!(voxelshape = blockstate2.getCollisionShape(this.world, blockpos2, iselectioncontext)).isEmpty()) {
+                                    if (!(voxelshape = blockstate2.getCollisionShape(this.world, blockpos2,
+                                            iselectioncontext)).isEmpty()) {
                                         f11 = (float) voxelshape.getEnd(Direction.Axis.Y) + (float) blockpos2.getY();
 
                                         if ((double) f11 - this.getPosY() > (double) f7) {
@@ -1076,7 +1124,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                                         blockpos = blockpos.up();
                                         BlockState blockstate3 = this.world.getBlockState(blockpos);
 
-                                        if (!blockstate3.getCollisionShape(this.world, blockpos, iselectioncontext).isEmpty()) {
+                                        if (!blockstate3.getCollisionShape(this.world, blockpos, iselectioncontext)
+                                                .isEmpty()) {
                                             return;
                                         }
                                     }
@@ -1100,7 +1149,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     private boolean canAutoJump() {
-        return this.isAutoJumpEnabled() && this.autoJumpTime <= 0 && this.onGround && !this.isStayingOnGroundSurface() && !this.isPassenger() && this.isMoving() && (double) this.getJumpFactor() >= 1.0D;
+        return this.isAutoJumpEnabled() && this.autoJumpTime <= 0 && this.onGround && !this.isStayingOnGroundSurface()
+                && !this.isPassenger() && this.isMoving() && (double) this.getJumpFactor() >= 1.0D;
     }
 
     private boolean isMoving() {
@@ -1124,7 +1174,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                 return 1.0F;
             } else {
                 float f2 = MathHelper.clamp((float) this.counterInWater / 100.0F, 0.0F, 1.0F);
-                float f3 = (float) this.counterInWater < 100.0F ? 0.0F : MathHelper.clamp(((float) this.counterInWater - 100.0F) / 500.0F, 0.0F, 1.0F);
+                float f3 = (float) this.counterInWater < 100.0F ? 0.0F
+                        : MathHelper.clamp(((float) this.counterInWater - 100.0F) / 500.0F, 0.0F, 1.0F);
                 return f2 * 0.6F + f3 * 0.39999998F;
             }
         }
@@ -1142,12 +1193,14 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             return this.eyesInWaterPlayer;
         } else {
             if (!flag && flag1) {
-                this.world.playSound(this.getPosX(), this.getPosY(), this.getPosZ(), SoundEvents.AMBIENT_UNDERWATER_ENTER, SoundCategory.AMBIENT, 1.0F, 1.0F, false);
+                this.world.playSound(this.getPosX(), this.getPosY(), this.getPosZ(),
+                        SoundEvents.AMBIENT_UNDERWATER_ENTER, SoundCategory.AMBIENT, 1.0F, 1.0F, false);
                 this.mc.getSoundHandler().play(new UnderwaterAmbientSounds.UnderWaterSound(this));
             }
 
             if (flag && !flag1) {
-                this.world.playSound(this.getPosX(), this.getPosY(), this.getPosZ(), SoundEvents.AMBIENT_UNDERWATER_EXIT, SoundCategory.AMBIENT, 1.0F, 1.0F, false);
+                this.world.playSound(this.getPosX(), this.getPosY(), this.getPosZ(),
+                        SoundEvents.AMBIENT_UNDERWATER_EXIT, SoundCategory.AMBIENT, 1.0F, 1.0F, false);
             }
 
             return this.eyesInWaterPlayer;
@@ -1156,8 +1209,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
     public Vector3d getLeashPosition(float partialTicks) {
         if (this.mc.gameSettings.getPointOfView().func_243192_a()) {
-            float f = MathHelper.lerp(partialTicks * 0.5F, this.rotationYaw, this.prevRotationYaw) * ((float) Math.PI / 180F);
-            float f1 = MathHelper.lerp(partialTicks * 0.5F, this.rotationPitch, this.prevRotationPitch) * ((float) Math.PI / 180F);
+            float f = MathHelper.lerp(partialTicks * 0.5F, this.rotationYaw, this.prevRotationYaw)
+                    * ((float) Math.PI / 180F);
+            float f1 = MathHelper.lerp(partialTicks * 0.5F, this.rotationPitch, this.prevRotationPitch)
+                    * ((float) Math.PI / 180F);
             double d0 = this.getPrimaryHand() == HandSide.RIGHT ? -1.0D : 1.0D;
             Vector3d vector3d = new Vector3d(0.39D * d0, -0.6D, 0.3D);
             return vector3d.rotatePitch(-f1).rotateYaw(-f).add(this.getEyePosition(partialTicks));

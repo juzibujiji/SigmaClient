@@ -14,6 +14,7 @@ import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
 import com.mentalfrostbyte.jello.util.system.math.SmoothInterpolator;
+import org.lwjgl.glfw.GLFW;
 import org.newdawn.slick.TrueTypeFont;
 
 import java.io.IOException;
@@ -21,10 +22,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static com.mentalfrostbyte.jello.util.game.MinecraftUtil.mc;
+
 public class ChangelogScreen extends CustomGuiScreen {
     public Animation animation = new Animation(380, 200, Animation.Direction.BACKWARDS);
     public ScrollableContentPanel scrollPanel;
     private static JsonArray cachedChangelog;
+
+    private int opencount = 0;
+    private boolean wasHovered = false;
+    public static boolean isEasteregg = false;
 
     private static final Path LOCAL_CHANGELOG_FILE = Path.of("run", "changelog.json");
     private static final String DEFAULT_LOCAL_CHANGELOG = """
@@ -93,7 +100,8 @@ public class ChangelogScreen extends CustomGuiScreen {
 
     @Override
     public void draw(float partialTicks) {
-        this.animation.changeDirection(!this.isHovered() ? Animation.Direction.BACKWARDS : Animation.Direction.FORWARDS);
+        this.animation
+                .changeDirection(!this.isHovered() ? Animation.Direction.BACKWARDS : Animation.Direction.FORWARDS);
         partialTicks *= this.animation.calcPercent();
 
         float fadeFactor = SmoothInterpolator.interpolate(this.animation.calcPercent(), 0.17f, 1.0f, 0.51f, 1.0f);
@@ -104,15 +112,19 @@ public class ChangelogScreen extends CustomGuiScreen {
 
         this.drawBackground((int) (150.0f * (1.0f - fadeFactor)));
         this.method13225();
-        RenderUtil.drawString(ResourceRegistry.JelloLightFont36, 100.0F, 100.0F, "Changelog", RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks));
+        RenderUtil.drawString(ResourceRegistry.JelloLightFont36, 100.0F, 100.0F, "Changelog",
+                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks));
         TrueTypeFont jelloLightFont25 = ResourceRegistry.JelloLightFont25;
         String versionText = "You're currently using Sigma " + Client.FULL_VERSION;
         RenderUtil.drawString(
                 jelloLightFont25,
                 100.0f, 150.0f,
                 versionText,
-                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6f * partialTicks)
-        );
+                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6f * partialTicks));
+        if (opencount >= 10) {
+            GLFW.glfwSetWindowTitle(mc.getMainWindow().getHandle(), "Sigma Never Die!!!");
+            isEasteregg = true;
+        }
         super.draw(partialTicks);
     }
 
@@ -138,6 +150,15 @@ public class ChangelogScreen extends CustomGuiScreen {
             Client.logger.error("Failed to read local changelog file: " + LOCAL_CHANGELOG_FILE, e);
             return DEFAULT_LOCAL_CHANGELOG;
         }
+    }
+
+    @Override
+    public void setHovered(boolean hovered) {
+        if (hovered && !wasHovered) {
+            opencount++;
+        }
+        super.setHovered(hovered);
+        wasHovered = hovered;
     }
 
     private void ensureLocalChangelogFile() throws IOException {

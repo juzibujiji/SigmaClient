@@ -1,7 +1,6 @@
 package com.mentalfrostbyte.jello.util.client.render;
 
 import org.lwjgl.nanovg.NVGColor;
-import org.lwjgl.opengl.GL11;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
@@ -96,9 +95,6 @@ public class NanoVGFontRenderer {
     public static void beginFrame(int width, int height) {
         if (!initialized)
             return;
-        // Save all OpenGL state before NanoVG modifies it
-        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
-        GL11.glPushMatrix();
         nvgBeginFrame(nvg, width, height, 1.0f);
     }
 
@@ -109,14 +105,6 @@ public class NanoVGFontRenderer {
         if (!initialized)
             return;
         nvgEndFrame(nvg);
-        // Restore all OpenGL state that NanoVG may have changed
-        GL11.glPopMatrix();
-        GL11.glPopAttrib();
-        // Re-enable blend with Minecraft's expected blend function
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        // Unbind any textures NanoVG may have left bound
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
     }
 
     /**

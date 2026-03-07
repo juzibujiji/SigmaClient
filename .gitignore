@@ -40,10 +40,3 @@ replay_*.log
 *.hprof
 *.jfr
 .aider*
-# 忽略 Minecraft 运行日志
-logs/
-latest.log
-
-# 忽略本地生成的配置和存档 (按需添加)
-sigma5/config.json
-sigma5/profiles/

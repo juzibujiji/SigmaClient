@@ -623,4 +623,4 @@ public class MusicPlayer extends AnimatedIconPanel {
     public static void playSong(MusicPlayer player, Thumbnails videoManager, YoutubeVideoData video) {
         player.playSong(videoManager, video);
     }
-}
+}
