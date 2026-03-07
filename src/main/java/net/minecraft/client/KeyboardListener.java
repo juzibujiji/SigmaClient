@@ -566,7 +566,8 @@ public class KeyboardListener
     {
         if (windowPointer == this.mc.getMainWindow().getHandle())
         {
-            if (Client.getInstance().guiManager.getCurrentScreen() != null) {
+            // SJ)LbS öH©ŸH Screen W&‹ö/-‡“eÕ	
+            if (Client.getInstance().guiManager.getCurrentScreen() != null && !(this.mc.currentScreen instanceof ChatScreen)) {
                 Client.getInstance().guiManager.addTypedChar(codePoint, modifiers);
                 return;
             }

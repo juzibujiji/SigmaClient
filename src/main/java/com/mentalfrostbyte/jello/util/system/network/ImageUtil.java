@@ -23,7 +23,7 @@ import java.nio.ByteBuffer;
 public class ImageUtil {
 
     public static String getSkinUrlByID(String uuid) {
-        return "https://crafatar.com/skins/" + uuid;
+        return "https://mc-heads.net/skin/" + uuid;
     }
 
     public static BufferedImage applyBlur(BufferedImage image, int amount) {
@@ -34,7 +34,8 @@ public class ImageUtil {
                     BufferedImage var5 = var4.filter(image, null);
                     var5 = var4.filter(applyEdgeWrap(var5), null);
                     var5 = applyEdgeWrap(var5);
-                    return var5.getSubimage(amount, amount, image.getWidth() - amount - amount, image.getHeight() - amount - amount);
+                    return var5.getSubimage(amount, amount, image.getWidth() - amount - amount,
+                            image.getHeight() - amount - amount);
                 } else {
                     return image;
                 }
@@ -49,7 +50,8 @@ public class ImageUtil {
     public static BufferedImage addPadding(BufferedImage var0, int var1) {
         int var4 = var0.getWidth() + var1 * 2;
         int var5 = var0.getHeight() + var1 * 2;
-        BufferedImage var6 = method35043(var0, (float) var4 / (float) var0.getWidth(), (float) var5 / (float) var0.getHeight());
+        BufferedImage var6 = method35043(var0, (float) var4 / (float) var0.getWidth(),
+                (float) var5 / (float) var0.getHeight());
 
         for (int var7 = 0; var7 < var0.getWidth(); var7++) {
             for (int var8 = 0; var8 < var0.getHeight(); var8++) {
@@ -145,10 +147,12 @@ public class ImageUtil {
         if (image == null) {
             return image;
         } else {
-            ConvolveOp blurOperation = new ConvolveOp(createGaussianKernel((float) blurRadius), ConvolveOp.EDGE_NO_OP, null);
+            ConvolveOp blurOperation = new ConvolveOp(createGaussianKernel((float) blurRadius), ConvolveOp.EDGE_NO_OP,
+                    null);
             int imageWidth = image.getWidth();
             int imageHeight = image.getHeight();
-            BufferedImage extendedImage = new BufferedImage(imageWidth + blurRadius * 2, imageHeight + blurRadius * 2, image.getType());
+            BufferedImage extendedImage = new BufferedImage(imageWidth + blurRadius * 2, imageHeight + blurRadius * 2,
+                    image.getType());
 
             for (int x = 0; x < imageWidth; x++) {
                 for (int y = 0; y < imageHeight; y++) {
@@ -159,11 +163,13 @@ public class ImageUtil {
             BufferedImage blurredImage = blurOperation.filter(extendedImage, null);
             blurredImage = blurOperation.filter(applyEdgeWrap(blurredImage), null);
             blurredImage = applyEdgeWrap(blurredImage);
-            return blurredImage.getSubimage(blurRadius, blurRadius, extendedImage.getWidth() - blurRadius * 2, extendedImage.getHeight() - blurRadius * 2);
+            return blurredImage.getSubimage(blurRadius, blurRadius, extendedImage.getWidth() - blurRadius * 2,
+                    extendedImage.getHeight() - blurRadius * 2);
         }
     }
 
-    public static BufferedImage method35036(int var0, int var1, int var2, int var3, int var4, int var5, int var6, boolean var7) {
+    public static BufferedImage method35036(int var0, int var1, int var2, int var3, int var4, int var5, int var6,
+            boolean var7) {
         int var10 = 4;
         var1 = (int) ((float) var1 * GuiManager.scaleFactor);
         var0 = (int) ((float) var0 * GuiManager.scaleFactor);
@@ -186,7 +192,8 @@ public class ImageUtil {
                     int var16 = var11.get(var15) & 255;
                     int var17 = var11.get(var15 + 1) & 255;
                     int var18 = var11.get(var15 + 2) & 255;
-                    var12.setRGB(var13 / var4, var3 / var4 - (var14 / var4 + 1), 0xFF000000 | var16 << 16 | var17 << 8 | var18);
+                    var12.setRGB(var13 / var4, var3 / var4 - (var14 / var4 + 1),
+                            0xFF000000 | var16 << 16 | var17 << 8 | var18);
                 }
             }
         }
@@ -235,7 +242,8 @@ public class ImageUtil {
         try (InputStream inputStream = getInputStreamFromURL(urlString)) {
             return TextureLoader.getTexture("PNG", inputStream);
         } catch (IOException e) {
-            throw new IllegalStateException("Unable to load texture from URL: " + urlString, e);
+            System.err.println("[ImageUtil] Failed to load texture from URL: " + urlString + " - " + e.getMessage());
+            return null;
         }
     }
 
@@ -253,4 +261,4 @@ public class ImageUtil {
 
         return new BufferedInputStream(connection.getInputStream());
     }
-}
+}

@@ -1,0 +1,83 @@
+---- Minecraft Crash Report ----
+// There are four lights!
+
+Time: 2026/2/11 下午6:07
+Description: Exception ticking world
+
+java.lang.NullPointerException: Cannot invoke "net.minecraft.world.chunk.ChunkSection.getBlockState(int, int, int)" because "p_i242085_3_" is null
+	at net.minecraft.network.play.server.SMultiBlockChangePacket.<init>(SMultiBlockChangePacket.java:36)
+	at net.minecraft.world.server.ChunkHolder.sendChanges(ChunkHolder.java:230)
+	at net.minecraft.world.server.ServerChunkProvider.lambda$11(ServerChunkProvider.java:438)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at net.minecraft.world.server.ServerChunkProvider.tickChunks(ServerChunkProvider.java:431)
+	at net.minecraft.world.server.ServerChunkProvider.tick(ServerChunkProvider.java:403)
+	at net.minecraft.world.server.ServerWorld.tick(ServerWorld.java:384)
+	at net.minecraft.server.MinecraftServer.updateTimeLightAndEntities(MinecraftServer.java:1011)
+	at net.minecraft.server.MinecraftServer.tick(MinecraftServer.java:938)
+	at net.minecraft.server.integrated.IntegratedServer.tick(IntegratedServer.java:105)
+	at net.minecraft.server.MinecraftServer.func_240802_v_(MinecraftServer.java:744)
+	at net.minecraft.server.MinecraftServer.lambda$1(MinecraftServer.java:234)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Server thread
+Stacktrace:
+	at net.minecraft.network.play.server.SMultiBlockChangePacket.<init>(SMultiBlockChangePacket.java:36)
+	at net.minecraft.world.server.ChunkHolder.sendChanges(ChunkHolder.java:230)
+	at net.minecraft.world.server.ServerChunkProvider.lambda$11(ServerChunkProvider.java:438)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at net.minecraft.world.server.ServerChunkProvider.tickChunks(ServerChunkProvider.java:431)
+	at net.minecraft.world.server.ServerChunkProvider.tick(ServerChunkProvider.java:403)
+	at net.minecraft.world.server.ServerWorld.tick(ServerWorld.java:384)
+
+-- Affected level --
+Details:
+	All players: 1 total; [ServerPlayerEntity['Player517'/395, l='ServerLevel[New World]', x=-114.48, y=67.00, z=-29.34]]
+	Chunk stats: ServerChunkCache: 2220
+	Level dimension: minecraft:overworld
+	Level spawn location: World: (-64,64,208), Chunk: (at 0,4,0 in -4,13; contains blocks -64,0,208 to -49,255,223), Region: (-1,0; contains chunks -32,0 to -1,31, blocks -512,0,0 to -1,255,511)
+	Level time: 1997 game time, 1997 day time
+	Level name: New World
+	Level game mode: Game mode: survival (ID 0). Hardcore: false. Cheats: false
+	Level weather: Rain time: 19280 (now: false), thunder time: 85914 (now: false)
+	Known server brands: vanilla
+	Level was modded: true
+	Level storage version: 0x04ABD - Anvil
+Stacktrace:
+	at net.minecraft.server.MinecraftServer.updateTimeLightAndEntities(MinecraftServer.java:1011)
+	at net.minecraft.server.MinecraftServer.tick(MinecraftServer.java:938)
+	at net.minecraft.server.integrated.IntegratedServer.tick(IntegratedServer.java:105)
+	at net.minecraft.server.MinecraftServer.func_240802_v_(MinecraftServer.java:744)
+	at net.minecraft.server.MinecraftServer.lambda$1(MinecraftServer.java:234)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.4
+	Minecraft Version ID: 187f12efb63249bdb81feded603ea82d
+	Operating System: Windows 11 (amd64) version 10.0
+	Java Version: 17.0.18, Eclipse Adoptium
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Eclipse Adoptium
+	Memory: 320286752 bytes (305 MB) / 931135488 bytes (888 MB) up to 4236247040 bytes (4040 MB)
+	CPUs: 16
+	JVM Flags: 1 total; -XX:+ShowCodeDetailsInExceptionMessages
+	Player Count: 1 / 8; [ServerPlayerEntity['Player517'/395, l='ServerLevel[New World]', x=-114.48, y=67.00, z=-29.34]]
+	Data Packs: vanilla
+	Type: Integrated Server (map_client.txt)
+	Is Modded: Very likely; Jar signature invalidated
+	OptiFine Version: OptiFine_1.16.4_HD_U_G5
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 591.86
+	OpenGlRenderer: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 16

@@ -1,0 +1,67 @@
+---- Minecraft Crash Report ----
+// I bet Cylons wouldn't have this problem.
+
+Time: 2026/1/17 下午9:18
+Description: Unexpected error
+
+java.lang.IllegalStateException: Unable to load texture from URL: https://crafatar.com/avatars/8667ba71b85a4004af54457a9734eed7
+	at com.mentalfrostbyte.jello.util.system.network.ImageUtil.loadTextureFromURL(ImageUtil.java:238)
+	at com.mentalfrostbyte.jello.managers.util.account.microsoft.Account.setHeadTexture(Account.java:191)
+	at com.mentalfrostbyte.jello.gui.base.elements.impl.altmanager.AccountUI.drawAccountHead(AccountUI.java:96)
+	at com.mentalfrostbyte.jello.gui.base.elements.impl.altmanager.AccountUI.draw(AccountUI.java:71)
+	at com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen.drawChildren(CustomGuiScreen.java:230)
+	at com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen.draw(CustomGuiScreen.java:219)
+	at com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen.drawChildren(CustomGuiScreen.java:230)
+	at com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen.draw(CustomGuiScreen.java:219)
+	at com.mentalfrostbyte.jello.gui.impl.jello.buttons.ScrollableContentPanel.draw(ScrollableContentPanel.java:91)
+	at com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen.drawChildren(CustomGuiScreen.java:230)
+	at com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen.draw(CustomGuiScreen.java:219)
+	at com.mentalfrostbyte.jello.gui.impl.jello.altmanager.AltManagerScreen.draw(AltManagerScreen.java:325)
+	at com.mentalfrostbyte.jello.managers.GuiManager.renderWatermark(GuiManager.java:294)
+	at net.minecraft.client.renderer.GameRenderer.updateCameraAndRender(GameRenderer.java:649)
+	at net.minecraft.client.Minecraft.runGameLoop(Minecraft.java:1013)
+	at net.minecraft.client.Minecraft.run(Minecraft.java:617)
+	at net.minecraft.client.main.Main.main(Main.java:208)
+	at Start.main(Start.java:8)
+Caused by: java.io.IOException: Failed to load image, HTTP response code: 521
+	at com.mentalfrostbyte.jello.util.system.network.ImageUtil.getInputStreamFromURL(ImageUtil.java:251)
+	at com.mentalfrostbyte.jello.util.system.network.ImageUtil.loadTextureFromURL(ImageUtil.java:235)
+	... 17 more
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.4
+	Minecraft Version ID: 47187144d81b43099bd4c1cfd2d8e546
+	Operating System: Windows 10 (amd64) version 10.0
+	Java Version: 17.0.10, Oracle Corporation
+	Java VM Version: Java HotSpot(TM) 64-Bit Server VM (mixed mode, sharing), Oracle Corporation
+	Memory: 528260984 bytes (503 MB) / 910163968 bytes (868 MB) up to 4263510016 bytes (4066 MB)
+	CPUs: 8
+	JVM Flags: 1 total; -XX:+ShowCodeDetailsInExceptionMessages
+	Launched Version: vanilla
+	Backend library: LWJGL version 3.3.6+1
+	Backend API: Quadro M2000M/PCIe/SSE2 GL version 4.6.0 NVIDIA 552.22, NVIDIA Corporation
+	GL Caps: Using framebuffer using OpenGL 3.0
+	Using VBOs: Yes
+	Is Modded: Very likely; Jar signature invalidated
+	Type: Client (map_client.txt)
+	Graphics mode: fancy
+	Resource Packs: vanilla
+	Current Language: English (US)
+	CPU: 8x Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz
+	OptiFine Version: OptiFine_1.16.4_HD_U_G5
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 552.22
+	OpenGlRenderer: Quadro M2000M/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 8

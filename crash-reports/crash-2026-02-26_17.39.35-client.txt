@@ -1,0 +1,109 @@
+---- Minecraft Crash Report ----
+// I let you down. Sorry :(
+
+Time: 2026/2/26 下午5:39
+Description: mouseClicked event handler
+
+java.lang.NoClassDefFoundError: com/mentalfrostbyte/jello/util/game/world/WorldHeightHelper
+	at net.optifine.render.ChunkVisibility.<clinit>(ChunkVisibility.java:26)
+	at net.minecraft.client.renderer.WorldRenderer.setWorldAndLoadRenderers(WorldRenderer.java:804)
+	at net.minecraft.client.Minecraft.updateWorldRenderer(Minecraft.java:2058)
+	at net.minecraft.client.Minecraft.unloadWorld(Minecraft.java:2036)
+	at net.minecraft.client.Minecraft.unloadWorld(Minecraft.java:1999)
+	at net.minecraft.client.gui.screen.ConnectingScreen.<init>(ConnectingScreen.java:41)
+	at net.minecraft.client.gui.screen.MultiplayerScreen.connectToServer(MultiplayerScreen.java:276)
+	at net.minecraft.client.gui.screen.MultiplayerScreen.connectToSelected(MultiplayerScreen.java:265)
+	at net.minecraft.client.gui.screen.ServerSelectionList$NormalEntry.mouseClicked(ServerSelectionList.java:545)
+	at net.minecraft.client.gui.widget.list.AbstractList.mouseClicked(AbstractList.java:361)
+	at net.minecraft.client.gui.INestedGuiEventHandler.mouseClicked(INestedGuiEventHandler.java:25)
+	at net.minecraft.client.MouseHelper.lambda$0(MouseHelper.java:123)
+	at net.minecraft.client.gui.screen.Screen.wrapScreenError(Screen.java:510)
+	at net.minecraft.client.MouseHelper.mouseButtonCallback(MouseHelper.java:121)
+	at net.minecraft.client.MouseHelper.lambda$7(MouseHelper.java:222)
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.execute(ThreadTaskExecutor.java:104)
+	at net.minecraft.client.MouseHelper.lambda$3(MouseHelper.java:221)
+	at org.lwjgl.glfw.GLFWMouseButtonCallbackI.callback(GLFWMouseButtonCallbackI.java:43)
+	at org.lwjgl.system.JNI.invokeV(Native Method)
+	at org.lwjgl.glfw.GLFW.glfwWaitEventsTimeout(GLFW.java:3555)
+	at com.mojang.blaze3d.systems.RenderSystem.limitDisplayFPS(RenderSystem.java:132)
+	at net.minecraft.client.Minecraft.runGameLoop(Minecraft.java:1036)
+	at net.minecraft.client.Minecraft.run(Minecraft.java:617)
+	at net.minecraft.client.main.Main.main(Main.java:208)
+	at Start.main(Start.java:9)
+Caused by: java.lang.ClassNotFoundException: com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper
+	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:641)
+	at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:188)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:525)
+	... 25 more
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at net.optifine.render.ChunkVisibility.<clinit>(ChunkVisibility.java:26)
+	at net.minecraft.client.renderer.WorldRenderer.setWorldAndLoadRenderers(WorldRenderer.java:804)
+	at net.minecraft.client.Minecraft.updateWorldRenderer(Minecraft.java:2058)
+	at net.minecraft.client.Minecraft.unloadWorld(Minecraft.java:2036)
+	at net.minecraft.client.Minecraft.unloadWorld(Minecraft.java:1999)
+	at net.minecraft.client.gui.screen.ConnectingScreen.<init>(ConnectingScreen.java:41)
+	at net.minecraft.client.gui.screen.MultiplayerScreen.connectToServer(MultiplayerScreen.java:276)
+	at net.minecraft.client.gui.screen.MultiplayerScreen.connectToSelected(MultiplayerScreen.java:265)
+	at net.minecraft.client.gui.screen.ServerSelectionList$NormalEntry.mouseClicked(ServerSelectionList.java:545)
+	at net.minecraft.client.gui.widget.list.AbstractList.mouseClicked(AbstractList.java:361)
+	at net.minecraft.client.gui.INestedGuiEventHandler.mouseClicked(INestedGuiEventHandler.java:25)
+	at net.minecraft.client.MouseHelper.lambda$0(MouseHelper.java:123)
+
+-- Affected screen --
+Details:
+	Screen name: com.mentalfrostbyte.jello.gui.impl.jello.viamcp.JelloPortalScreen
+Stacktrace:
+	at net.minecraft.client.gui.screen.Screen.wrapScreenError(Screen.java:510)
+	at net.minecraft.client.MouseHelper.mouseButtonCallback(MouseHelper.java:121)
+	at net.minecraft.client.MouseHelper.lambda$7(MouseHelper.java:222)
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.execute(ThreadTaskExecutor.java:104)
+	at net.minecraft.client.MouseHelper.lambda$3(MouseHelper.java:221)
+	at org.lwjgl.glfw.GLFWMouseButtonCallbackI.callback(GLFWMouseButtonCallbackI.java:43)
+	at org.lwjgl.system.JNI.invokeV(Native Method)
+	at org.lwjgl.glfw.GLFW.glfwWaitEventsTimeout(GLFW.java:3555)
+	at com.mojang.blaze3d.systems.RenderSystem.limitDisplayFPS(RenderSystem.java:132)
+	at net.minecraft.client.Minecraft.runGameLoop(Minecraft.java:1036)
+	at net.minecraft.client.Minecraft.run(Minecraft.java:617)
+	at net.minecraft.client.main.Main.main(Main.java:208)
+	at Start.main(Start.java:9)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.4
+	Minecraft Version ID: 71793e44c5fb4d3b91976bb4fb5d1518
+	Operating System: Windows 11 (amd64) version 10.0
+	Java Version: 17.0.18, Eclipse Adoptium
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Eclipse Adoptium
+	Memory: 441130320 bytes (420 MB) / 916455424 bytes (874 MB) up to 4236247040 bytes (4040 MB)
+	CPUs: 16
+	JVM Flags: 1 total; -XX:+ShowCodeDetailsInExceptionMessages
+	Launched Version: vanilla
+	Backend library: LWJGL version 3.3.6+1
+	Backend API: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2 GL version 4.6.0 NVIDIA 591.86, NVIDIA Corporation
+	GL Caps: Using framebuffer using OpenGL 3.0
+	Using VBOs: Yes
+	Is Modded: Definitely; Client brand changed to '1939Games'
+	Type: Client (map_client.txt)
+	Graphics mode: fancy
+	Resource Packs: vanilla
+	Current Language: English (US)
+	CPU: 16x Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
+	OptiFine Version: OptiFine_1.16.4_HD_U_G5
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 591.86
+	OpenGlRenderer: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 16

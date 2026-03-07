@@ -133,7 +133,7 @@ public class ModuleManager {
         this.register(new GamePlay());
         this.register(new ChatCleaner());
         this.register(new ChatFilter());
-        this.register(new FakeForge());
+        this.register(new ClientSpoof());
         this.register(new GameIdler());
         this.register(new Jargon());
         this.register(new Murderer());

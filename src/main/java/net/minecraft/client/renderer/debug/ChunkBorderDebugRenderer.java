@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.IRenderTypeBuffer;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.Entity;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import net.optifine.Config;
 import net.optifine.shaders.Shaders;
 
@@ -36,8 +37,8 @@ public class ChunkBorderDebugRenderer implements DebugRenderer.IDebugRenderer
             Entity entity = this.minecraft.gameRenderer.getActiveRenderInfo().getRenderViewEntity();
             Tessellator tessellator = Tessellator.getInstance();
             BufferBuilder bufferbuilder = tessellator.getBuffer();
-            double d0 = 0.0D - camY;
-            double d1 = 256.0D - camY;
+            double d0 = (double)WorldHeightHelper.getMinY() - camY;
+            double d1 = (double)WorldHeightHelper.getMaxY() - camY;
             RenderSystem.disableTexture();
             RenderSystem.disableBlend();
             double d2 = (double)(entity.chunkCoordX << 4) - camX;
@@ -80,7 +81,7 @@ public class ChunkBorderDebugRenderer implements DebugRenderer.IDebugRenderer
                 bufferbuilder.pos(d2 + 16.0D, d1, d3 + (double)l).color(1.0F, 1.0F, 0.0F, 0.0F).endVertex();
             }
 
-            for (int i1 = 0; i1 <= 256; i1 += 2)
+            for (int i1 = WorldHeightHelper.getMinY(); i1 <= WorldHeightHelper.getMaxY(); i1 += 2)
             {
                 double d4 = (double)i1 - camY;
                 bufferbuilder.pos(d2, d4, d3).color(1.0F, 1.0F, 0.0F, 0.0F).endVertex();
@@ -107,7 +108,7 @@ public class ChunkBorderDebugRenderer implements DebugRenderer.IDebugRenderer
                 }
             }
 
-            for (int k1 = 0; k1 <= 256; k1 += 16)
+            for (int k1 = WorldHeightHelper.getMinY(); k1 <= WorldHeightHelper.getMaxY(); k1 += 16)
             {
                 double d5 = (double)k1 - camY;
                 bufferbuilder.pos(d2, d5, d3).color(0.25F, 0.25F, 1.0F, 0.0F).endVertex();

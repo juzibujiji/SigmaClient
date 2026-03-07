@@ -13,6 +13,7 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkSection;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import net.optifine.Config;
 
 public class ChunkVisibility
@@ -22,7 +23,7 @@ public class ChunkVisibility
     public static final Direction[][] enumFacingOppositeArrays = makeEnumFacingArrays(true);
     private static int counter = 0;
     private static int iMaxStatic = -1;
-    private static int iMaxStaticFinal = 16;
+    private static int iMaxStaticFinal = WorldHeightHelper.getSectionCount() - 1;
     private static World worldLast = null;
     private static int pcxLast = Integer.MIN_VALUE;
     private static int pczLast = Integer.MIN_VALUE;
@@ -32,7 +33,7 @@ public class ChunkVisibility
         int i = MathHelper.floor(viewEntity.getPosX()) >> 4;
         int j = MathHelper.floor(viewEntity.getPosY()) >> 4;
         int k = MathHelper.floor(viewEntity.getPosZ()) >> 4;
-        j = Config.limit(j, 0, 15);
+        j = Config.limit(j, 0, WorldHeightHelper.getSectionCount() - 1);
         Chunk chunk = world.getChunk(i, k);
         int l = i - renderDistanceChunks;
         int i1 = i + renderDistanceChunks;
@@ -42,7 +43,7 @@ public class ChunkVisibility
         if (world != worldLast || i != pcxLast || k != pczLast)
         {
             counter = 0;
-            iMaxStaticFinal = 16;
+            iMaxStaticFinal = WorldHeightHelper.getSectionCount() - 1;
             worldLast = world;
             pcxLast = i;
             pczLast = k;
@@ -110,7 +111,7 @@ public class ChunkVisibility
                         {
                             for (BlockPos blockpos : map.keySet())
                             {
-                                int l2 = blockpos.getY() >> 4;
+                                                                int l2 = (blockpos.getY() >> 4) + WorldHeightHelper.getSectionOffset();
 
                                 if (l2 > l1)
                                 {
@@ -155,7 +156,7 @@ public class ChunkVisibility
         }
 
         counter = (counter + 1) % 4;
-        return l1 << 4;
+                return (l1 - WorldHeightHelper.getSectionOffset()) << 4;
     }
 
     public static boolean isFinished()

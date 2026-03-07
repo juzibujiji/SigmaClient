@@ -1,6 +1,7 @@
 package net.minecraft.world;
 
 import com.google.common.collect.Lists;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import com.mojang.serialization.Codec;
 import java.io.IOException;
 import java.util.Collection;
@@ -63,13 +64,16 @@ import net.minecraft.world.storage.MapData;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public abstract class World implements IWorld, AutoCloseable
-{
+public abstract class World implements IWorld, AutoCloseable {
     protected static final Logger LOGGER = LogManager.getLogger();
-    public static final Codec<RegistryKey<World>> CODEC = ResourceLocation.CODEC.xmap(RegistryKey.getKeyCreator(Registry.WORLD_KEY), RegistryKey::getLocation);
-    public static final RegistryKey<World> OVERWORLD = RegistryKey.getOrCreateKey(Registry.WORLD_KEY, new ResourceLocation("overworld"));
-    public static final RegistryKey<World> THE_NETHER = RegistryKey.getOrCreateKey(Registry.WORLD_KEY, new ResourceLocation("the_nether"));
-    public static final RegistryKey<World> THE_END = RegistryKey.getOrCreateKey(Registry.WORLD_KEY, new ResourceLocation("the_end"));
+    public static final Codec<RegistryKey<World>> CODEC = ResourceLocation.CODEC
+            .xmap(RegistryKey.getKeyCreator(Registry.WORLD_KEY), RegistryKey::getLocation);
+    public static final RegistryKey<World> OVERWORLD = RegistryKey.getOrCreateKey(Registry.WORLD_KEY,
+            new ResourceLocation("overworld"));
+    public static final RegistryKey<World> THE_NETHER = RegistryKey.getOrCreateKey(Registry.WORLD_KEY,
+            new ResourceLocation("the_nether"));
+    public static final RegistryKey<World> THE_END = RegistryKey.getOrCreateKey(Registry.WORLD_KEY,
+            new ResourceLocation("the_end"));
     private static final Direction[] FACING_VALUES = Direction.values();
     public final List<TileEntity> loadedTileEntityList = Lists.newArrayList();
     public final List<TileEntity> tickableTileEntities = Lists.newArrayList();
@@ -80,8 +84,10 @@ public abstract class World implements IWorld, AutoCloseable
     private int skylightSubtracted;
 
     /**
-     * Contains the current Linear Congruential Generator seed for block updates. Used with an A value of 3 and a C
-     * value of 0x3c6ef35f, producing a highly planar series of values ill-suited for choosing random blocks in a
+     * Contains the current Linear Congruential Generator seed for block updates.
+     * Used with an A value of 3 and a C
+     * value of 0x3c6ef35f, producing a highly planar series of values ill-suited
+     * for choosing random blocks in a
      * 16x128x16 field.
      */
     protected int updateLCG = (new Random()).nextInt();
@@ -97,37 +103,33 @@ public abstract class World implements IWorld, AutoCloseable
     public final boolean isRemote;
 
     /**
-     * True while the World is ticking , to prevent CME's if any of those ticks create more tile entities.
+     * True while the World is ticking , to prevent CME's if any of those ticks
+     * create more tile entities.
      */
     protected boolean processingLoadedTiles;
     private final WorldBorder worldBorder;
     private final BiomeManager biomeManager;
     private final RegistryKey<World> dimension;
 
-    protected World(ISpawnWorldInfo worldInfo, RegistryKey<World> dimension, final DimensionType dimensionType, Supplier<IProfiler> profiler, boolean isRemote, boolean isDebug, long seed)
-    {
+    protected World(ISpawnWorldInfo worldInfo, RegistryKey<World> dimension, final DimensionType dimensionType,
+            Supplier<IProfiler> profiler, boolean isRemote, boolean isDebug, long seed) {
         this.profiler = profiler;
         this.worldInfo = worldInfo;
         this.dimensionType = dimensionType;
         this.dimension = dimension;
         this.isRemote = isRemote;
 
-        if (dimensionType.getCoordinateScale() != 1.0D)
-        {
-            this.worldBorder = new WorldBorder()
-            {
-                public double getCenterX()
-                {
+        if (dimensionType.getCoordinateScale() != 1.0D) {
+            this.worldBorder = new WorldBorder() {
+                public double getCenterX() {
                     return super.getCenterX() / dimensionType.getCoordinateScale();
                 }
-                public double getCenterZ()
-                {
+
+                public double getCenterZ() {
                     return super.getCenterZ() / dimensionType.getCoordinateScale();
                 }
             };
-        }
-        else
-        {
+        } else {
             this.worldBorder = new WorldBorder();
         }
 
@@ -136,70 +138,56 @@ public abstract class World implements IWorld, AutoCloseable
         this.isDebug = isDebug;
     }
 
-    public boolean isRemote()
-    {
+    public boolean isRemote() {
         return this.isRemote;
     }
 
     @Nullable
-    public MinecraftServer getServer()
-    {
+    public MinecraftServer getServer() {
         return null;
     }
 
     /**
      * Check if the given BlockPos has valid coordinates
      */
-    public static boolean isValid(BlockPos pos)
-    {
+    public static boolean isValid(BlockPos pos) {
         return !isOutsideBuildHeight(pos) && isValidXZPosition(pos);
     }
 
-    public static boolean isInvalidPosition(BlockPos pos)
-    {
+    public static boolean isInvalidPosition(BlockPos pos) {
         return !isInvalidYPosition(pos.getY()) && isValidXZPosition(pos);
     }
 
-    private static boolean isValidXZPosition(BlockPos pos)
-    {
+    private static boolean isValidXZPosition(BlockPos pos) {
         return pos.getX() >= -30000000 && pos.getZ() >= -30000000 && pos.getX() < 30000000 && pos.getZ() < 30000000;
     }
 
-    private static boolean isInvalidYPosition(int y)
-    {
+    private static boolean isInvalidYPosition(int y) {
         return y < -20000000 || y >= 20000000;
     }
 
-    public static boolean isOutsideBuildHeight(BlockPos pos)
-    {
+    public static boolean isOutsideBuildHeight(BlockPos pos) {
         return isYOutOfBounds(pos.getY());
     }
 
-    public static boolean isYOutOfBounds(int y)
-    {
-        return y < 0 || y >= 256;
+    public static boolean isYOutOfBounds(int y) {
+        return WorldHeightHelper.isYOutOfBounds(y);
     }
 
-    public Chunk getChunkAt(BlockPos pos)
-    {
+    public Chunk getChunkAt(BlockPos pos) {
         return this.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
     }
 
-    public Chunk getChunk(int chunkX, int chunkZ)
-    {
-        return (Chunk)this.getChunk(chunkX, chunkZ, ChunkStatus.FULL);
+    public Chunk getChunk(int chunkX, int chunkZ) {
+        return (Chunk) this.getChunk(chunkX, chunkZ, ChunkStatus.FULL);
     }
 
-    public IChunk getChunk(int x, int z, ChunkStatus requiredStatus, boolean nonnull)
-    {
+    public IChunk getChunk(int x, int z, ChunkStatus requiredStatus, boolean nonnull) {
         IChunk ichunk = this.getChunkProvider().getChunk(x, z, requiredStatus, nonnull);
 
-        if (ichunk == null && nonnull)
-        {
+        if (ichunk == null && nonnull) {
             throw new IllegalStateException("Should always be able to create a chunk!");
-        }
-        else
-        {
+        } else {
             return ichunk;
         }
     }
@@ -210,71 +198,60 @@ public abstract class World implements IWorld, AutoCloseable
      * 2 will send the change to clients.
      * 4 will prevent the block from being re-rendered.
      * 8 will force any re-renders to run on the main thread instead
-     * 16 will prevent neighbor reactions (e.g. fences connecting, observers pulsing).
+     * 16 will prevent neighbor reactions (e.g. fences connecting, observers
+     * pulsing).
      * 32 will prevent neighbor reactions from spawning drops.
      * 64 will signify the block is being moved.
      * Flags can be OR-ed
      */
-    public boolean setBlockState(BlockPos pos, BlockState newState, int flags)
-    {
+    public boolean setBlockState(BlockPos pos, BlockState newState, int flags) {
         return this.setBlockState(pos, newState, flags, 512);
     }
 
-    public boolean setBlockState(BlockPos pos, BlockState state, int flags, int recursionLeft)
-    {
-        if (isOutsideBuildHeight(pos))
-        {
+    public boolean setBlockState(BlockPos pos, BlockState state, int flags, int recursionLeft) {
+        if (isOutsideBuildHeight(pos)) {
             return false;
-        }
-        else if (!this.isRemote && this.isDebug())
-        {
+        } else if (!this.isRemote && this.isDebug()) {
             return false;
-        }
-        else
-        {
+        } else {
             Chunk chunk = this.getChunkAt(pos);
             Block block = state.getBlock();
             BlockState blockstate = chunk.setBlockState(pos, state, (flags & 64) != 0);
 
-            if (blockstate == null)
-            {
+            if (blockstate == null) {
                 return false;
-            }
-            else
-            {
+            } else {
                 BlockState blockstate1 = this.getBlockState(pos);
 
-                if ((flags & 128) == 0 && blockstate1 != blockstate && (blockstate1.getOpacity(this, pos) != blockstate.getOpacity(this, pos) || blockstate1.getLightValue() != blockstate.getLightValue() || blockstate1.isTransparent() || blockstate.isTransparent()))
-                {
+                if ((flags & 128) == 0 && blockstate1 != blockstate
+                        && (blockstate1.getOpacity(this, pos) != blockstate.getOpacity(this, pos)
+                                || blockstate1.getLightValue() != blockstate.getLightValue()
+                                || blockstate1.isTransparent() || blockstate.isTransparent())) {
                     this.getProfiler().startSection("queueCheckLight");
                     this.getChunkProvider().getLightManager().checkBlock(pos);
                     this.getProfiler().endSection();
                 }
 
-                if (blockstate1 == state)
-                {
-                    if (blockstate != blockstate1)
-                    {
+                if (blockstate1 == state) {
+                    if (blockstate != blockstate1) {
                         this.markBlockRangeForRenderUpdate(pos, blockstate, blockstate1);
                     }
 
-                    if ((flags & 2) != 0 && (!this.isRemote || (flags & 4) == 0) && (this.isRemote || chunk.getLocationType() != null && chunk.getLocationType().isAtLeast(ChunkHolder.LocationType.TICKING)))
-                    {
+                    if ((flags & 2) != 0 && (!this.isRemote || (flags & 4) == 0)
+                            && (this.isRemote || chunk.getLocationType() != null
+                                    && chunk.getLocationType().isAtLeast(ChunkHolder.LocationType.TICKING))) {
                         this.notifyBlockUpdate(pos, blockstate, state, flags);
                     }
 
-                    if ((flags & 1) != 0)
-                    {
+                    if ((flags & 1) != 0) {
                         this.func_230547_a_(pos, blockstate.getBlock());
 
-                        if (!this.isRemote && state.hasComparatorInputOverride())
-                        {
+                        if (!this.isRemote && state.hasComparatorInputOverride()) {
                             this.updateComparatorOutputLevel(pos, block);
                         }
                     }
 
-                    if ((flags & 16) == 0 && recursionLeft > 0)
-                    {
+                    if ((flags & 16) == 0 && recursionLeft > 0) {
                         int i = flags & -34;
                         blockstate.updateDiagonalNeighbors(this, pos, i, recursionLeft - 1);
                         state.updateNeighbours(this, pos, i, recursionLeft - 1);
@@ -289,35 +266,27 @@ public abstract class World implements IWorld, AutoCloseable
         }
     }
 
-    public void onBlockStateChange(BlockPos pos, BlockState blockStateIn, BlockState newState)
-    {
+    public void onBlockStateChange(BlockPos pos, BlockState blockStateIn, BlockState newState) {
     }
 
-    public boolean removeBlock(BlockPos pos, boolean isMoving)
-    {
+    public boolean removeBlock(BlockPos pos, boolean isMoving) {
         FluidState fluidstate = this.getFluidState(pos);
         return this.setBlockState(pos, fluidstate.getBlockState(), 3 | (isMoving ? 64 : 0));
     }
 
-    public boolean destroyBlock(BlockPos pos, boolean dropBlock, @Nullable Entity entity, int recursionLeft)
-    {
+    public boolean destroyBlock(BlockPos pos, boolean dropBlock, @Nullable Entity entity, int recursionLeft) {
         BlockState blockstate = this.getBlockState(pos);
 
-        if (blockstate.isAir())
-        {
+        if (blockstate.isAir()) {
             return false;
-        }
-        else
-        {
+        } else {
             FluidState fluidstate = this.getFluidState(pos);
 
-            if (!(blockstate.getBlock() instanceof AbstractFireBlock))
-            {
+            if (!(blockstate.getBlock() instanceof AbstractFireBlock)) {
                 this.playEvent(2001, pos, Block.getStateId(blockstate));
             }
 
-            if (dropBlock)
-            {
+            if (dropBlock) {
                 TileEntity tileentity = blockstate.getBlock().isTileEntityProvider() ? this.getTileEntity(pos) : null;
                 Block.spawnDrops(blockstate, this, pos, tileentity, entity, ItemStack.EMPTY);
             }
@@ -329,8 +298,7 @@ public abstract class World implements IWorld, AutoCloseable
     /**
      * Convenience method to update the block on both the client and server
      */
-    public boolean setBlockState(BlockPos pos, BlockState state)
-    {
+    public boolean setBlockState(BlockPos pos, BlockState state) {
         return this.setBlockState(pos, state, 3);
     }
 
@@ -339,12 +307,10 @@ public abstract class World implements IWorld, AutoCloseable
      */
     public abstract void notifyBlockUpdate(BlockPos pos, BlockState oldState, BlockState newState, int flags);
 
-    public void markBlockRangeForRenderUpdate(BlockPos blockPosIn, BlockState oldState, BlockState newState)
-    {
+    public void markBlockRangeForRenderUpdate(BlockPos blockPosIn, BlockState oldState, BlockState newState) {
     }
 
-    public void notifyNeighborsOfStateChange(BlockPos pos, Block blockIn)
-    {
+    public void notifyNeighborsOfStateChange(BlockPos pos, Block blockIn) {
         this.neighborChanged(pos.west(), blockIn, pos);
         this.neighborChanged(pos.east(), blockIn, pos);
         this.neighborChanged(pos.down(), blockIn, pos);
@@ -353,60 +319,46 @@ public abstract class World implements IWorld, AutoCloseable
         this.neighborChanged(pos.south(), blockIn, pos);
     }
 
-    public void notifyNeighborsOfStateExcept(BlockPos pos, Block blockType, Direction skipSide)
-    {
-        if (skipSide != Direction.WEST)
-        {
+    public void notifyNeighborsOfStateExcept(BlockPos pos, Block blockType, Direction skipSide) {
+        if (skipSide != Direction.WEST) {
             this.neighborChanged(pos.west(), blockType, pos);
         }
 
-        if (skipSide != Direction.EAST)
-        {
+        if (skipSide != Direction.EAST) {
             this.neighborChanged(pos.east(), blockType, pos);
         }
 
-        if (skipSide != Direction.DOWN)
-        {
+        if (skipSide != Direction.DOWN) {
             this.neighborChanged(pos.down(), blockType, pos);
         }
 
-        if (skipSide != Direction.UP)
-        {
+        if (skipSide != Direction.UP) {
             this.neighborChanged(pos.up(), blockType, pos);
         }
 
-        if (skipSide != Direction.NORTH)
-        {
+        if (skipSide != Direction.NORTH) {
             this.neighborChanged(pos.north(), blockType, pos);
         }
 
-        if (skipSide != Direction.SOUTH)
-        {
+        if (skipSide != Direction.SOUTH) {
             this.neighborChanged(pos.south(), blockType, pos);
         }
     }
 
-    public void neighborChanged(BlockPos pos, Block blockIn, BlockPos fromPos)
-    {
-        if (!this.isRemote)
-        {
+    public void neighborChanged(BlockPos pos, Block blockIn, BlockPos fromPos) {
+        if (!this.isRemote) {
             BlockState blockstate = this.getBlockState(pos);
 
-            try
-            {
+            try {
                 blockstate.neighborChanged(this, pos, blockIn, fromPos, false);
-            }
-            catch (Throwable throwable)
-            {
+            } catch (Throwable throwable) {
                 CrashReport crashreport = CrashReport.makeCrashReport(throwable, "Exception while updating neighbours");
                 CrashReportCategory crashreportcategory = crashreport.makeCategory("Block being updated");
-                crashreportcategory.addDetail("Source block type", () ->
-                {
+                crashreportcategory.addDetail("Source block type", () -> {
                     try {
-                        return String.format("ID #%s (%s // %s)", Registry.BLOCK.getKey(blockIn), blockIn.getTranslationKey(), blockIn.getClass().getCanonicalName());
-                    }
-                    catch (Throwable throwable1)
-                    {
+                        return String.format("ID #%s (%s // %s)", Registry.BLOCK.getKey(blockIn),
+                                blockIn.getTranslationKey(), blockIn.getClass().getCanonicalName());
+                    } catch (Throwable throwable1) {
                         return "ID #" + Registry.BLOCK.getKey(blockIn);
                     }
                 });
@@ -422,11 +374,11 @@ public abstract class World implements IWorld, AutoCloseable
         if (x >= -30000000 && z >= -30000000 && x < 30000000 && z < 30000000) {
             if (this.chunkExists(x >> 4, z >> 4)) {
                 i = this.getChunk(x >> 4, z >> 4).getTopBlockY(heightmapType, x & 15, z & 15) + 1;
-                if (i < -64) { // Allow negative Y values (trust)
-                    i = -64;
+                if (i < WorldHeightHelper.getMinY()) { // Allow negative Y values (trust)
+                    i = WorldHeightHelper.getMinY();
                 }
             } else {
-                i = -64; // trying to do 1.17+
+                i = WorldHeightHelper.getMinY(); // trying to do 1.17+
             }
         } else {
             i = this.getSeaLevel() + 1;
@@ -435,113 +387,104 @@ public abstract class World implements IWorld, AutoCloseable
         return i;
     }
 
-    public WorldLightManager getLightManager()
-    {
+    public WorldLightManager getLightManager() {
         return this.getChunkProvider().getLightManager();
     }
 
-    public BlockState getBlockState(BlockPos pos)
-    {
-        if (isOutsideBuildHeight(pos))
-        {
+    public BlockState getBlockState(BlockPos pos) {
+        if (isOutsideBuildHeight(pos)) {
             return Blocks.VOID_AIR.getDefaultState();
-        }
-        else
-        {
+        } else {
             Chunk chunk = this.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             return chunk.getBlockState(pos);
         }
     }
 
-    public FluidState getFluidState(BlockPos pos)
-    {
-        if (isOutsideBuildHeight(pos))
-        {
+    public FluidState getFluidState(BlockPos pos) {
+        if (isOutsideBuildHeight(pos)) {
             return Fluids.EMPTY.getDefaultState();
-        }
-        else
-        {
+        } else {
             Chunk chunk = this.getChunkAt(pos);
             return chunk.getFluidState(pos);
         }
     }
 
     /**
-     * Checks whether its daytime by seeing if the light subtracted from the skylight is less than 4. Always returns
-     * true on the client because vanilla has no need for it on the client, therefore it is not synced to the client
+     * Checks whether its daytime by seeing if the light subtracted from the
+     * skylight is less than 4. Always returns
+     * true on the client because vanilla has no need for it on the client,
+     * therefore it is not synced to the client
      */
-    public boolean isDaytime()
-    {
+    public boolean isDaytime() {
         return !this.getDimensionType().doesFixedTimeExist() && this.skylightSubtracted < 4;
     }
 
-    public boolean isNightTime()
-    {
+    public boolean isNightTime() {
         return !this.getDimensionType().doesFixedTimeExist() && !this.isDaytime();
     }
 
     /**
-     * Plays a sound. On the server, the sound is broadcast to all nearby <em>except</em> the given player. On the
-     * client, the sound only plays if the given player is the client player. Thus, this method is intended to be called
-     * from code running on both sides. The client plays it locally and the server plays it for everyone else.
+     * Plays a sound. On the server, the sound is broadcast to all nearby
+     * <em>except</em> the given player. On the
+     * client, the sound only plays if the given player is the client player. Thus,
+     * this method is intended to be called
+     * from code running on both sides. The client plays it locally and the server
+     * plays it for everyone else.
      */
-    public void playSound(@Nullable PlayerEntity player, BlockPos pos, SoundEvent soundIn, SoundCategory category, float volume, float pitch)
-    {
-        this.playSound(player, (double)pos.getX() + 0.5D, (double)pos.getY() + 0.5D, (double)pos.getZ() + 0.5D, soundIn, category, volume, pitch);
+    public void playSound(@Nullable PlayerEntity player, BlockPos pos, SoundEvent soundIn, SoundCategory category,
+            float volume, float pitch) {
+        this.playSound(player, (double) pos.getX() + 0.5D, (double) pos.getY() + 0.5D, (double) pos.getZ() + 0.5D,
+                soundIn, category, volume, pitch);
     }
 
-    public abstract void playSound(@Nullable PlayerEntity player, double x, double y, double z, SoundEvent soundIn, SoundCategory category, float volume, float pitch);
+    public abstract void playSound(@Nullable PlayerEntity player, double x, double y, double z, SoundEvent soundIn,
+            SoundCategory category, float volume, float pitch);
 
-    public abstract void playMovingSound(@Nullable PlayerEntity playerIn, Entity entityIn, SoundEvent eventIn, SoundCategory categoryIn, float volume, float pitch);
+    public abstract void playMovingSound(@Nullable PlayerEntity playerIn, Entity entityIn, SoundEvent eventIn,
+            SoundCategory categoryIn, float volume, float pitch);
 
-    public void playSound(double x, double y, double z, SoundEvent soundIn, SoundCategory category, float volume, float pitch, boolean distanceDelay)
-    {
+    public void playSound(double x, double y, double z, SoundEvent soundIn, SoundCategory category, float volume,
+            float pitch, boolean distanceDelay) {
     }
 
-    public void addParticle(IParticleData particleData, double x, double y, double z, double xSpeed, double ySpeed, double zSpeed)
-    {
+    public void addParticle(IParticleData particleData, double x, double y, double z, double xSpeed, double ySpeed,
+            double zSpeed) {
     }
 
-    public void addParticle(IParticleData particleData, boolean forceAlwaysRender, double x, double y, double z, double xSpeed, double ySpeed, double zSpeed)
-    {
+    public void addParticle(IParticleData particleData, boolean forceAlwaysRender, double x, double y, double z,
+            double xSpeed, double ySpeed, double zSpeed) {
     }
 
-    public void addOptionalParticle(IParticleData particleData, double x, double y, double z, double xSpeed, double ySpeed, double zSpeed)
-    {
+    public void addOptionalParticle(IParticleData particleData, double x, double y, double z, double xSpeed,
+            double ySpeed, double zSpeed) {
     }
 
-    public void addOptionalParticle(IParticleData particleData, boolean ignoreRange, double x, double y, double z, double xSpeed, double ySpeed, double zSpeed)
-    {
+    public void addOptionalParticle(IParticleData particleData, boolean ignoreRange, double x, double y, double z,
+            double xSpeed, double ySpeed, double zSpeed) {
     }
 
     /**
      * Return getCelestialAngle()*2*PI
      */
-    public float getCelestialAngleRadians(float partialTicks)
-    {
+    public float getCelestialAngleRadians(float partialTicks) {
         float f = this.func_242415_f(partialTicks);
-        return f * ((float)Math.PI * 2F);
+        return f * ((float) Math.PI * 2F);
     }
 
-    public boolean addTileEntity(TileEntity tile)
-    {
-        if (this.processingLoadedTiles)
-        {
-            LOGGER.error("Adding block entity while ticking: {} @ {}", () ->
-            {
+    public boolean addTileEntity(TileEntity tile) {
+        if (this.processingLoadedTiles) {
+            LOGGER.error("Adding block entity while ticking: {} @ {}", () -> {
                 return Registry.BLOCK_ENTITY_TYPE.getKey(tile.getType());
             }, tile::getPos);
         }
 
         boolean flag = this.loadedTileEntityList.add(tile);
 
-        if (flag && tile instanceof ITickableTileEntity)
-        {
+        if (flag && tile instanceof ITickableTileEntity) {
             this.tickableTileEntities.add(tile);
         }
 
-        if (this.isRemote)
-        {
+        if (this.isRemote) {
             BlockPos blockpos = tile.getPos();
             BlockState blockstate = this.getBlockState(blockpos);
             this.notifyBlockUpdate(blockpos, blockstate, blockstate, 2);
@@ -550,28 +493,21 @@ public abstract class World implements IWorld, AutoCloseable
         return flag;
     }
 
-    public void addTileEntities(Collection<TileEntity> tileEntityCollection)
-    {
-        if (this.processingLoadedTiles)
-        {
+    public void addTileEntities(Collection<TileEntity> tileEntityCollection) {
+        if (this.processingLoadedTiles) {
             this.addedTileEntityList.addAll(tileEntityCollection);
-        }
-        else
-        {
-            for (TileEntity tileentity : tileEntityCollection)
-            {
+        } else {
+            for (TileEntity tileentity : tileEntityCollection) {
                 this.addTileEntity(tileentity);
             }
         }
     }
 
-    public void tickBlockEntities()
-    {
+    public void tickBlockEntities() {
         IProfiler iprofiler = this.getProfiler();
         iprofiler.startSection("blockEntities");
 
-        if (!this.tileEntitiesToBeRemoved.isEmpty())
-        {
+        if (!this.tileEntitiesToBeRemoved.isEmpty()) {
             this.tickableTileEntities.removeAll(this.tileEntitiesToBeRemoved);
             this.loadedTileEntityList.removeAll(this.tileEntitiesToBeRemoved);
             this.tileEntitiesToBeRemoved.clear();
@@ -580,36 +516,26 @@ public abstract class World implements IWorld, AutoCloseable
         this.processingLoadedTiles = true;
         Iterator<TileEntity> iterator = this.tickableTileEntities.iterator();
 
-        while (iterator.hasNext())
-        {
+        while (iterator.hasNext()) {
             TileEntity tileentity = iterator.next();
 
-            if (!tileentity.isRemoved() && tileentity.hasWorld())
-            {
+            if (!tileentity.isRemoved() && tileentity.hasWorld()) {
                 BlockPos blockpos = tileentity.getPos();
 
-                if (this.getChunkProvider().canTick(blockpos) && this.getWorldBorder().contains(blockpos))
-                {
-                    try
-                    {
-                        iprofiler.startSection(() ->
-                        {
-                            return String.valueOf((Object)TileEntityType.getId(tileentity.getType()));
+                if (this.getChunkProvider().canTick(blockpos) && this.getWorldBorder().contains(blockpos)) {
+                    try {
+                        iprofiler.startSection(() -> {
+                            return String.valueOf((Object) TileEntityType.getId(tileentity.getType()));
                         });
 
-                        if (tileentity.getType().isValidBlock(this.getBlockState(blockpos).getBlock()))
-                        {
-                            ((ITickableTileEntity)tileentity).tick();
-                        }
-                        else
-                        {
+                        if (tileentity.getType().isValidBlock(this.getBlockState(blockpos).getBlock())) {
+                            ((ITickableTileEntity) tileentity).tick();
+                        } else {
                             tileentity.warnInvalidBlock();
                         }
 
                         iprofiler.endSection();
-                    }
-                    catch (Throwable throwable)
-                    {
+                    } catch (Throwable throwable) {
                         CrashReport crashreport = CrashReport.makeCrashReport(throwable, "Ticking block entity");
                         CrashReportCategory crashreportcategory = crashreport.makeCategory("Block entity being ticked");
                         tileentity.addInfoToCrashReport(crashreportcategory);
@@ -618,13 +544,11 @@ public abstract class World implements IWorld, AutoCloseable
                 }
             }
 
-            if (tileentity.isRemoved())
-            {
+            if (tileentity.isRemoved()) {
                 iterator.remove();
                 this.loadedTileEntityList.remove(tileentity);
 
-                if (this.isBlockLoaded(tileentity.getPos()))
-                {
+                if (this.isBlockLoaded(tileentity.getPos())) {
                     this.getChunkAt(tileentity.getPos()).removeTileEntity(tileentity.getPos());
                 }
             }
@@ -633,21 +557,16 @@ public abstract class World implements IWorld, AutoCloseable
         this.processingLoadedTiles = false;
         iprofiler.endStartSection("pendingBlockEntities");
 
-        if (!this.addedTileEntityList.isEmpty())
-        {
-            for (int i = 0; i < this.addedTileEntityList.size(); ++i)
-            {
+        if (!this.addedTileEntityList.isEmpty()) {
+            for (int i = 0; i < this.addedTileEntityList.size(); ++i) {
                 TileEntity tileentity1 = this.addedTileEntityList.get(i);
 
-                if (!tileentity1.isRemoved())
-                {
-                    if (!this.loadedTileEntityList.contains(tileentity1))
-                    {
+                if (!tileentity1.isRemoved()) {
+                    if (!this.loadedTileEntityList.contains(tileentity1)) {
                         this.addTileEntity(tileentity1);
                     }
 
-                    if (this.isBlockLoaded(tileentity1.getPos()))
-                    {
+                    if (this.isBlockLoaded(tileentity1.getPos())) {
                         Chunk chunk = this.getChunkAt(tileentity1.getPos());
                         BlockState blockstate = chunk.getBlockState(tileentity1.getPos());
                         chunk.addTileEntity(tileentity1.getPos(), tileentity1);
@@ -662,14 +581,10 @@ public abstract class World implements IWorld, AutoCloseable
         iprofiler.endSection();
     }
 
-    public void guardEntityTick(Consumer<Entity> consumerEntity, Entity entityIn)
-    {
-        try
-        {
+    public void guardEntityTick(Consumer<Entity> consumerEntity, Entity entityIn) {
+        try {
             consumerEntity.accept(entityIn);
-        }
-        catch (Throwable throwable)
-        {
+        } catch (Throwable throwable) {
             CrashReport crashreport = CrashReport.makeCrashReport(throwable, "Ticking entity");
             CrashReportCategory crashreportcategory = crashreport.makeCategory("Entity being ticked");
             entityIn.fillCrashReport(crashreportcategory);
@@ -685,24 +600,26 @@ public abstract class World implements IWorld, AutoCloseable
         int i1 = MathHelper.floor(bb.minZ);
         int j1 = MathHelper.ceil(bb.maxZ);
         BlockMaterialMatcher blockmaterialmatcher = BlockMaterialMatcher.forMaterial(materialIn);
-        return BlockPos.getAllInBox(i, k, i1, j - 1, l - 1, j1 - 1).anyMatch((p_217397_2_) ->
-        {
+        return BlockPos.getAllInBox(i, k, i1, j - 1, l - 1, j1 - 1).anyMatch((p_217397_2_) -> {
             return blockmaterialmatcher.test(this.getBlockState(p_217397_2_));
         });
     }
 
-    public Explosion createExplosion(@Nullable Entity entityIn, double xIn, double yIn, double zIn, float explosionRadius, Explosion.Mode modeIn)
-    {
-        return this.createExplosion(entityIn, (DamageSource)null, (ExplosionContext)null, xIn, yIn, zIn, explosionRadius, false, modeIn);
+    public Explosion createExplosion(@Nullable Entity entityIn, double xIn, double yIn, double zIn,
+            float explosionRadius, Explosion.Mode modeIn) {
+        return this.createExplosion(entityIn, (DamageSource) null, (ExplosionContext) null, xIn, yIn, zIn,
+                explosionRadius, false, modeIn);
     }
 
-    public Explosion createExplosion(@Nullable Entity entityIn, double xIn, double yIn, double zIn, float explosionRadius, boolean causesFire, Explosion.Mode modeIn)
-    {
-        return this.createExplosion(entityIn, (DamageSource)null, (ExplosionContext)null, xIn, yIn, zIn, explosionRadius, causesFire, modeIn);
+    public Explosion createExplosion(@Nullable Entity entityIn, double xIn, double yIn, double zIn,
+            float explosionRadius, boolean causesFire, Explosion.Mode modeIn) {
+        return this.createExplosion(entityIn, (DamageSource) null, (ExplosionContext) null, xIn, yIn, zIn,
+                explosionRadius, causesFire, modeIn);
     }
 
-    public Explosion createExplosion(@Nullable Entity exploder, @Nullable DamageSource damageSource, @Nullable ExplosionContext context, double x, double y, double z, float size, boolean causesFire, Explosion.Mode mode)
-    {
+    public Explosion createExplosion(@Nullable Entity exploder, @Nullable DamageSource damageSource,
+            @Nullable ExplosionContext context, double x, double y, double z, float size, boolean causesFire,
+            Explosion.Mode mode) {
         Explosion explosion = new Explosion(this, exploder, damageSource, context, x, y, z, size, causesFire, mode);
         explosion.doExplosionA();
         explosion.doExplosionB(true);
@@ -710,40 +627,31 @@ public abstract class World implements IWorld, AutoCloseable
     }
 
     /**
-     * Returns the name of the current chunk provider, by calling chunkprovider.makeString()
+     * Returns the name of the current chunk provider, by calling
+     * chunkprovider.makeString()
      */
-    public String getProviderName()
-    {
+    public String getProviderName() {
         return this.getChunkProvider().makeString();
     }
 
     @Nullable
-    public TileEntity getTileEntity(BlockPos pos)
-    {
-        if (isOutsideBuildHeight(pos))
-        {
+    public TileEntity getTileEntity(BlockPos pos) {
+        if (isOutsideBuildHeight(pos)) {
             return null;
-        }
-        else if (!this.isRemote && Thread.currentThread() != this.mainThread)
-        {
+        } else if (!this.isRemote && Thread.currentThread() != this.mainThread) {
             return null;
-        }
-        else
-        {
+        } else {
             TileEntity tileentity = null;
 
-            if (this.processingLoadedTiles)
-            {
+            if (this.processingLoadedTiles) {
                 tileentity = this.getPendingTileEntityAt(pos);
             }
 
-            if (tileentity == null)
-            {
+            if (tileentity == null) {
                 tileentity = this.getChunkAt(pos).getTileEntity(pos, Chunk.CreateEntityType.IMMEDIATE);
             }
 
-            if (tileentity == null)
-            {
+            if (tileentity == null) {
                 tileentity = this.getPendingTileEntityAt(pos);
             }
 
@@ -752,14 +660,11 @@ public abstract class World implements IWorld, AutoCloseable
     }
 
     @Nullable
-    private TileEntity getPendingTileEntityAt(BlockPos pos)
-    {
-        for (int i = 0; i < this.addedTileEntityList.size(); ++i)
-        {
+    private TileEntity getPendingTileEntityAt(BlockPos pos) {
+        for (int i = 0; i < this.addedTileEntityList.size(); ++i) {
             TileEntity tileentity = this.addedTileEntityList.get(i);
 
-            if (!tileentity.isRemoved() && tileentity.getPos().equals(pos))
-            {
+            if (!tileentity.isRemoved() && tileentity.getPos().equals(pos)) {
                 return tileentity;
             }
         }
@@ -767,32 +672,24 @@ public abstract class World implements IWorld, AutoCloseable
         return null;
     }
 
-    public void setTileEntity(BlockPos pos, @Nullable TileEntity tileEntityIn)
-    {
-        if (!isOutsideBuildHeight(pos))
-        {
-            if (tileEntityIn != null && !tileEntityIn.isRemoved())
-            {
-                if (this.processingLoadedTiles)
-                {
+    public void setTileEntity(BlockPos pos, @Nullable TileEntity tileEntityIn) {
+        if (!isOutsideBuildHeight(pos)) {
+            if (tileEntityIn != null && !tileEntityIn.isRemoved()) {
+                if (this.processingLoadedTiles) {
                     tileEntityIn.setWorldAndPos(this, pos);
                     Iterator<TileEntity> iterator = this.addedTileEntityList.iterator();
 
-                    while (iterator.hasNext())
-                    {
+                    while (iterator.hasNext()) {
                         TileEntity tileentity = iterator.next();
 
-                        if (tileentity.getPos().equals(pos))
-                        {
+                        if (tileentity.getPos().equals(pos)) {
                             tileentity.remove();
                             iterator.remove();
                         }
                     }
 
                     this.addedTileEntityList.add(tileEntityIn);
-                }
-                else
-                {
+                } else {
                     this.getChunkAt(pos).addTileEntity(pos, tileEntityIn);
                     this.addTileEntity(tileEntityIn);
                 }
@@ -800,19 +697,14 @@ public abstract class World implements IWorld, AutoCloseable
         }
     }
 
-    public void removeTileEntity(BlockPos pos)
-    {
+    public void removeTileEntity(BlockPos pos) {
         TileEntity tileentity = this.getTileEntity(pos);
 
-        if (tileentity != null && this.processingLoadedTiles)
-        {
+        if (tileentity != null && this.processingLoadedTiles) {
             tileentity.remove();
             this.addedTileEntityList.remove(tileentity);
-        }
-        else
-        {
-            if (tileentity != null)
-            {
+        } else {
+            if (tileentity != null) {
                 this.addedTileEntityList.remove(tileentity);
                 this.loadedTileEntityList.remove(tileentity);
                 this.tickableTileEntities.remove(tileentity);
@@ -822,77 +714,67 @@ public abstract class World implements IWorld, AutoCloseable
         }
     }
 
-    public boolean isBlockPresent(BlockPos pos)
-    {
-        return isOutsideBuildHeight(pos) ? false : this.getChunkProvider().chunkExists(pos.getX() >> 4, pos.getZ() >> 4);
+    public boolean isBlockPresent(BlockPos pos) {
+        return isOutsideBuildHeight(pos) ? false
+                : this.getChunkProvider().chunkExists(pos.getX() >> 4, pos.getZ() >> 4);
     }
 
-    public boolean isDirectionSolid(BlockPos pos, Entity entity, Direction direction)
-    {
-        if (isOutsideBuildHeight(pos))
-        {
+    public boolean isDirectionSolid(BlockPos pos, Entity entity, Direction direction) {
+        if (isOutsideBuildHeight(pos)) {
             return false;
-        }
-        else
-        {
+        } else {
             IChunk ichunk = this.getChunk(pos.getX() >> 4, pos.getZ() >> 4, ChunkStatus.FULL, false);
             return ichunk == null ? false : ichunk.getBlockState(pos).isTopSolid(this, pos, entity, direction);
         }
     }
 
-    public boolean isTopSolid(BlockPos pos, Entity entityIn)
-    {
+    public boolean isTopSolid(BlockPos pos, Entity entityIn) {
         return this.isDirectionSolid(pos, entityIn, Direction.UP);
     }
 
     /**
-     * Called on construction of the World class to setup the initial skylight values
+     * Called on construction of the World class to setup the initial skylight
+     * values
      */
-    public void calculateInitialSkylight()
-    {
-        double d0 = 1.0D - (double)(this.getRainStrength(1.0F) * 5.0F) / 16.0D;
-        double d1 = 1.0D - (double)(this.getThunderStrength(1.0F) * 5.0F) / 16.0D;
-        double d2 = 0.5D + 2.0D * MathHelper.clamp((double)MathHelper.cos(this.func_242415_f(1.0F) * ((float)Math.PI * 2F)), -0.25D, 0.25D);
-        this.skylightSubtracted = (int)((1.0D - d2 * d0 * d1) * 11.0D);
+    public void calculateInitialSkylight() {
+        double d0 = 1.0D - (double) (this.getRainStrength(1.0F) * 5.0F) / 16.0D;
+        double d1 = 1.0D - (double) (this.getThunderStrength(1.0F) * 5.0F) / 16.0D;
+        double d2 = 0.5D + 2.0D * MathHelper
+                .clamp((double) MathHelper.cos(this.func_242415_f(1.0F) * ((float) Math.PI * 2F)), -0.25D, 0.25D);
+        this.skylightSubtracted = (int) ((1.0D - d2 * d0 * d1) * 11.0D);
     }
 
     /**
      * first boolean for hostile mobs and second for peaceful mobs
      */
-    public void setAllowedSpawnTypes(boolean hostile, boolean peaceful)
-    {
+    public void setAllowedSpawnTypes(boolean hostile, boolean peaceful) {
         this.getChunkProvider().setAllowedSpawnTypes(hostile, peaceful);
     }
 
     /**
      * Called from World constructor to set rainingStrength and thunderingStrength
      */
-    protected void calculateInitialWeather()
-    {
-        if (this.worldInfo.isRaining())
-        {
+    protected void calculateInitialWeather() {
+        if (this.worldInfo.isRaining()) {
             this.rainingStrength = 1.0F;
 
-            if (this.worldInfo.isThundering())
-            {
+            if (this.worldInfo.isThundering()) {
                 this.thunderingStrength = 1.0F;
             }
         }
     }
 
-    public void close() throws IOException
-    {
+    public void close() throws IOException {
         this.getChunkProvider().close();
     }
 
     @Nullable
-    public IBlockReader getBlockReader(int chunkX, int chunkZ)
-    {
+    public IBlockReader getBlockReader(int chunkX, int chunkZ) {
         return this.getChunk(chunkX, chunkZ, ChunkStatus.FULL, false);
     }
 
-    public List<Entity> getEntitiesInAABBexcluding(@Nullable Entity entityIn, AxisAlignedBB boundingBox, @Nullable Predicate <? super Entity > predicate)
-    {
+    public List<Entity> getEntitiesInAABBexcluding(@Nullable Entity entityIn, AxisAlignedBB boundingBox,
+            @Nullable Predicate<? super Entity> predicate) {
         this.getProfiler().func_230035_c_("getEntities");
         List<Entity> list = Lists.newArrayList();
         int i = MathHelper.floor((boundingBox.minX - 2.0D) / 16.0D);
@@ -901,14 +783,11 @@ public abstract class World implements IWorld, AutoCloseable
         int l = MathHelper.floor((boundingBox.maxZ + 2.0D) / 16.0D);
         AbstractChunkProvider abstractchunkprovider = this.getChunkProvider();
 
-        for (int i1 = i; i1 <= j; ++i1)
-        {
-            for (int j1 = k; j1 <= l; ++j1)
-            {
+        for (int i1 = i; i1 <= j; ++i1) {
+            for (int j1 = k; j1 <= l; ++j1) {
                 Chunk chunk = abstractchunkprovider.getChunk(i1, j1, false);
 
-                if (chunk != null)
-                {
+                if (chunk != null) {
                     chunk.getEntitiesWithinAABBForEntity(entityIn, boundingBox, list, predicate);
                 }
             }
@@ -917,8 +796,8 @@ public abstract class World implements IWorld, AutoCloseable
         return list;
     }
 
-    public <T extends Entity> List<T> getEntitiesWithinAABB(@Nullable EntityType<T> type, AxisAlignedBB boundingBox, Predicate <? super T > predicate)
-    {
+    public <T extends Entity> List<T> getEntitiesWithinAABB(@Nullable EntityType<T> type, AxisAlignedBB boundingBox,
+            Predicate<? super T> predicate) {
         this.getProfiler().func_230035_c_("getEntities");
         int i = MathHelper.floor((boundingBox.minX - 2.0D) / 16.0D);
         int j = MathHelper.ceil((boundingBox.maxX + 2.0D) / 16.0D);
@@ -926,14 +805,11 @@ public abstract class World implements IWorld, AutoCloseable
         int l = MathHelper.ceil((boundingBox.maxZ + 2.0D) / 16.0D);
         List<T> list = Lists.newArrayList();
 
-        for (int i1 = i; i1 < j; ++i1)
-        {
-            for (int j1 = k; j1 < l; ++j1)
-            {
+        for (int i1 = i; i1 < j; ++i1) {
+            for (int j1 = k; j1 < l; ++j1) {
                 Chunk chunk = this.getChunkProvider().getChunk(i1, j1, false);
 
-                if (chunk != null)
-                {
+                if (chunk != null) {
                     chunk.getEntitiesWithinAABBForList(type, boundingBox, list, predicate);
                 }
             }
@@ -942,8 +818,8 @@ public abstract class World implements IWorld, AutoCloseable
         return list;
     }
 
-    public <T extends Entity> List<T> getEntitiesWithinAABB(Class <? extends T > clazz, AxisAlignedBB aabb, @Nullable Predicate <? super T > filter)
-    {
+    public <T extends Entity> List<T> getEntitiesWithinAABB(Class<? extends T> clazz, AxisAlignedBB aabb,
+            @Nullable Predicate<? super T> filter) {
         this.getProfiler().func_230035_c_("getEntities");
         int i = MathHelper.floor((aabb.minX - 2.0D) / 16.0D);
         int j = MathHelper.ceil((aabb.maxX + 2.0D) / 16.0D);
@@ -952,14 +828,11 @@ public abstract class World implements IWorld, AutoCloseable
         List<T> list = Lists.newArrayList();
         AbstractChunkProvider abstractchunkprovider = this.getChunkProvider();
 
-        for (int i1 = i; i1 < j; ++i1)
-        {
-            for (int j1 = k; j1 < l; ++j1)
-            {
+        for (int i1 = i; i1 < j; ++i1) {
+            for (int j1 = k; j1 < l; ++j1) {
                 Chunk chunk = abstractchunkprovider.getChunk(i1, j1, false);
 
-                if (chunk != null)
-                {
+                if (chunk != null) {
                     chunk.getEntitiesOfTypeWithinAABB(clazz, aabb, list, filter);
                 }
             }
@@ -968,8 +841,8 @@ public abstract class World implements IWorld, AutoCloseable
         return list;
     }
 
-    public <T extends Entity> List<T> getLoadedEntitiesWithinAABB(Class <? extends T > p_225316_1_, AxisAlignedBB p_225316_2_, @Nullable Predicate <? super T > p_225316_3_)
-    {
+    public <T extends Entity> List<T> getLoadedEntitiesWithinAABB(Class<? extends T> p_225316_1_,
+            AxisAlignedBB p_225316_2_, @Nullable Predicate<? super T> p_225316_3_) {
         this.getProfiler().func_230035_c_("getLoadedEntities");
         int i = MathHelper.floor((p_225316_2_.minX - 2.0D) / 16.0D);
         int j = MathHelper.ceil((p_225316_2_.maxX + 2.0D) / 16.0D);
@@ -978,14 +851,11 @@ public abstract class World implements IWorld, AutoCloseable
         List<T> list = Lists.newArrayList();
         AbstractChunkProvider abstractchunkprovider = this.getChunkProvider();
 
-        for (int i1 = i; i1 < j; ++i1)
-        {
-            for (int j1 = k; j1 < l; ++j1)
-            {
+        for (int i1 = i; i1 < j; ++i1) {
+            for (int j1 = k; j1 < l; ++j1) {
                 Chunk chunk = abstractchunkprovider.getChunkNow(i1, j1);
 
-                if (chunk != null)
-                {
+                if (chunk != null) {
                     chunk.getEntitiesOfTypeWithinAABB(p_225316_1_, p_225316_2_, list, p_225316_3_);
                 }
             }
@@ -997,69 +867,52 @@ public abstract class World implements IWorld, AutoCloseable
     @Nullable
 
     /**
-     * Returns the Entity with the given ID, or null if it doesn't exist in this World.
+     * Returns the Entity with the given ID, or null if it doesn't exist in this
+     * World.
      */
     public abstract Entity getEntityByID(int id);
 
-    public void markChunkDirty(BlockPos pos, TileEntity unusedTileEntity)
-    {
-        if (this.isBlockLoaded(pos))
-        {
+    public void markChunkDirty(BlockPos pos, TileEntity unusedTileEntity) {
+        if (this.isBlockLoaded(pos)) {
             this.getChunkAt(pos).markDirty();
         }
     }
 
-    public int getSeaLevel()
-    {
+    public int getSeaLevel() {
         return 63;
     }
 
     /**
-     * Returns the single highest strong power out of all directions using getStrongPower(BlockPos, EnumFacing)
+     * Returns the single highest strong power out of all directions using
+     * getStrongPower(BlockPos, EnumFacing)
      */
-    public int getStrongPower(BlockPos pos)
-    {
+    public int getStrongPower(BlockPos pos) {
         int i = 0;
         i = Math.max(i, this.getStrongPower(pos.down(), Direction.DOWN));
 
-        if (i >= 15)
-        {
+        if (i >= 15) {
             return i;
-        }
-        else
-        {
+        } else {
             i = Math.max(i, this.getStrongPower(pos.up(), Direction.UP));
 
-            if (i >= 15)
-            {
+            if (i >= 15) {
                 return i;
-            }
-            else
-            {
+            } else {
                 i = Math.max(i, this.getStrongPower(pos.north(), Direction.NORTH));
 
-                if (i >= 15)
-                {
+                if (i >= 15) {
                     return i;
-                }
-                else
-                {
+                } else {
                     i = Math.max(i, this.getStrongPower(pos.south(), Direction.SOUTH));
 
-                    if (i >= 15)
-                    {
+                    if (i >= 15) {
                         return i;
-                    }
-                    else
-                    {
+                    } else {
                         i = Math.max(i, this.getStrongPower(pos.west(), Direction.WEST));
 
-                        if (i >= 15)
-                        {
+                        if (i >= 15) {
                             return i;
-                        }
-                        else
-                        {
+                        } else {
                             i = Math.max(i, this.getStrongPower(pos.east(), Direction.EAST));
                             return i >= 15 ? i : i;
                         }
@@ -1069,65 +922,48 @@ public abstract class World implements IWorld, AutoCloseable
         }
     }
 
-    public boolean isSidePowered(BlockPos pos, Direction side)
-    {
+    public boolean isSidePowered(BlockPos pos, Direction side) {
         return this.getRedstonePower(pos, side) > 0;
     }
 
-    public int getRedstonePower(BlockPos pos, Direction facing)
-    {
+    public int getRedstonePower(BlockPos pos, Direction facing) {
         BlockState blockstate = this.getBlockState(pos);
         int i = blockstate.getWeakPower(this, pos, facing);
         return blockstate.isNormalCube(this, pos) ? Math.max(i, this.getStrongPower(pos)) : i;
     }
 
-    public boolean isBlockPowered(BlockPos pos)
-    {
-        if (this.getRedstonePower(pos.down(), Direction.DOWN) > 0)
-        {
+    public boolean isBlockPowered(BlockPos pos) {
+        if (this.getRedstonePower(pos.down(), Direction.DOWN) > 0) {
             return true;
-        }
-        else if (this.getRedstonePower(pos.up(), Direction.UP) > 0)
-        {
+        } else if (this.getRedstonePower(pos.up(), Direction.UP) > 0) {
             return true;
-        }
-        else if (this.getRedstonePower(pos.north(), Direction.NORTH) > 0)
-        {
+        } else if (this.getRedstonePower(pos.north(), Direction.NORTH) > 0) {
             return true;
-        }
-        else if (this.getRedstonePower(pos.south(), Direction.SOUTH) > 0)
-        {
+        } else if (this.getRedstonePower(pos.south(), Direction.SOUTH) > 0) {
             return true;
-        }
-        else if (this.getRedstonePower(pos.west(), Direction.WEST) > 0)
-        {
+        } else if (this.getRedstonePower(pos.west(), Direction.WEST) > 0) {
             return true;
-        }
-        else
-        {
+        } else {
             return this.getRedstonePower(pos.east(), Direction.EAST) > 0;
         }
     }
 
     /**
-     * Checks if the specified block or its neighbors are powered by a neighboring block. Used by blocks like TNT and
+     * Checks if the specified block or its neighbors are powered by a neighboring
+     * block. Used by blocks like TNT and
      * Doors.
      */
-    public int getRedstonePowerFromNeighbors(BlockPos pos)
-    {
+    public int getRedstonePowerFromNeighbors(BlockPos pos) {
         int i = 0;
 
-        for (Direction direction : FACING_VALUES)
-        {
+        for (Direction direction : FACING_VALUES) {
             int j = this.getRedstonePower(pos.offset(direction), direction);
 
-            if (j >= 15)
-            {
+            if (j >= 15) {
                 return 15;
             }
 
-            if (j > i)
-            {
+            if (j > i) {
                 i = j;
             }
         }
@@ -1138,63 +974,54 @@ public abstract class World implements IWorld, AutoCloseable
     /**
      * If on MP, sends a quitting packet.
      */
-    public void sendQuittingDisconnectingPacket()
-    {
+    public void sendQuittingDisconnectingPacket() {
     }
 
-    public long getGameTime()
-    {
+    public long getGameTime() {
         return this.worldInfo.getGameTime();
     }
 
-    public long getDayTime()
-    {
+    public long getDayTime() {
         return this.worldInfo.getDayTime();
     }
 
-    public boolean isBlockModifiable(PlayerEntity player, BlockPos pos)
-    {
+    public boolean isBlockModifiable(PlayerEntity player, BlockPos pos) {
         return true;
     }
 
     /**
      * sends a Packet 38 (Entity Status) to all tracked players of that entity
      */
-    public void setEntityState(Entity entityIn, byte state)
-    {
+    public void setEntityState(Entity entityIn, byte state) {
     }
 
-    public void addBlockEvent(BlockPos pos, Block blockIn, int eventID, int eventParam)
-    {
+    public void addBlockEvent(BlockPos pos, Block blockIn, int eventID, int eventParam) {
         this.getBlockState(pos).receiveBlockEvent(this, pos, eventID, eventParam);
     }
 
     /**
      * Returns the world's WorldInfo object
      */
-    public IWorldInfo getWorldInfo()
-    {
+    public IWorldInfo getWorldInfo() {
         return this.worldInfo;
     }
 
     /**
      * Gets the GameRules instance.
      */
-    public GameRules getGameRules()
-    {
+    public GameRules getGameRules() {
         return this.worldInfo.getGameRulesInstance();
     }
 
-    public float getThunderStrength(float delta)
-    {
-        return MathHelper.lerp(delta, this.prevThunderingStrength, this.thunderingStrength) * this.getRainStrength(delta);
+    public float getThunderStrength(float delta) {
+        return MathHelper.lerp(delta, this.prevThunderingStrength, this.thunderingStrength)
+                * this.getRainStrength(delta);
     }
 
     /**
      * Sets the strength of the thunder.
      */
-    public void setThunderStrength(float strength)
-    {
+    public void setThunderStrength(float strength) {
         this.prevThunderingStrength = strength;
         this.thunderingStrength = strength;
     }
@@ -1202,31 +1029,26 @@ public abstract class World implements IWorld, AutoCloseable
     /**
      * Returns rain strength.
      */
-    public float getRainStrength(float delta)
-    {
+    public float getRainStrength(float delta) {
         return MathHelper.lerp(delta, this.prevRainingStrength, this.rainingStrength);
     }
 
     /**
      * Sets the strength of the rain.
      */
-    public void setRainStrength(float strength)
-    {
+    public void setRainStrength(float strength) {
         this.prevRainingStrength = strength;
         this.rainingStrength = strength;
     }
 
     /**
-     * Returns true if the current thunder strength (weighted with the rain strength) is greater than 0.9
+     * Returns true if the current thunder strength (weighted with the rain
+     * strength) is greater than 0.9
      */
-    public boolean isThundering()
-    {
-        if (this.getDimensionType().hasSkyLight() && !this.getDimensionType().getHasCeiling())
-        {
-            return (double)this.getThunderStrength(1.0F) > 0.9D;
-        }
-        else
-        {
+    public boolean isThundering() {
+        if (this.getDimensionType().hasSkyLight() && !this.getDimensionType().getHasCeiling()) {
+            return (double) this.getThunderStrength(1.0F) > 0.9D;
+        } else {
             return false;
         }
     }
@@ -1234,37 +1056,27 @@ public abstract class World implements IWorld, AutoCloseable
     /**
      * Returns true if the current rain strength is greater than 0.2
      */
-    public boolean isRaining()
-    {
-        return (double)this.getRainStrength(1.0F) > 0.2D;
+    public boolean isRaining() {
+        return (double) this.getRainStrength(1.0F) > 0.2D;
     }
 
     /**
      * Check if precipitation is currently happening at a position
      */
-    public boolean isRainingAt(BlockPos position)
-    {
-        if (!this.isRaining())
-        {
+    public boolean isRainingAt(BlockPos position) {
+        if (!this.isRaining()) {
             return false;
-        }
-        else if (!this.canSeeSky(position))
-        {
+        } else if (!this.canSeeSky(position)) {
             return false;
-        }
-        else if (this.getHeight(Heightmap.Type.MOTION_BLOCKING, position).getY() > position.getY())
-        {
+        } else if (this.getHeight(Heightmap.Type.MOTION_BLOCKING, position).getY() > position.getY()) {
             return false;
-        }
-        else
-        {
+        } else {
             Biome biome = this.getBiome(position);
             return biome.getPrecipitation() == Biome.RainType.RAIN && biome.getTemperature(position) >= 0.15F;
         }
     }
 
-    public boolean isBlockinHighHumidity(BlockPos pos)
-    {
+    public boolean isBlockinHighHumidity(BlockPos pos) {
         Biome biome = this.getBiome(pos);
         return biome.isHighHumidity();
     }
@@ -1276,32 +1088,25 @@ public abstract class World implements IWorld, AutoCloseable
 
     public abstract int getNextMapId();
 
-    public void playBroadcastSound(int id, BlockPos pos, int data)
-    {
+    public void playBroadcastSound(int id, BlockPos pos, int data) {
     }
 
     /**
      * Adds some basic stats of the world to the given crash report.
      */
-    public CrashReportCategory fillCrashReport(CrashReport report)
-    {
+    public CrashReportCategory fillCrashReport(CrashReport report) {
         CrashReportCategory crashreportcategory = report.makeCategoryDepth("Affected level", 1);
-        crashreportcategory.addDetail("All players", () ->
-        {
+        crashreportcategory.addDetail("All players", () -> {
             return this.getPlayers().size() + " total; " + this.getPlayers();
         });
         crashreportcategory.addDetail("Chunk stats", this.getChunkProvider()::makeString);
-        crashreportcategory.addDetail("Level dimension", () ->
-        {
+        crashreportcategory.addDetail("Level dimension", () -> {
             return this.getDimensionKey().getLocation().toString();
         });
 
-        try
-        {
+        try {
             this.worldInfo.addToCrashReport(crashreportcategory);
-        }
-        catch (Throwable throwable)
-        {
+        } catch (Throwable throwable) {
             crashreportcategory.addCrashSectionThrowable("Level Data Unobtainable", throwable);
         }
 
@@ -1310,33 +1115,26 @@ public abstract class World implements IWorld, AutoCloseable
 
     public abstract void sendBlockBreakProgress(int breakerId, BlockPos pos, int progress);
 
-    public void makeFireworks(double x, double y, double z, double motionX, double motionY, double motionZ, @Nullable CompoundNBT compound)
-    {
+    public void makeFireworks(double x, double y, double z, double motionX, double motionY, double motionZ,
+            @Nullable CompoundNBT compound) {
     }
 
     public abstract Scoreboard getScoreboard();
 
-    public void updateComparatorOutputLevel(BlockPos pos, Block blockIn)
-    {
-        for (Direction direction : Direction.Plane.HORIZONTAL)
-        {
+    public void updateComparatorOutputLevel(BlockPos pos, Block blockIn) {
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
             BlockPos blockpos = pos.offset(direction);
 
-            if (this.isBlockLoaded(blockpos))
-            {
+            if (this.isBlockLoaded(blockpos)) {
                 BlockState blockstate = this.getBlockState(blockpos);
 
-                if (blockstate.isIn(Blocks.COMPARATOR))
-                {
+                if (blockstate.isIn(Blocks.COMPARATOR)) {
                     blockstate.neighborChanged(this, blockpos, blockIn, pos, false);
-                }
-                else if (blockstate.isNormalCube(this, blockpos))
-                {
+                } else if (blockstate.isNormalCube(this, blockpos)) {
                     blockpos = blockpos.offset(direction);
                     blockstate = this.getBlockState(blockpos);
 
-                    if (blockstate.isIn(Blocks.COMPARATOR))
-                    {
+                    if (blockstate.isIn(Blocks.COMPARATOR)) {
                         blockstate.neighborChanged(this, blockpos, blockIn, pos, false);
                     }
                 }
@@ -1344,13 +1142,11 @@ public abstract class World implements IWorld, AutoCloseable
         }
     }
 
-    public DifficultyInstance getDifficultyForLocation(BlockPos pos)
-    {
+    public DifficultyInstance getDifficultyForLocation(BlockPos pos) {
         long i = 0L;
         float f = 0.0F;
 
-        if (this.isBlockLoaded(pos))
-        {
+        if (this.isBlockLoaded(pos)) {
             f = this.getMoonFactor();
             i = this.getChunkAt(pos).getInhabitedTime();
         }
@@ -1358,42 +1154,34 @@ public abstract class World implements IWorld, AutoCloseable
         return new DifficultyInstance(this.getDifficulty(), this.getDayTime(), i, f);
     }
 
-    public int getSkylightSubtracted()
-    {
+    public int getSkylightSubtracted() {
         return this.skylightSubtracted;
     }
 
-    public void setTimeLightningFlash(int timeFlashIn)
-    {
+    public void setTimeLightningFlash(int timeFlashIn) {
     }
 
-    public WorldBorder getWorldBorder()
-    {
+    public WorldBorder getWorldBorder() {
         return this.worldBorder;
     }
 
-    public void sendPacketToServer(IPacket<?> packetIn)
-    {
+    public void sendPacketToServer(IPacket<?> packetIn) {
         throw new UnsupportedOperationException("Can't send packets to server unless you're on the client.");
     }
 
-    public DimensionType getDimensionType()
-    {
+    public DimensionType getDimensionType() {
         return this.dimensionType;
     }
 
-    public RegistryKey<World> getDimensionKey()
-    {
+    public RegistryKey<World> getDimensionKey() {
         return this.dimension;
     }
 
-    public Random getRandom()
-    {
+    public Random getRandom() {
         return this.rand;
     }
 
-    public boolean hasBlockState(BlockPos pos, Predicate<BlockState> state)
-    {
+    public boolean hasBlockState(BlockPos pos, Predicate<BlockState> state) {
         return state.test(this.getBlockState(pos));
     }
 
@@ -1401,35 +1189,29 @@ public abstract class World implements IWorld, AutoCloseable
 
     public abstract ITagCollectionSupplier getTags();
 
-    public BlockPos getBlockRandomPos(int x, int y, int z, int yMask)
-    {
+    public BlockPos getBlockRandomPos(int x, int y, int z, int yMask) {
         this.updateLCG = this.updateLCG * 3 + 1013904223;
         int i = this.updateLCG >> 2;
         return new BlockPos(x + (i & 15), y + (i >> 16 & yMask), z + (i >> 8 & 15));
     }
 
-    public boolean isSaveDisabled()
-    {
+    public boolean isSaveDisabled() {
         return false;
     }
 
-    public IProfiler getProfiler()
-    {
+    public IProfiler getProfiler() {
         return this.profiler.get();
     }
 
-    public Supplier<IProfiler> getWorldProfiler()
-    {
+    public Supplier<IProfiler> getWorldProfiler() {
         return this.profiler;
     }
 
-    public BiomeManager getBiomeManager()
-    {
+    public BiomeManager getBiomeManager() {
         return this.biomeManager;
     }
 
-    public final boolean isDebug()
-    {
+    public final boolean isDebug() {
         return this.isDebug;
     }
 }

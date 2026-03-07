@@ -18,6 +18,7 @@ import net.minecraft.util.text.LanguageMap;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TranslationTextComponent;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWCharCallbackI;
 import org.lwjgl.glfw.GLFWCharModsCallbackI;
 import org.lwjgl.glfw.GLFWCursorPosCallbackI;
 import org.lwjgl.glfw.GLFWDropCallbackI;
@@ -66,7 +67,10 @@ public class InputMappings
     public static void setKeyCallbacks(long p_216505_0_, GLFWKeyCallbackI p_216505_2_, GLFWCharModsCallbackI p_216505_3_)
     {
         GLFW.glfwSetKeyCallback(p_216505_0_, p_216505_2_);
-        GLFW.glfwSetCharModsCallback(p_216505_0_, p_216505_3_);
+        // Use glfwSetCharCallback instead of glfwSetCharModsCallback for proper IME support
+        GLFW.glfwSetCharCallback(p_216505_0_, (window, codepoint) -> {
+            p_216505_3_.invoke(window, codepoint, 0);
+        });
     }
 
     public static void setMouseCallbacks(long p_216503_0_, GLFWCursorPosCallbackI p_216503_2_, GLFWMouseButtonCallbackI p_216503_3_, GLFWScrollCallbackI p_216503_4_, GLFWDropCallbackI p_216503_5_)

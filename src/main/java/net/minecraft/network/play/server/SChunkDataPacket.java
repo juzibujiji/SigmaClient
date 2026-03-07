@@ -21,11 +21,11 @@ import net.minecraft.world.biome.BiomeContainer;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkSection;
 import net.minecraft.world.gen.Heightmap;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import net.optifine.ChunkDataOF;
 import net.optifine.ChunkOF;
 
-public class SChunkDataPacket implements IPacket<IClientPlayNetHandler>
-{
+public class SChunkDataPacket implements IPacket<IClientPlayNetHandler> {
     private int chunkX;
     private int chunkZ;
     private int availableSections;
@@ -37,43 +37,37 @@ public class SChunkDataPacket implements IPacket<IClientPlayNetHandler>
     private boolean fullChunk;
     private Map<String, Object> customData;
 
-    public SChunkDataPacket()
-    {
+    public SChunkDataPacket() {
     }
 
-    public SChunkDataPacket(Chunk p_i242081_1_, int p_i242081_2_)
-    {
+    public SChunkDataPacket(Chunk p_i242081_1_, int p_i242081_2_) {
         ChunkPos chunkpos = p_i242081_1_.getPos();
         this.chunkX = chunkpos.x;
         this.chunkZ = chunkpos.z;
         this.fullChunk = p_i242081_2_ == 65535;
         this.heightmapTags = new CompoundNBT();
 
-        for (Entry<Heightmap.Type, Heightmap> entry : p_i242081_1_.getHeightmaps())
-        {
-            if (entry.getKey().isUsageClient())
-            {
+        for (Entry<Heightmap.Type, Heightmap> entry : p_i242081_1_.getHeightmaps()) {
+            if (entry.getKey().isUsageClient()) {
                 this.heightmapTags.put(entry.getKey().getId(), new LongArrayNBT(entry.getValue().getDataArray()));
             }
         }
 
-        if (this.fullChunk)
-        {
+        if (this.fullChunk) {
             this.biomes = p_i242081_1_.getBiomes().getBiomeIds();
         }
 
         this.buffer = new byte[this.calculateChunkSize(p_i242081_1_, p_i242081_2_)];
-        this.availableSections = this.extractChunkData(new PacketBuffer(this.getWriteBuffer()), p_i242081_1_, p_i242081_2_);
+        this.availableSections = this.extractChunkData(new PacketBuffer(this.getWriteBuffer()), p_i242081_1_,
+                p_i242081_2_);
         this.tileEntityTags = Lists.newArrayList();
 
-        for (Entry<BlockPos, TileEntity> entry1 : p_i242081_1_.getTileEntityMap().entrySet())
-        {
+        for (Entry<BlockPos, TileEntity> entry1 : p_i242081_1_.getTileEntityMap().entrySet()) {
             BlockPos blockpos = entry1.getKey();
             TileEntity tileentity = entry1.getValue();
             int i = blockpos.getY() >> 4;
 
-            if (this.isFullChunk() || (p_i242081_2_ & 1 << i) != 0)
-            {
+            if (this.isFullChunk() || (p_i242081_2_ & 1 << i) != 0) {
                 CompoundNBT compoundnbt = tileentity.getUpdateTag();
                 this.tileEntityTags.add(compoundnbt);
             }
@@ -87,34 +81,28 @@ public class SChunkDataPacket implements IPacket<IClientPlayNetHandler>
     /**
      * Reads the raw packet data from the data stream.
      */
-    public void readPacketData(PacketBuffer buf) throws IOException
-    {
+    public void readPacketData(PacketBuffer buf) throws IOException {
         this.chunkX = buf.readInt();
         this.chunkZ = buf.readInt();
         this.fullChunk = buf.readBoolean();
         this.availableSections = buf.readVarInt();
         this.heightmapTags = buf.readCompoundTag();
 
-        if (this.fullChunk)
-        {
+        if (this.fullChunk) {
             this.biomes = buf.readVarIntArray(BiomeContainer.BIOMES_SIZE);
         }
 
         int i = buf.readVarInt();
 
-        if (i > 2097152)
-        {
+        if (i > 2097152) {
             throw new RuntimeException("Chunk Packet trying to allocate too much memory on read.");
-        }
-        else
-        {
+        } else {
             this.buffer = new byte[i];
             buf.readBytes(this.buffer);
             int j = buf.readVarInt();
             this.tileEntityTags = Lists.newArrayList();
 
-            for (int k = 0; k < j; ++k)
-            {
+            for (int k = 0; k < j; ++k) {
                 this.tileEntityTags.add(buf.readCompoundTag());
             }
         }
@@ -123,16 +111,14 @@ public class SChunkDataPacket implements IPacket<IClientPlayNetHandler>
     /**
      * Writes the raw packet data to the data stream.
      */
-    public void writePacketData(PacketBuffer buf) throws IOException
-    {
+    public void writePacketData(PacketBuffer buf) throws IOException {
         buf.writeInt(this.chunkX);
         buf.writeInt(this.chunkZ);
         buf.writeBoolean(this.fullChunk);
         buf.writeVarInt(this.availableSections);
         buf.writeCompoundTag(this.heightmapTags);
 
-        if (this.biomes != null)
-        {
+        if (this.biomes != null) {
             buf.writeVarIntArray(this.biomes);
         }
 
@@ -140,8 +126,7 @@ public class SChunkDataPacket implements IPacket<IClientPlayNetHandler>
         buf.writeBytes(this.buffer);
         buf.writeVarInt(this.tileEntityTags.size());
 
-        for (CompoundNBT compoundnbt : this.tileEntityTags)
-        {
+        for (CompoundNBT compoundnbt : this.tileEntityTags) {
             buf.writeCompoundTag(compoundnbt);
         }
     }
@@ -149,35 +134,31 @@ public class SChunkDataPacket implements IPacket<IClientPlayNetHandler>
     /**
      * Passes this Packet on to the NetHandler for processing.
      */
-    public void processPacket(IClientPlayNetHandler handler)
-    {
+    public void processPacket(IClientPlayNetHandler handler) {
         handler.handleChunkData(this);
     }
 
-    public PacketBuffer getReadBuffer()
-    {
+    public PacketBuffer getReadBuffer() {
         return new PacketBuffer(Unpooled.wrappedBuffer(this.buffer), this.customData);
     }
 
-    private ByteBuf getWriteBuffer()
-    {
+    private ByteBuf getWriteBuffer() {
         ByteBuf bytebuf = Unpooled.wrappedBuffer(this.buffer);
         bytebuf.writerIndex(0);
         return bytebuf;
     }
 
-    public int extractChunkData(PacketBuffer buf, Chunk chunkIn, int writeSkylight)
-    {
+    public int extractChunkData(PacketBuffer buf, Chunk chunkIn, int writeSkylight) {
         int i = 0;
         ChunkSection[] achunksection = chunkIn.getSections();
         int j = 0;
 
-        for (int k = achunksection.length; j < k; ++j)
-        {
+        for (int k = achunksection.length; j < k; ++j) {
             ChunkSection chunksection = achunksection[j];
 
-            if (chunksection != Chunk.EMPTY_SECTION && (!this.isFullChunk() || !chunksection.isEmpty()) && (writeSkylight & 1 << j) != 0)
-            {
+            // Bitmask: bit j = section array index j
+            if (chunksection != Chunk.EMPTY_SECTION && (!this.isFullChunk() || !chunksection.isEmpty())
+                    && j < Integer.SIZE && (writeSkylight & 1 << j) != 0) {
                 i |= 1 << j;
                 chunksection.write(buf);
             }
@@ -186,18 +167,17 @@ public class SChunkDataPacket implements IPacket<IClientPlayNetHandler>
         return i;
     }
 
-    protected int calculateChunkSize(Chunk chunkIn, int changedSectionsIn)
-    {
+    protected int calculateChunkSize(Chunk chunkIn, int changedSectionsIn) {
         int i = 0;
         ChunkSection[] achunksection = chunkIn.getSections();
         int j = 0;
 
-        for (int k = achunksection.length; j < k; ++j)
-        {
+        for (int k = achunksection.length; j < k; ++j) {
             ChunkSection chunksection = achunksection[j];
 
-            if (chunksection != Chunk.EMPTY_SECTION && (!this.isFullChunk() || !chunksection.isEmpty()) && (changedSectionsIn & 1 << j) != 0)
-            {
+            // Bitmask: bit j = section array index j
+            if (chunksection != Chunk.EMPTY_SECTION && (!this.isFullChunk() || !chunksection.isEmpty())
+                    && j < Integer.SIZE && (changedSectionsIn & 1 << j) != 0) {
                 i += chunksection.getSize();
             }
         }
@@ -205,39 +185,32 @@ public class SChunkDataPacket implements IPacket<IClientPlayNetHandler>
         return i;
     }
 
-    public int getChunkX()
-    {
+    public int getChunkX() {
         return this.chunkX;
     }
 
-    public int getChunkZ()
-    {
+    public int getChunkZ() {
         return this.chunkZ;
     }
 
-    public int getAvailableSections()
-    {
+    public int getAvailableSections() {
         return this.availableSections;
     }
 
-    public boolean isFullChunk()
-    {
+    public boolean isFullChunk() {
         return this.fullChunk;
     }
 
-    public CompoundNBT getHeightmapTags()
-    {
+    public CompoundNBT getHeightmapTags() {
         return this.heightmapTags;
     }
 
-    public List<CompoundNBT> getTileEntityTags()
-    {
+    public List<CompoundNBT> getTileEntityTags() {
         return this.tileEntityTags;
     }
 
     @Nullable
-    public int[] func_244296_i()
-    {
+    public int[] func_244296_i() {
         return this.biomes;
     }
 }

@@ -1,5 +1,6 @@
 package net.optifine.util;
 
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.chunk.ChunkSection;
@@ -16,7 +17,8 @@ public class RenderChunkUtils
         }
         else
         {
-            int i = renderChunk.getPosition().getY() >> 4;
+            int i = (renderChunk.getPosition().getY() >> 4) + WorldHeightHelper.getSectionOffset();
+            if (i < 0 || i >= achunksection.length) return 0;
             ChunkSection chunksection = achunksection[i];
             return chunksection == null ? 0 : chunksection.getBlockRefCount();
         }

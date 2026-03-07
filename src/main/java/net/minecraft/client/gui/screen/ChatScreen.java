@@ -83,6 +83,12 @@ public class ChatScreen extends Screen
         this.commandSuggestionHelper.init();
     }
 
+    @Override
+    public boolean charTyped(char codePoint, int modifiers)
+    {
+        return this.inputField.charTyped(codePoint, modifiers);
+    }
+
     public boolean keyPressed(int keyCode, int scanCode, int modifiers)
     {
         if (this.commandSuggestionHelper.onKeyPressed(keyCode, scanCode, modifiers))

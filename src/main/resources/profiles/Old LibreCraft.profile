@@ -778,7 +778,7 @@
       },
       {
         "allowed": true,
-        "name": "FakeForge",
+        "name": "ClientSpoof",
         "options": [
           {
             "name": "Client Brand",

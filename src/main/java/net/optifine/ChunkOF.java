@@ -1,5 +1,6 @@
 package net.optifine;
 
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
@@ -35,7 +36,7 @@ public class ChunkOF extends Chunk
 
         if (chunksection != null)
         {
-            int i = (chunksection.getYLocation() >> 4) + 1;
+            int i = (chunksection.getYLocation() >> 4) + WorldHeightHelper.getSectionOffset() + 1;
             achunksectiondataof = new ChunkSectionDataOF[i];
             ChunkSection[] achunksection = chunkIn.getSections();
 

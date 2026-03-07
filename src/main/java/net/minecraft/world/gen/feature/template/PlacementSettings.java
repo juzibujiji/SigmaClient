@@ -25,7 +25,6 @@ public class PlacementSettings
     private boolean field_204765_h = true;
     @Nullable
     private Random random;
-    @Nullable
     private int field_204767_m;
     private final List<StructureProcessor> processors = Lists.newArrayList();
     private boolean field_215225_l;

@@ -1,0 +1,74 @@
+---- Minecraft Crash Report ----
+// This doesn't make any sense!
+
+Time: 2026/2/11 下午5:09
+Description: Unexpected error
+
+java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 25
+	at net.minecraft.client.renderer.WorldRenderer.updateCameraAndRender(WorldRenderer.java:1357)
+	at net.minecraft.client.renderer.GameRenderer.renderWorld(GameRenderer.java:862)
+	at net.minecraft.client.renderer.GameRenderer.updateCameraAndRender(GameRenderer.java:553)
+	at net.minecraft.client.Minecraft.runGameLoop(Minecraft.java:1013)
+	at net.minecraft.client.Minecraft.run(Minecraft.java:617)
+	at net.minecraft.client.main.Main.main(Main.java:208)
+	at Start.main(Start.java:8)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at net.minecraft.client.renderer.WorldRenderer.updateCameraAndRender(WorldRenderer.java:1357)
+	at net.minecraft.client.renderer.GameRenderer.renderWorld(GameRenderer.java:862)
+
+-- Affected level --
+Details:
+	All players: 2 total; [ClientPlayerEntity['Player882'/3340, l='ClientLevel', x=-341.50, y=68.00, z=94.50], RemoteClientPlayerEntity['Zis30axs'/174, l='ClientLevel', x=-328.10, y=69.00, z=108.45]]
+	Chunk stats: Client Chunk Cache: 961, 615
+	Level dimension: minecraft:overworld
+	Level spawn location: World: (-336,64,96), Chunk: (at 0,4,0 in -21,6; contains blocks -336,0,96 to -321,255,111), Region: (-1,0; contains chunks -32,0 to -1,31, blocks -512,0,0 to -1,255,511)
+	Level time: 30129 game time, 30129 day time
+	Server brand: forge
+	Server type: Non-integrated multiplayer server
+Stacktrace:
+	at net.minecraft.client.world.ClientWorld.fillCrashReport(ClientWorld.java:622)
+	at net.minecraft.client.Minecraft.addGraphicsAndWorldToCrashReport(Minecraft.java:2251)
+	at net.minecraft.client.Minecraft.run(Minecraft.java:639)
+	at net.minecraft.client.main.Main.main(Main.java:208)
+	at Start.main(Start.java:8)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.4
+	Minecraft Version ID: 874111c184e14add80dbac3f602ef5b6
+	Operating System: Windows 11 (amd64) version 10.0
+	Java Version: 17.0.18, Eclipse Adoptium
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Eclipse Adoptium
+	Memory: 548791232 bytes (523 MB) / 937426944 bytes (894 MB) up to 4236247040 bytes (4040 MB)
+	CPUs: 16
+	JVM Flags: 1 total; -XX:+ShowCodeDetailsInExceptionMessages
+	Launched Version: vanilla
+	Backend library: LWJGL version 3.3.6+1
+	Backend API: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2 GL version 4.6.0 NVIDIA 591.86, NVIDIA Corporation
+	GL Caps: Using framebuffer using OpenGL 3.0
+	Using VBOs: Yes
+	Is Modded: Very likely; Jar signature invalidated
+	Type: Client (map_client.txt)
+	Graphics mode: fancy
+	Resource Packs: vanilla
+	Current Language: English (US)
+	CPU: 16x Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
+	OptiFine Version: OptiFine_1.16.4_HD_U_G5
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 591.86
+	OpenGlRenderer: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 16

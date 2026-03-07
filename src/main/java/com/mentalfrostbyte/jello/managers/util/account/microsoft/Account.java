@@ -6,6 +6,7 @@ import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.util.system.network.ImageUtil;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
 import org.newdawn.slick.opengl.Texture;
+import org.newdawn.slick.util.BufferedImageUtil;
 import fr.litarvan.openauth.microsoft.MicrosoftAuthResult;
 import fr.litarvan.openauth.microsoft.MicrosoftAuthenticationException;
 import fr.litarvan.openauth.microsoft.MicrosoftAuthenticator;
@@ -34,6 +35,9 @@ public class Account {
     private int useCount;
     private BufferedImage skin;
     private Texture head;
+    private volatile boolean headLoading = false;
+    private volatile boolean headLoadFailed = false;
+    private volatile BufferedImage pendingHeadImage = null;
     private Thread skinUpdateThread;
 
     private String token = "";
@@ -187,8 +191,50 @@ public class Account {
     }
 
     public Texture setHeadTexture() {
-        if (this.head == null) {
-            this.head = ImageUtil.loadTextureFromURL("https://crafatar.com/avatars/" + getFormattedUUID());
+        // If we have a pending image from background thread, create texture now (on
+        // render thread)
+        if (this.pendingHeadImage != null) {
+            try {
+                this.head = BufferedImageUtil.getTexture("head_" + getFormattedUUID(), this.pendingHeadImage);
+            } catch (Exception e) {
+                System.err.println("[Account] Failed to create head texture: " + e.getMessage());
+            }
+            this.pendingHeadImage = null;
+        }
+
+        // Start background download if not already loading, not failed, and head not
+        // loaded
+        if (this.head == null && !this.headLoading && !this.headLoadFailed) {
+            this.headLoading = true;
+            new Thread(() -> {
+                // Try multiple API endpoints in case some are blocked
+                String[] apiUrls = {
+                        "https://minotar.net/avatar/" + getFormattedUUID(),
+                        "https://mc-heads.net/avatar/" + getFormattedUUID()
+                };
+
+                BufferedImage image = null;
+                for (String apiUrl : apiUrls) {
+                    try {
+                        URL url = new URL(apiUrl);
+                        image = ImageIO.read(url);
+                        if (image != null) {
+                            System.out.println("[Account] Successfully loaded head from: " + apiUrl);
+                            break;
+                        }
+                    } catch (Exception e) {
+                        System.err.println("[Account] Failed to download from " + apiUrl + ": " + e.getMessage());
+                    }
+                }
+
+                if (image != null) {
+                    this.pendingHeadImage = image;
+                } else {
+                    this.headLoadFailed = true;
+                    System.err.println("[Account] All avatar APIs failed, using default head");
+                }
+                this.headLoading = false;
+            }, "HeadTextureLoader-" + getFormattedUUID()).start();
         }
 
         return this.head != null ? this.head : Resources.head;
@@ -231,8 +277,8 @@ public class Account {
             this.updateSkin();
             this.lastUsed = System.currentTimeMillis();
             return new Session(
-                    result.getProfile().getName(), result.getProfile().getId(), result.getAccessToken(), getAccountType().name()
-            );
+                    result.getProfile().getName(), result.getProfile().getId(), result.getAccessToken(),
+                    getAccountType().name());
         } else if (isPossibleRefreshToken(this.token)) {
             this.setName(this.getEmail());
             this.setUuid(fixUUID(this.getPassword()));
@@ -260,8 +306,7 @@ public class Account {
     public static String fixUUID(String uuidString) {
         return uuidString.replaceFirst(
                 "(\\p{XDigit}{8})(\\p{XDigit}{4})(\\p{XDigit}{4})(\\p{XDigit}{4})(\\p{XDigit}+)",
-                "$1-$2-$3-$4-$5"
-        );
+                "$1-$2-$3-$4-$5");
     }
 
     public JsonObject toJSON() {

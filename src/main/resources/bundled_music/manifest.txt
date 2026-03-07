@@ -1,0 +1,3 @@
+xilian.lrc=昔涟-张韶涵_HOYO-MiX[iq].lrc
+xilian.mp3=昔涟-张韶涵_HOYO-MiX[iq].mp3
+xilian.png=昔涟-张韶涵_HOYO-MiX[iq].png

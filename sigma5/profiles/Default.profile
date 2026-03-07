@@ -1,0 +1,2834 @@
+{
+  "modConfig": {
+    "mods": [
+      {
+        "name": "ActiveMods",
+        "enabled": true,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Size",
+            "value": "Normal"
+          },
+          {
+            "name": "Animations",
+            "value": true
+          },
+          {
+            "name": "Sound",
+            "value": true
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Basic": [
+            {
+              "name": "Range",
+              "value": 4.0
+            }
+          ],
+          "Smooth": [
+            {
+              "name": "Range",
+              "value": 4.0
+            }
+          ]
+        },
+        "name": "Aimbot",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Basic"
+          },
+          {
+            "name": "Players",
+            "value": true
+          },
+          {
+            "name": "Animals/Monsters",
+            "value": false
+          },
+          {
+            "name": "Invisible",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "AntiBlind",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "AntiBot",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Advanced"
+          }
+        ]
+      },
+      {
+        "name": "AntiCactus",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Above",
+            "value": true
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Basic": [
+            {
+              "name": "Explosions",
+              "value": true
+            },
+            {
+              "name": "H-Multiplier",
+              "value": 0.0
+            },
+            {
+              "name": "V-Multiplier",
+              "value": 0.0
+            }
+          ],
+          "AAC": [
+            {
+              "name": "Strength",
+              "value": 0.7
+            }
+          ],
+          "Delay": [
+            {
+              "name": "Delay",
+              "value": 7.0
+            },
+            {
+              "name": "H-Multiplier",
+              "value": 0.0
+            },
+            {
+              "name": "V-Multiplier",
+              "value": 0.0
+            }
+          ],
+          "Spartan": [
+            {
+              "name": "Ticks",
+              "value": 1.0
+            }
+          ],
+          "Minemen": [],
+          "Gomme": [
+            {
+              "name": "Delay",
+              "value": 0.5
+            },
+            {
+              "name": "Boost",
+              "value": 0.1
+            }
+          ],
+          "Vulcan": [],
+          "Legit": [],
+          "Grim": []
+        },
+        "name": "AntiKnockBack",
+        "enabled": true,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Grim"
+          }
+        ]
+      },
+      {
+        "name": "AntiLevitation",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "AntiVanish",
+        "enabled": true,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "AntiVoid",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Void",
+            "value": true
+          },
+          {
+            "name": "Fall Distance",
+            "value": 8.0
+          },
+          {
+            "name": "Mode",
+            "value": "Hypixel"
+          }
+        ]
+      },
+      {
+        "name": "Auto32k",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "AutoArmor",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Fake Items",
+            "value": false
+          },
+          {
+            "name": "Delay",
+            "value": 0.3
+          },
+          {
+            "name": "Mode",
+            "value": "Basic"
+          },
+          {
+            "name": "Elytra",
+            "value": "Ignore"
+          }
+        ]
+      },
+      {
+        "name": "AutoClicker",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Base CPS",
+            "value": 1.0
+          },
+          {
+            "name": "Min CPS",
+            "value": 1.0
+          },
+          {
+            "name": "Max CPS",
+            "value": 1.0
+          },
+          {
+            "name": "AutoBlock",
+            "value": false
+          },
+          {
+            "name": "Hover Check",
+            "value": false
+          },
+          {
+            "name": "Auto Block Ticks",
+            "value": 1.0
+          },
+          {
+            "name": "1.9+ Cooldown",
+            "value": false
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Basic": [],
+          "Hypixel": [
+            {
+              "name": "Fire resistance potions",
+              "value": true
+            }
+          ]
+        },
+        "name": "AutoGapple",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Basic"
+          },
+          {
+            "name": "Health",
+            "value": 7.0
+          }
+        ]
+      },
+      {
+        "name": "AutoLog",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Min Health",
+            "value": 2.5
+          },
+          {
+            "name": "No Totems",
+            "value": false
+          },
+          {
+            "name": "One Time Use",
+            "value": true
+          },
+          {
+            "name": "Smart Enable",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "AutoMLG",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Cubecraft",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "AutoPotion",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Health",
+            "value": 6.0
+          },
+          {
+            "name": "Predict",
+            "value": true
+          },
+          {
+            "name": "Instant",
+            "value": false
+          },
+          {
+            "name": "Speed",
+            "value": true
+          },
+          {
+            "name": "Regen",
+            "value": true
+          },
+          {
+            "name": "Custom potion",
+            "value": false
+          },
+          {
+            "name": "In fight",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "AutoReconnect",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "One time",
+            "value": false
+          },
+          {
+            "name": "Reconnect button",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "AutoRespawn",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "AutoSoup",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Health",
+            "value": 13.0
+          },
+          {
+            "name": "Refill delay",
+            "value": 4.0
+          },
+          {
+            "name": "Refill accuracy",
+            "value": 100.0
+          },
+          {
+            "name": "Refill mode",
+            "value": "Basic"
+          },
+          {
+            "name": "Soup mode",
+            "value": "Instant"
+          },
+          {
+            "name": "Bowls",
+            "value": "Drop"
+          }
+        ]
+      },
+      {
+        "name": "AutoSprint",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "NoJumpDelay",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "AutoTools",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Inv Mode",
+            "value": "Basic"
+          }
+        ]
+      },
+      {
+        "name": "AutoTotem",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "AutoWalk",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Blink",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "sub-options": {
+          "NCP": [
+            {
+              "name": "Speed Mode",
+              "value": "None"
+            },
+            {
+              "name": "KeepRotations",
+              "value": true
+            },
+            {
+              "name": "Extend",
+              "value": 0.0
+            },
+            {
+              "name": "Downwards",
+              "value": true
+            }
+          ],
+          "AAC": [
+            {
+              "name": "Haphe (AACAP)",
+              "value": false
+            }
+          ],
+          "Smooth": [
+            {
+              "name": "Speed Mode",
+              "value": "None"
+            },
+            {
+              "name": "Constant Speed",
+              "value": 0.0
+            }
+          ],
+          "Hypixel": [
+            {
+              "name": "Speed Mode",
+              "value": "None"
+            },
+            {
+              "name": "KeepRotations",
+              "value": true
+            },
+            {
+              "name": "Downwards",
+              "value": true
+            },
+            {
+              "name": "Constant Speed",
+              "value": 0.0
+            }
+          ]
+        },
+        "name": "BlockFly",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "NCP"
+          },
+          {
+            "name": "ItemSpoof",
+            "value": "Spoof"
+          },
+          {
+            "name": "Tower Mode",
+            "value": "NCP"
+          },
+          {
+            "name": "Picking mode",
+            "value": "Basic"
+          },
+          {
+            "name": "Tower while moving",
+            "value": false
+          },
+          {
+            "name": "Show Block Amount",
+            "value": true
+          },
+          {
+            "name": "NoSwing",
+            "value": true
+          },
+          {
+            "name": "Intelligent Block Picker",
+            "value": true
+          },
+          {
+            "name": "No Sprint",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "BoatFly",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Speed",
+            "value": 4.0
+          }
+        ]
+      },
+      {
+        "name": "BowAimbot",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Sort mode",
+            "value": "Angle"
+          },
+          {
+            "name": "Range",
+            "value": 70.0
+          },
+          {
+            "name": "Silent",
+            "value": false
+          },
+          {
+            "name": "Teams",
+            "value": true
+          },
+          {
+            "name": "Players",
+            "value": true
+          },
+          {
+            "name": "Animals/Monsters",
+            "value": false
+          },
+          {
+            "name": "Anti-Bot",
+            "value": true
+          },
+          {
+            "name": "Invisible",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "BrainFreeze",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Breadcrumbs",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Fade Out",
+            "value": true
+          },
+          {
+            "name": "Color",
+            "value": -65794,
+            "rainbow": false
+          }
+        ]
+      },
+      {
+        "name": "CakeEater",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "No Swing",
+            "value": true
+          },
+          {
+            "name": "Mineplex",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "CameraNoClip",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Cape",
+        "enabled": true,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Cape",
+            "value": "Spade"
+          },
+          {
+            "name": "Movement Factor",
+            "value": 1.0
+          }
+        ]
+      },
+      {
+        "name": "ChatCleaner",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "ChatFilter",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Miniblox mode",
+            "value": false
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Outline": [],
+          "Box": []
+        },
+        "name": "ChestESP",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Outline"
+          },
+          {
+            "name": "Show Regular Chests",
+            "value": true
+          },
+          {
+            "name": "Regular Color",
+            "value": -65794,
+            "rainbow": false
+          },
+          {
+            "name": "Show Trapped Chests",
+            "value": true
+          },
+          {
+            "name": "Trapped Color",
+            "value": -13108,
+            "rainbow": false
+          },
+          {
+            "name": "Show Ender Chests",
+            "value": true
+          },
+          {
+            "name": "Ender Color",
+            "value": -1848065,
+            "rainbow": false
+          }
+        ]
+      },
+      {
+        "name": "ChestStealer",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Aura",
+            "value": false
+          },
+          {
+            "name": "Ignore Junk",
+            "value": true
+          },
+          {
+            "name": "Fix ViaVersion",
+            "value": true
+          },
+          {
+            "name": "Close",
+            "value": true
+          },
+          {
+            "name": "Delay",
+            "value": 0.2
+          },
+          {
+            "name": "First Item",
+            "value": 0.2
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Basic": [],
+          "Miniblox": [
+            {
+              "name": "Funny movement packets",
+              "value": true
+            },
+            {
+              "name": "Funny movements",
+              "value": 6.0
+            }
+          ],
+          "Spartan": []
+        },
+        "name": "ClickTP",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Basic"
+          },
+          {
+            "name": "Sneak",
+            "value": true
+          },
+          {
+            "name": "Auto Disable",
+            "value": true
+          },
+          {
+            "name": "Maximum range",
+            "value": 100.0
+          }
+        ]
+      },
+      {
+        "name": "ClientSpoof",
+        "enabled": true,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Custom"
+          },
+          {
+            "name": "BrandName",
+            "value": "1939Games"
+          }
+        ]
+      },
+      {
+        "name": "Compass",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Coords",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "CorrectMovement",
+        "enabled": true,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "sub-options": {
+          "Minis": [
+            {
+              "name": "Mode",
+              "value": "Basic"
+            },
+            {
+              "name": "Avoid Fall Damage",
+              "value": false
+            }
+          ],
+          "Packet": [
+            {
+              "name": "HurtTime",
+              "value": 15.0
+            },
+            {
+              "name": "Mode",
+              "value": "Basic"
+            }
+          ],
+          "NoGround": [
+            {
+              "name": "Offset",
+              "value": "Vanilla"
+            },
+            {
+              "name": "Avoid Fall Damage",
+              "value": true
+            }
+          ],
+          "Hover": [],
+          "Minemen": [],
+          "AAC 4": [
+            {
+              "name": "KillAura",
+              "value": false
+            }
+          ]
+        },
+        "name": "Criticals",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Minis"
+          }
+        ]
+      },
+      {
+        "name": "DVD Simulator",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "DebugSpeed",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Derp",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Rotation Mode",
+            "value": "Random"
+          },
+          {
+            "name": "Hit",
+            "value": true
+          },
+          {
+            "name": "Sneak",
+            "value": true
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "PingSpoof": [
+            {
+              "name": "Lag",
+              "value": 1000.0
+            },
+            {
+              "name": "Inv Bypass",
+              "value": false
+            }
+          ],
+          "Null": [
+            {
+              "name": "Inv Bypass",
+              "value": false
+            }
+          ],
+          "Hypixel": [],
+          "Hypixel Prediction": [
+            {
+              "name": "Motion",
+              "value": true
+            },
+            {
+              "name": "InvMove",
+              "value": true
+            }
+          ],
+          "TP": [
+            {
+              "name": "Delay",
+              "value": 20.0
+            },
+            {
+              "name": "Mode",
+              "value": "Basic1"
+            },
+            {
+              "name": "OnGround",
+              "value": false
+            },
+            {
+              "name": "More Packets",
+              "value": false
+            },
+            {
+              "name": "Ping spoof",
+              "value": false
+            }
+          ],
+          "Viper": [],
+          "VeltPvP": [],
+          "Ghostly": [],
+          "Miniblox": [
+            {
+              "name": "Floating Kick Bypass",
+              "value": true
+            },
+            {
+              "name": "Floating Kick Bypass Delay",
+              "value": 20.0
+            }
+          ],
+          "Miniblox Desync": [],
+          "Custom": [
+            {
+              "name": "Log cancelled packets",
+              "value": false
+            },
+            {
+              "name": "PRESS_SHIFT_KEY",
+              "value": false
+            },
+            {
+              "name": "RELEASE_SHIFT_KEY",
+              "value": false
+            },
+            {
+              "name": "STOP_SLEEPING",
+              "value": false
+            },
+            {
+              "name": "START_SPRINTING",
+              "value": false
+            },
+            {
+              "name": "STOP_SPRINTING",
+              "value": false
+            },
+            {
+              "name": "START_RIDING_JUMP",
+              "value": false
+            },
+            {
+              "name": "STOP_RIDING_JUMP",
+              "value": false
+            },
+            {
+              "name": "OPEN_INVENTORY",
+              "value": false
+            },
+            {
+              "name": "START_FALL_FLYING",
+              "value": false
+            },
+            {
+              "name": "START_DESTROY_BLOCK",
+              "value": false
+            },
+            {
+              "name": "ABORT_DESTROY_BLOCK",
+              "value": false
+            },
+            {
+              "name": "STOP_DESTROY_BLOCK",
+              "value": false
+            },
+            {
+              "name": "DROP_ALL_ITEMS",
+              "value": false
+            },
+            {
+              "name": "DROP_ITEM",
+              "value": false
+            },
+            {
+              "name": "RELEASE_USE_ITEM",
+              "value": false
+            },
+            {
+              "name": "SWAP_ITEM_WITH_OFFHAND",
+              "value": false
+            }
+          ],
+          "VerusTimer": [],
+          "VerusTest": [],
+          "Verus Fly": []
+        },
+        "name": "Disabler",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "PingSpoof"
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Shadow": [
+            {
+              "name": "Color",
+              "value": -65794,
+              "rainbow": false
+            }
+          ],
+          "Sims": [],
+          "Box Outline": [
+            {
+              "name": "Color",
+              "value": -65794,
+              "rainbow": false
+            }
+          ],
+          "Vanilla": []
+        },
+        "name": "ESP",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Shadow"
+          },
+          {
+            "name": "Show Players",
+            "value": true
+          },
+          {
+            "name": "Show Mobs",
+            "value": false
+          },
+          {
+            "name": "Show Passives",
+            "value": false
+          },
+          {
+            "name": "Show Invisibles",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "ElytraFly",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "NCP",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "EntitySpeed",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "FPSBooster",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "FakeLag",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Lag duration",
+            "value": 0.3
+          },
+          {
+            "name": "Delay",
+            "value": 0.4
+          },
+          {
+            "name": "Combat",
+            "value": true
+          },
+          {
+            "name": "Blocks",
+            "value": true
+          },
+          {
+            "name": "Ping",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "FastBow",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "FastBreak",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "FastEat",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Basic"
+          },
+          {
+            "name": "Speed",
+            "value": 0.55
+          }
+        ]
+      },
+      {
+        "name": "FastLadder",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Motion",
+            "value": 0.35
+          },
+          {
+            "name": "Down mode",
+            "value": "None"
+          }
+        ]
+      },
+      {
+        "name": "FastPlace",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Reduce Delay",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "FlagDetector",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "sub-options": {
+          "Vanilla": [
+            {
+              "name": "Speed",
+              "value": 4.0
+            },
+            {
+              "name": "Kick bypass",
+              "value": true
+            }
+          ],
+          "VClip": [
+            {
+              "name": "Speed",
+              "value": 4.0
+            },
+            {
+              "name": "When",
+              "value": "Fall distance"
+            },
+            {
+              "name": "Delay",
+              "value": 3.0
+            },
+            {
+              "name": "Fall distance",
+              "value": 1.0
+            },
+            {
+              "name": "Clip distance mode",
+              "value": "Fall distance"
+            },
+            {
+              "name": "Clip distance (if constant)",
+              "value": 1.0
+            },
+            {
+              "name": "Kick bypass",
+              "value": true
+            },
+            {
+              "name": "Fake",
+              "value": true
+            }
+          ],
+          "Hypixel": [
+            {
+              "name": "Mode",
+              "value": "Basic"
+            },
+            {
+              "name": "Speed",
+              "value": 1.0
+            },
+            {
+              "name": "No Collision",
+              "value": true
+            },
+            {
+              "name": "Timer Boost",
+              "value": 2.5
+            },
+            {
+              "name": "Timer Duration",
+              "value": 0.3
+            }
+          ],
+          "Mineplex": [
+            {
+              "name": "Boost",
+              "value": 4.0
+            },
+            {
+              "name": "Fake",
+              "value": false
+            }
+          ],
+          "Jetpack": [],
+          "Bow": [],
+          "OmegaCraft": [],
+          "ViperMC": [
+            {
+              "name": "Speed",
+              "value": 4.0
+            }
+          ],
+          "VeltPvP": [
+            {
+              "name": "Speed",
+              "value": 4.0
+            }
+          ],
+          "Hawk": [],
+          "LibreCraft": [
+            {
+              "name": "Speed",
+              "value": 4.0
+            }
+          ],
+          "Reloaded": [
+            {
+              "name": "Speed",
+              "value": 4.0
+            },
+            {
+              "name": "Offset",
+              "value": false
+            },
+            {
+              "name": "NoFall",
+              "value": true
+            }
+          ],
+          "NCPSpigot": [],
+          "AGC": [],
+          "Horizon": [],
+          "Spartan": [
+            {
+              "name": "Ground Spoof",
+              "value": true
+            },
+            {
+              "name": "Fake Block",
+              "value": true
+            }
+          ],
+          "Cubecraft": [
+            {
+              "name": "Damage",
+              "value": false
+            }
+          ],
+          "Cubecraft2": [],
+          "Test": [],
+          "Verus": [
+            {
+              "name": "Mode",
+              "value": "Glide"
+            }
+          ]
+        },
+        "name": "Fly",
+        "enabled": true,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Vanilla"
+          }
+        ]
+      },
+      {
+        "name": "Freecam",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Speed",
+            "value": 4.0
+          }
+        ]
+      },
+      {
+        "name": "Fullbright",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Normal"
+          }
+        ]
+      },
+      {
+        "name": "GameIdler",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "sub-options": {
+          "Hypixel": [
+            {
+              "name": "FriendAccept",
+              "value": false
+            },
+            {
+              "name": "Hide infos",
+              "value": false
+            }
+          ],
+          "Cubecraft": [],
+          "Mineplex": [],
+          "Miniblox": [
+            {
+              "name": "FriendAccept",
+              "value": false
+            },
+            {
+              "name": "AutoVote",
+              "value": true
+            },
+            {
+              "name": "Mode",
+              "value": "Insane (2)"
+            },
+            {
+              "name": "AutoBuy",
+              "value": false
+            },
+            {
+              "name": "Armor",
+              "value": true
+            },
+            {
+              "name": "Chainmail Armor",
+              "value": false
+            },
+            {
+              "name": "Iron Armor",
+              "value": true
+            },
+            {
+              "name": "Diamond Armor",
+              "value": true
+            },
+            {
+              "name": "Sword",
+              "value": true
+            },
+            {
+              "name": "Stone Sword",
+              "value": false
+            },
+            {
+              "name": "Iron Sword",
+              "value": true
+            },
+            {
+              "name": "Diamond Sword",
+              "value": true
+            },
+            {
+              "name": "Upgrades",
+              "value": true
+            },
+            {
+              "name": "Sharpness",
+              "value": true
+            },
+            {
+              "name": "Protection",
+              "value": true
+            },
+            {
+              "name": "Haste",
+              "value": true
+            },
+            {
+              "name": "Heal Pool",
+              "value": true
+            },
+            {
+              "name": "Forge",
+              "value": true
+            }
+          ],
+          "Funcraft": [],
+          "Jartex": []
+        },
+        "name": "GamePlay",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Hypixel"
+          },
+          {
+            "name": "AutoL",
+            "value": true
+          },
+          {
+            "name": "AutoL Mode",
+            "value": "Basic"
+          },
+          {
+            "name": "First character",
+            "value": ""
+          },
+          {
+            "name": "AutoGG",
+            "value": true
+          },
+          {
+            "name": "Auto Join",
+            "value": true
+          },
+          {
+            "name": "Auto Join delay",
+            "value": 4.0
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Vanilla": [
+            {
+              "name": "Motion",
+              "value": 0.75
+            }
+          ],
+          "Mineplex": [
+            {
+              "name": "Motion",
+              "value": 1.1
+            },
+            {
+              "name": "Disable",
+              "value": true
+            },
+            {
+              "name": "Fake fly",
+              "value": false
+            }
+          ],
+          "Miniblox": [
+            {
+              "name": "Motion",
+              "value": 0.75
+            }
+          ],
+          "Hypixel": [
+            {
+              "name": "Motion",
+              "value": 0.75
+            }
+          ]
+        },
+        "name": "HighJump",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Vanilla"
+          }
+        ]
+      },
+      {
+        "name": "HitSounds",
+        "enabled": true,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Hypixel",
+            "value": true
+          },
+          {
+            "name": "Criticals",
+            "value": false
+          },
+          {
+            "name": "Sound Pitch",
+            "value": 1.0
+          }
+        ]
+      },
+      {
+        "name": "InfiniteAura",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Range",
+            "value": 4.0
+          },
+          {
+            "name": "Attack Range",
+            "value": 4.0
+          },
+          {
+            "name": "CPS",
+            "value": 8.0
+          },
+          {
+            "name": "Targets",
+            "value": 4.0
+          },
+          {
+            "name": "Pathfind",
+            "value": true
+          },
+          {
+            "name": "Players",
+            "value": true
+          },
+          {
+            "name": "Animals/Monsters",
+            "value": false
+          },
+          {
+            "name": "Anti-Bot",
+            "value": true
+          },
+          {
+            "name": "Invisible",
+            "value": true
+          },
+          {
+            "name": "No Swing",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "Info HUD",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Cords",
+            "value": "Normal"
+          },
+          {
+            "name": "Show Player",
+            "value": true
+          },
+          {
+            "name": "Show Armor",
+            "value": true
+          },
+          {
+            "name": "Move chat up",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "InteractRange",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Range",
+            "value": 4.0
+          }
+        ]
+      },
+      {
+        "name": "InvManager",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Basic"
+          },
+          {
+            "name": "Delay",
+            "value": 0.3
+          },
+          {
+            "name": "Block Cap",
+            "value": 150.0
+          },
+          {
+            "name": "Clean Type",
+            "value": "Skywars"
+          },
+          {
+            "name": "Fake Items",
+            "value": false
+          },
+          {
+            "name": "Cleaner",
+            "value": true
+          },
+          {
+            "name": "Sword",
+            "value": true
+          },
+          {
+            "name": "Tools",
+            "value": "Keep"
+          },
+          {
+            "name": "Archery",
+            "value": true
+          },
+          {
+            "name": "Food",
+            "value": false
+          },
+          {
+            "name": "Heads",
+            "value": false
+          },
+          {
+            "name": "Auto Shield",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "InvMove",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "AACP",
+            "value": true
+          },
+          {
+            "name": "Hypixel",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "ItemPhysics",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Disable Floating",
+            "value": false
+          },
+          {
+            "name": "Enable Gravity",
+            "value": false
+          },
+          {
+            "name": "Gravity Value",
+            "value": 1.0
+          },
+          {
+            "name": "Loaf Always",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "Jargon",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Jargon",
+            "value": "Excuse"
+          }
+        ]
+      },
+      {
+        "name": "Jesus",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Basic"
+          },
+          {
+            "name": "Swim up",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "KeyStrokes",
+        "enabled": true,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "KillAura",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Single"
+          },
+          {
+            "name": "Autoblock Mode",
+            "value": "None"
+          },
+          {
+            "name": "Unblock Rate",
+            "value": 0.0
+          },
+          {
+            "name": "Sort Mode",
+            "value": "Range"
+          },
+          {
+            "name": "Rotation Mode",
+            "value": "NCP"
+          },
+          {
+            "name": "Use Rotation Speed",
+            "value": true
+          },
+          {
+            "name": "Rotation Speed",
+            "value": 6.0
+          },
+          {
+            "name": "Range",
+            "value": 4.02
+          },
+          {
+            "name": "Min CPS",
+            "value": 8.0
+          },
+          {
+            "name": "Max CPS",
+            "value": 8.0
+          },
+          {
+            "name": "Interact autoblock",
+            "value": true
+          },
+          {
+            "name": "HitEvent",
+            "value": true
+          },
+          {
+            "name": "Players",
+            "value": true
+          },
+          {
+            "name": "Animals",
+            "value": false
+          },
+          {
+            "name": "Monsters",
+            "value": false
+          },
+          {
+            "name": "Invisible",
+            "value": true
+          },
+          {
+            "name": "Raytrace",
+            "value": true
+          },
+          {
+            "name": "Cooldown",
+            "value": false
+          },
+          {
+            "name": "No swing",
+            "value": false
+          },
+          {
+            "name": "Disable on death",
+            "value": true
+          },
+          {
+            "name": "Through walls",
+            "value": true
+          },
+          {
+            "name": "Silent",
+            "value": true
+          },
+          {
+            "name": "ESP",
+            "value": true
+          },
+          {
+            "name": "ESP Color",
+            "value": -65794,
+            "rainbow": false
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "NCP": [
+            {
+              "name": "Boost",
+              "value": 3.0
+            },
+            {
+              "name": "Duration",
+              "value": 10.0
+            },
+            {
+              "name": "Glide Mode",
+              "value": "Basic"
+            },
+            {
+              "name": "Speed Mode",
+              "value": "Basic"
+            }
+          ],
+          "Cubecraft": [
+            {
+              "name": "Boost",
+              "value": 3.0
+            }
+          ]
+        },
+        "name": "LongJump",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "NCP"
+          },
+          {
+            "name": "Auto Disable",
+            "value": true
+          },
+          {
+            "name": "BorderJump",
+            "value": true
+          },
+          {
+            "name": "Auto Jump",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "LowFire",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "MiniMap",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Murderer",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "GUI",
+            "value": true
+          },
+          {
+            "name": "Chat Message",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "MusicParticles",
+        "enabled": true,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "NameProtect",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Username",
+            "value": "Me"
+          }
+        ]
+      },
+      {
+        "name": "NameTags",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Magnify",
+            "value": true
+          },
+          {
+            "name": "Furnaces",
+            "value": true
+          },
+          {
+            "name": "Mob Owners",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "NewAura",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Sort mode",
+            "value": "Range"
+          },
+          {
+            "name": "Click mode",
+            "value": "CPS"
+          },
+          {
+            "name": "Min CPS",
+            "value": 10.0
+          },
+          {
+            "name": "Max CPS",
+            "value": 11.0
+          },
+          {
+            "name": "Delay patterns",
+            "value": false
+          },
+          {
+            "name": "Delay pattern 1",
+            "value": 89.0
+          },
+          {
+            "name": "Delay pattern 2",
+            "value": 110.0
+          },
+          {
+            "name": "Delay pattern 3",
+            "value": 130.0
+          },
+          {
+            "name": "Search range",
+            "value": 4.0
+          },
+          {
+            "name": "Attack range",
+            "value": 3.4
+          },
+          {
+            "name": "Players",
+            "value": true
+          },
+          {
+            "name": "Monsters",
+            "value": false
+          },
+          {
+            "name": "Animals",
+            "value": true
+          },
+          {
+            "name": "Invisibles",
+            "value": false
+          },
+          {
+            "name": "Through walls",
+            "value": false
+          },
+          {
+            "name": "Raycast",
+            "value": true
+          },
+          {
+            "name": "Keep sprint",
+            "value": false
+          },
+          {
+            "name": "Sprint fix",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "NewChunks",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "NickNameDetector",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "sub-options": {
+          "Vanilla": [
+            {
+              "name": "Method",
+              "value": "Modify"
+            },
+            {
+              "name": "Reset fall distance",
+              "value": false
+            }
+          ],
+          "Cancel": [],
+          "Hypixel": [],
+          "Hypixel2": [],
+          "AAC": [],
+          "NCPSpigot": [],
+          "OldHypixel": [],
+          "VanillaLegit": [],
+          "Verus": [],
+          "VulcanPhase": []
+        },
+        "name": "NoFall",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Vanilla"
+          }
+        ]
+      },
+      {
+        "name": "NoHurtCam",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "NoServerInfo",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "NoSlow",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Vanilla"
+          }
+        ]
+      },
+      {
+        "name": "NoViewReset",
+        "enabled": true,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "NoteblockPlayer",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Nuker",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Range",
+            "value": 6.0
+          },
+          {
+            "name": "Mode",
+            "value": "All"
+          },
+          {
+            "name": "NoSwing",
+            "value": false
+          },
+          {
+            "name": "Blocks",
+            "value": []
+          },
+          {
+            "name": "Color",
+            "value": -6710887,
+            "rainbow": true
+          }
+        ]
+      },
+      {
+        "name": "OldHitting",
+        "enabled": true,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Animation",
+            "value": "Vanilla"
+          },
+          {
+            "name": "XPos",
+            "value": 0.0
+          },
+          {
+            "name": "YPos",
+            "value": 0.0
+          },
+          {
+            "name": "ZPos",
+            "value": 0.0
+          }
+        ]
+      },
+      {
+        "name": "Packet dumper",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "PacketEssentials",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Parkour",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "sub-options": {
+          "FullBlock": [],
+          "NCP": [
+            {
+              "name": "Hypixel",
+              "value": true
+            }
+          ],
+          "NoClip": [],
+          "Unfull": [],
+          "VClip": [
+            {
+              "name": "Blocks to clip",
+              "value": -4.0
+            }
+          ],
+          "Vanilla": [],
+          "Miniblox": []
+        },
+        "name": "Phase",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "FullBlock"
+          }
+        ]
+      },
+      {
+        "name": "PortalGodMode",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Projectiles",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "RearView",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Show in GUI",
+            "value": false
+          },
+          {
+            "name": "Smart Visibility",
+            "value": false
+          },
+          {
+            "name": "Size",
+            "value": 400.0
+          }
+        ]
+      },
+      {
+        "name": "Regen",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Packet amount",
+            "value": 50.0
+          },
+          {
+            "name": "Only OnGround",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "SafeWalk",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Search",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Chunk Range",
+            "value": 5.0
+          },
+          {
+            "name": "Tick Delay",
+            "value": 50.0
+          },
+          {
+            "name": "Holes",
+            "value": false
+          },
+          {
+            "name": "Color",
+            "value": -6710887,
+            "rainbow": true
+          },
+          {
+            "name": "Blocks",
+            "value": []
+          }
+        ]
+      },
+      {
+        "name": "ServerCrasher",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Flying Enabled"
+          }
+        ]
+      },
+      {
+        "name": "ShulkerInfo",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Sneak",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Spammer",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Message",
+            "value": "Use Sigma Client, it\u0027s free ! %r"
+          },
+          {
+            "name": "Messages delay",
+            "value": 3.0
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Vanilla": [
+            {
+              "name": "AutoJump",
+              "value": false
+            },
+            {
+              "name": "Speed",
+              "value": 4.0
+            }
+          ],
+          "UpdatedNCP": [
+            {
+              "name": "Mode",
+              "value": "Basic"
+            }
+          ],
+          "Hypixel": [
+            {
+              "name": "AutoJump",
+              "value": true
+            },
+            {
+              "name": "Timer",
+              "value": true
+            },
+            {
+              "name": "GroundSpeed",
+              "value": true
+            },
+            {
+              "name": "BorderJump",
+              "value": true
+            }
+          ],
+          "HypixelNew": [],
+          "AAC": [
+            {
+              "name": "Mode",
+              "value": "Basic"
+            },
+            {
+              "name": "Fluid Fix",
+              "value": true
+            },
+            {
+              "name": "Auto Jump",
+              "value": true
+            }
+          ],
+          "OldAAC": [
+            {
+              "name": "Auto Jump",
+              "value": true
+            }
+          ],
+          "ViperMC": [],
+          "SlowHop": [
+            {
+              "name": "AutoJump",
+              "value": true
+            }
+          ],
+          "NCP": [
+            {
+              "name": "Auto Jump",
+              "value": true
+            }
+          ],
+          "Legit": [
+            {
+              "name": "Sprint",
+              "value": true
+            },
+            {
+              "name": "AutoJump",
+              "value": true
+            }
+          ],
+          "Cubecraft": [
+            {
+              "name": "Mode",
+              "value": "Basic"
+            },
+            {
+              "name": "Speed",
+              "value": 0.75
+            },
+            {
+              "name": "AutoJump",
+              "value": false
+            }
+          ],
+          "YPort": [
+            {
+              "name": "Mode",
+              "value": "NCP"
+            },
+            {
+              "name": "OnGround",
+              "value": true
+            }
+          ],
+          "Minemen": [],
+          "Boost": [
+            {
+              "name": "Auto Jump",
+              "value": true
+            },
+            {
+              "children": [
+                {
+                  "name": "Assume Sprinting",
+                  "value": false
+                },
+                {
+                  "name": "Ignore Sneaking",
+                  "value": true
+                },
+                {
+                  "name": "Ignore In Water",
+                  "value": true
+                }
+              ],
+              "name": "Ignore Slowdowns",
+              "value": true
+            },
+            {
+              "name": "Boost After Ticks",
+              "value": 15.0
+            },
+            {
+              "name": "Boost Speed",
+              "value": 1.5
+            },
+            {
+              "name": "Normal Speed",
+              "value": 1.2
+            }
+          ],
+          "Verus": [
+            {
+              "name": "Mode",
+              "value": "Basic"
+            },
+            {
+              "name": "Damage boost",
+              "value": false
+            },
+            {
+              "name": "Damage boost time",
+              "value": 3.0
+            },
+            {
+              "name": "Timer",
+              "value": false
+            },
+            {
+              "name": "Timer Speed",
+              "value": 1.0
+            }
+          ],
+          "Vulcan": [],
+          "LowHop": [
+            {
+              "name": "Low TargetStrafe",
+              "value": true
+            }
+          ],
+          "Invaded": [
+            {
+              "name": "Speed",
+              "value": 3.0
+            }
+          ],
+          "Mineplex": [
+            {
+              "name": "AutoJump",
+              "value": true
+            },
+            {
+              "name": "OnGround",
+              "value": true
+            },
+            {
+              "name": "OnGround Speed",
+              "value": 0.8
+            }
+          ],
+          "Gomme": [],
+          "TestSpeed": [
+            {
+              "name": "Sprint",
+              "value": true
+            },
+            {
+              "name": "AutoJump",
+              "value": true
+            }
+          ]
+        },
+        "name": "Speed",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Vanilla"
+          },
+          {
+            "name": "Lag back checker",
+            "value": true
+          }
+        ]
+      },
+      {
+        "sub-options": {
+          "Vanilla": [
+            {
+              "name": "Motion",
+              "value": 0.35
+            }
+          ],
+          "Jump": [
+            {
+              "name": "Mode",
+              "value": "Spartan"
+            },
+            {
+              "name": "AutoJump",
+              "value": true
+            }
+          ],
+          "Minemen": [
+            {
+              "name": "AutoClimb",
+              "value": true
+            },
+            {
+              "name": "Ceiling",
+              "value": true
+            },
+            {
+              "name": "SneakVClip",
+              "value": true
+            }
+          ]
+        },
+        "name": "Spider",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Vanilla"
+          }
+        ]
+      },
+      {
+        "name": "StaffRepealer",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "sub-options": {
+          "Vanilla": [
+            {
+              "name": "Maximum heigh",
+              "value": 2.0
+            }
+          ],
+          "Hypixel": [
+            {
+              "name": "Maximum heigh",
+              "value": 2.0
+            },
+            {
+              "name": "Timer",
+              "value": 0.1
+            }
+          ],
+          "NCP": [
+            {
+              "name": "Maximum heigh",
+              "value": 2.0
+            },
+            {
+              "name": "Timer",
+              "value": 0.1
+            }
+          ],
+          "AAC": [],
+          "Spider": [
+            {
+              "name": "Mode",
+              "value": "NCP"
+            }
+          ]
+        },
+        "name": "Step",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Vanilla"
+          }
+        ]
+      },
+      {
+        "name": "Strafe",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Streaming",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Hide skins",
+            "value": true
+          },
+          {
+            "name": "Hide server name",
+            "value": false
+          },
+          {
+            "name": "Server name",
+            "value": "servernamehere"
+          },
+          {
+            "name": "Hide date",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "TabGUI",
+        "enabled": true,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "TargetStrafe",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Mode",
+            "value": "Basic"
+          },
+          {
+            "name": "Radius",
+            "value": 2.0
+          },
+          {
+            "name": "Only speed",
+            "value": true
+          },
+          {
+            "name": "Hold Spacebar",
+            "value": true
+          },
+          {
+            "name": "Anti Scaffold",
+            "value": true
+          },
+          {
+            "name": "AntiVoid",
+            "value": "Smart"
+          }
+        ]
+      },
+      {
+        "name": "Teams",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "Timer",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Timer",
+            "value": 0.1
+          }
+        ]
+      },
+      {
+        "name": "Tracers",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Color",
+            "value": -65794,
+            "rainbow": false
+          }
+        ]
+      },
+      {
+        "name": "Unstuck",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Flags",
+            "value": 5.0
+          }
+        ]
+      },
+      {
+        "name": "VClip",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "sub-options": {
+          "Normal": [],
+          "Legit": []
+        },
+        "name": "WTap",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Type",
+            "value": "Normal"
+          }
+        ]
+      },
+      {
+        "name": "Waypoints",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Unspawn Positions",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "Weather",
+        "enabled": false,
+        "allowed": true,
+        "options": [
+          {
+            "name": "Custom time",
+            "value": true
+          },
+          {
+            "name": "Time",
+            "value": 12000.0
+          },
+          {
+            "name": "Disable rain",
+            "value": true
+          }
+        ]
+      },
+      {
+        "name": "XCarry",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      },
+      {
+        "name": "XRay",
+        "enabled": false,
+        "allowed": true,
+        "options": []
+      }
+    ]
+  },
+  "name": "Default"
+}

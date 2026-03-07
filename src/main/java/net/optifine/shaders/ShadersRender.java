@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.IVertexBuilder;
 import java.nio.IntBuffer;
 import java.util.Iterator;
 import java.util.List;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.player.ClientPlayerEntity;
 import net.minecraft.client.renderer.ActiveRenderInfo;
@@ -284,7 +285,7 @@ public class ShadersRender
                 ChunkRenderDispatcher.ChunkRender chunkrenderdispatcher$chunkrender = worldrenderer$localrenderinformationcontainer.renderChunk;
                 Chunk chunk = chunkrenderdispatcher$chunkrender.getChunk();
 
-                for (Entity entity : chunk.getEntityLists()[chunkrenderdispatcher$chunkrender.getPosition().getY() / 16])
+                for (Entity entity : chunk.getEntityLists()[(chunkrenderdispatcher$chunkrender.getPosition().getY() / 16) + WorldHeightHelper.getSectionOffset()])
                 {
                     if ((entityrenderermanager.shouldRender(entity, clippinghelper, d0, d1, d2) || entity.isRidingOrBeingRiddenBy(minecraft.player)) && (entity != activeRenderInfo.getRenderViewEntity() || flag || activeRenderInfo.isThirdPerson() || activeRenderInfo.getRenderViewEntity() instanceof LivingEntity && ((LivingEntity)activeRenderInfo.getRenderViewEntity()).isSleeping()) && (!(entity instanceof ClientPlayerEntity) || activeRenderInfo.getRenderViewEntity() == entity))
                     {

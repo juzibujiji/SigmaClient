@@ -1,0 +1,92 @@
+---- Minecraft Crash Report ----
+// Hey, that tickles! Hehehe!
+
+Time: 2026/2/16 下午11:52
+Description: Ticking entity
+
+java.lang.ArrayIndexOutOfBoundsException: Index -3 out of bounds for length 25
+	at net.minecraft.world.chunk.Chunk.removeEntityAtIndex(Chunk.java:387)
+	at net.minecraft.client.world.ClientWorld.checkChunk(ClientWorld.java:315)
+	at net.minecraft.client.world.ClientWorld.updateEntity(ClientWorld.java:257)
+	at net.minecraft.world.World.guardEntityTick(World.java:586)
+	at net.minecraft.client.world.ClientWorld.tickEntities(ClientWorld.java:209)
+	at net.minecraft.client.Minecraft.runTick(Minecraft.java:1582)
+	at net.minecraft.client.Minecraft.runGameLoop(Minecraft.java:990)
+	at net.minecraft.client.Minecraft.run(Minecraft.java:617)
+	at net.minecraft.client.main.Main.main(Main.java:208)
+	at Start.main(Start.java:8)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at net.minecraft.world.chunk.Chunk.removeEntityAtIndex(Chunk.java:387)
+	at net.minecraft.client.world.ClientWorld.checkChunk(ClientWorld.java:315)
+	at net.minecraft.client.world.ClientWorld.updateEntity(ClientWorld.java:257)
+
+-- Entity being ticked --
+Details:
+	Entity Type: minecraft:bat (net.minecraft.entity.passive.BatEntity)
+	Entity ID: 984
+	Entity Name: Bat
+	Entity's Exact location: -288.12, -46.80, 85.45
+	Entity's Block location: World: (-289,-47,85), Chunk: (at 15,-3,5 in -19,5; contains blocks -304,0,80 to -289,255,95), Region: (-1,0; contains chunks -32,0 to -1,31, blocks -512,0,0 to -1,255,511)
+	Entity's Momentum: 0.04, 0.00, -0.04
+	Entity's Passengers: []
+	Entity's Vehicle: ~~ERROR~~ NullPointerException: Cannot invoke "net.minecraft.entity.Entity.toString()" because the return value of "net.minecraft.entity.Entity.getRidingEntity()" is null
+Stacktrace:
+	at net.minecraft.world.World.guardEntityTick(World.java:586)
+	at net.minecraft.client.world.ClientWorld.tickEntities(ClientWorld.java:209)
+
+-- Affected level --
+Details:
+	All players: 2 total; [ClientPlayerEntity['Player675'/988, l='ClientLevel', x=-338.50, y=68.00, z=100.50], RemoteClientPlayerEntity['Cyrene_O93'/163, l='ClientLevel', x=-326.96, y=69.91, z=104.80]]
+	Chunk stats: Client Chunk Cache: 961, 612
+	Level dimension: minecraft:overworld
+	Level spawn location: World: (-336,64,96), Chunk: (at 0,4,0 in -21,6; contains blocks -336,0,96 to -321,255,111), Region: (-1,0; contains chunks -32,0 to -1,31, blocks -512,0,0 to -1,255,511)
+	Level time: 169186 game time, 169186 day time
+	Server brand: forge
+	Server type: Non-integrated multiplayer server
+Stacktrace:
+	at net.minecraft.client.world.ClientWorld.fillCrashReport(ClientWorld.java:622)
+	at net.minecraft.client.Minecraft.addGraphicsAndWorldToCrashReport(Minecraft.java:2251)
+	at net.minecraft.client.Minecraft.run(Minecraft.java:634)
+	at net.minecraft.client.main.Main.main(Main.java:208)
+	at Start.main(Start.java:8)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.4
+	Minecraft Version ID: b3d39777118c4d5aadf8853fd267f010
+	Operating System: Windows 11 (amd64) version 10.0
+	Java Version: 17.0.18, Eclipse Adoptium
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Eclipse Adoptium
+	Memory: 459411360 bytes (438 MB) / 931135488 bytes (888 MB) up to 4236247040 bytes (4040 MB)
+	CPUs: 16
+	JVM Flags: 1 total; -XX:+ShowCodeDetailsInExceptionMessages
+	Launched Version: vanilla
+	Backend library: LWJGL version 3.3.6+1
+	Backend API: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2 GL version 4.6.0 NVIDIA 591.86, NVIDIA Corporation
+	GL Caps: Using framebuffer using OpenGL 3.0
+	Using VBOs: Yes
+	Is Modded: Very likely; Jar signature invalidated
+	Type: Client (map_client.txt)
+	Graphics mode: fancy
+	Resource Packs: vanilla
+	Current Language: English (US)
+	CPU: 16x Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
+	OptiFine Version: OptiFine_1.16.4_HD_U_G5
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 591.86
+	OpenGlRenderer: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 16

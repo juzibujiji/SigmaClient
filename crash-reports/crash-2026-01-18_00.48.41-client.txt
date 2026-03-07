@@ -1,0 +1,64 @@
+---- Minecraft Crash Report ----
+// My bad.
+
+Time: 2026/1/18 上午12:48
+Description: Initializing game
+
+java.lang.Error: Unresolved compilation problem: 
+	The method nvgCreateFontMem(long, ByteBuffer, ByteBuffer, boolean) in the type NanoVG is not applicable for the arguments (long, String, ByteBuffer, int)
+
+	at com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.init(NanoVGFontRenderer.java:61)
+	at com.mentalfrostbyte.jello.managers.MusicManager.init(MusicManager.java:108)
+	at com.mentalfrostbyte.Client.start(Client.java:90)
+	at net.minecraft.client.Minecraft.<init>(Minecraft.java:500)
+	at net.minecraft.client.main.Main.main(Main.java:159)
+	at Start.main(Start.java:8)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.init(NanoVGFontRenderer.java:61)
+	at com.mentalfrostbyte.jello.managers.MusicManager.init(MusicManager.java:108)
+	at com.mentalfrostbyte.Client.start(Client.java:90)
+	at net.minecraft.client.Minecraft.<init>(Minecraft.java:500)
+
+-- Initialization --
+Details:
+Stacktrace:
+	at net.minecraft.client.main.Main.main(Main.java:159)
+	at Start.main(Start.java:8)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.4
+	Minecraft Version ID: 5529761a83c34e2298ab3b68cf1dd0de
+	Operating System: Windows 10 (amd64) version 10.0
+	Java Version: 17.0.10, Oracle Corporation
+	Java VM Version: Java HotSpot(TM) 64-Bit Server VM (mixed mode, sharing), Oracle Corporation
+	Memory: 650669440 bytes (620 MB) / 1476395008 bytes (1408 MB) up to 4263510016 bytes (4066 MB)
+	CPUs: 8
+	JVM Flags: 1 total; -XX:+ShowCodeDetailsInExceptionMessages
+	Launched Version: vanilla
+	Backend library: LWJGL version 3.3.6+1
+	Backend API: Quadro M2000M/PCIe/SSE2 GL version 4.6.0 NVIDIA 552.22, NVIDIA Corporation
+	GL Caps: Using framebuffer using OpenGL 3.0
+	Using VBOs: Yes
+	Is Modded: Very likely; Jar signature invalidated
+	Type: Client (map_client.txt)
+	CPU: 8x Intel(R) Core(TM) i7-6700HQ CPU @ 2.60GHz
+	OptiFine Version: OptiFine_1.16.4_HD_U_G5
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 552.22
+	OpenGlRenderer: Quadro M2000M/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 8

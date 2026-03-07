@@ -320,4 +320,4 @@ public class DimensionType
             return this.hasSkyLight == type.hasSkyLight && this.hasCeiling == type.hasCeiling && this.ultrawarm == type.ultrawarm && this.natural == type.natural && this.coordinateScale == type.coordinateScale && this.hasDragonFight == type.hasDragonFight && this.piglinSafe == type.piglinSafe && this.bedWorks == type.bedWorks && this.respawnAnchorWorks == type.respawnAnchorWorks && this.hasRaids == type.hasRaids && this.logicalHeight == type.logicalHeight && Float.compare(type.ambientLight, this.ambientLight) == 0 && this.fixedTime.equals(type.fixedTime) && this.magnifier.equals(type.magnifier) && this.infiniburn.equals(type.infiniburn) && this.effects.equals(type.effects);
         }
     }
-}
+}

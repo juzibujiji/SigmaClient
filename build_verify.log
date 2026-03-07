@@ -1,0 +1,124 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------< com.mentalfrostbyte:sigma-jello >-------------------
+[INFO] Building sigma-jello 5.1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ sigma-jello ---
+[INFO] Copying 11014 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ sigma-jello ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 4873 source files with javac [debug release 17] to target\classes
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/optifine/ItemOverrideCache.java:[23,46] java.lang.Integer 中的 Integer(int) 已过时, 且标记为待删除
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/com/mentalfrostbyte/jello/util/system/math/vector/Vector2m.java:[492,14] java.lang.Double 中的 Double(double) 已过时, 且标记为待删除
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/com/mentalfrostbyte/jello/util/system/math/vector/Vector2m.java:[492,52] java.lang.Double 中的 Double(double) 已过时, 且标记为待删除
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/com/mentalfrostbyte/jello/util/game/sound/NBSFile.java:[35,12] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/com/mentalfrostbyte/jello/util/game/sound/NBSFile.java:[40,12] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/de/florianmichael/vialoadingbase/netty/handler/VLBViaDecodeHandler.java:[45,18] com.viaversion.viaversion.api.connection.UserConnection 中的 checkIncomingPacket() 已过时, 且标记为待删除
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ContainerBlock.java:[21,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ContainerBlock.java:[33,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/HorizontalBlock.java:[23,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/HorizontalBlock.java:[33,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractButtonBlock.java:[150,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractButtonBlock.java:[159,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractButtonBlock.java:[168,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractFurnaceBlock.java:[97,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractFurnaceBlock.java:[106,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractFurnaceBlock.java:[116,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractFurnaceBlock.java:[127,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractFurnaceBlock.java:[137,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractPressurePlateBlock.java:[148,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractPressurePlateBlock.java:[157,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractPressurePlateBlock.java:[166,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractPressurePlateBlock.java:[174,25] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AbstractRailBlock.java:[140,25] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/SkullBlock.java:[48,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/SkullBlock.java:[58,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AirBlock.java:[21,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AnvilBlock.java:[123,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AttachedStemBlock.java:[77,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/AttachedStemBlock.java:[87,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BambooBlock.java:[220,18] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BambooSaplingBlock.java:[111,18] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BannerBlock.java:[66,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BannerBlock.java:[76,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BarrelBlock.java:[100,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BarrelBlock.java:[125,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BarrelBlock.java:[134,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BarrelBlock.java:[145,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BarrelBlock.java:[155,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BarrierBlock.java:[23,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BeaconBlock.java:[59,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BedBlock.java:[367,25] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BedBlock.java:[377,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BeehiveBlock.java:[65,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BeehiveBlock.java:[74,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BeehiveBlock.java:[290,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BellBlock.java:[208,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BellBlock.java:[310,25] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/RotatedPillarBlock.java:[26,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ShulkerBoxBlock.java:[71,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ShulkerBoxBlock.java:[267,25] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ShulkerBoxBlock.java:[282,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ShulkerBoxBlock.java:[291,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ShulkerBoxBlock.java:[401,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ShulkerBoxBlock.java:[411,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/PistonBlock.java:[194,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/PistonBlock.java:[456,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/PistonBlock.java:[466,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BrewingStandBlock.java:[43,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BrewingStandBlock.java:[126,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BrewingStandBlock.java:[135,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/BubbleColumnBlock.java:[179,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CakeBlock.java:[108,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CakeBlock.java:[117,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CampfireBlock.java:[159,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CampfireBlock.java:[299,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CampfireBlock.java:[309,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CauldronBlock.java:[282,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CauldronBlock.java:[291,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ChestBlock.java:[149,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ChestBlock.java:[418,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ChestBlock.java:[427,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ChestBlock.java:[438,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ChestBlock.java:[448,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CommandBlockBlock.java:[153,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CommandBlockBlock.java:[162,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CommandBlockBlock.java:[207,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CommandBlockBlock.java:[218,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/CommandBlockBlock.java:[228,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/RedstoneDiodeBlock.java:[67,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/RedstoneDiodeBlock.java:[76,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/RedstoneDiodeBlock.java:[192,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ComparatorBlock.java:[189,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ComposterBlock.java:[302,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ComposterBlock.java:[311,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/ConduitBlock.java:[51,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DeadCoralWallFanBlock.java:[43,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DeadCoralWallFanBlock.java:[53,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DaylightDetectorBlock.java:[48,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DaylightDetectorBlock.java:[108,28] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DaylightDetectorBlock.java:[117,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DetectorRailBlock.java:[43,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DetectorRailBlock.java:[71,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DetectorRailBlock.java:[80,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DetectorRailBlock.java:[162,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DetectorRailBlock.java:[171,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DetectorRailBlock.java:[210,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DetectorRailBlock.java:[320,23] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DispenserBlock.java:[194,20] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DispenserBlock.java:[203,16] 未使用 @Deprecated 对已过时的项目进行注释
+[WARNING] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/block/DispenserBlock.java:[213,28] 未使用 @Deprecated 对已过时的项目进行注释
+[INFO] /e:/.sigma/SigmaRebase/src/main/java/com/mentalfrostbyte/jello/managers/GuiManager.java: 某些输入文件使用或覆盖了已过时的 API。
+[INFO] /e:/.sigma/SigmaRebase/src/main/java/com/mentalfrostbyte/jello/managers/GuiManager.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO] /e:/.sigma/SigmaRebase/src/main/java/net/minecraft/util/Util.java: 某些输入文件额外使用或覆盖了标记为待删除的已过时 API。
+[INFO] /e:/.sigma/SigmaRebase/src/main/java/com/mentalfrostbyte/jello/managers/GuiManager.java: 某些输入文件使用了未经检查或不安全的操作。
+[INFO] /e:/.sigma/SigmaRebase/src/main/java/com/mentalfrostbyte/jello/managers/GuiManager.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  01:03 min
+[INFO] Finished at: 2026-02-25T23:41:29+08:00
+[INFO] ------------------------------------------------------------------------

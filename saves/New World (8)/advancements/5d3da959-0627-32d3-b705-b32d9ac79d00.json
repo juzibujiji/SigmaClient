@@ -1,0 +1,9 @@
+{
+  "minecraft:adventure/adventuring_time": {
+    "criteria": {
+      "minecraft:birch_forest": "2026-02-26 00:19:11 +0800"
+    },
+    "done": false
+  },
+  "DataVersion": 2584
+}

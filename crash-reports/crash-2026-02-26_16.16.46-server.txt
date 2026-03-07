@@ -1,0 +1,113 @@
+---- Minecraft Crash Report ----
+// This doesn't make any sense!
+
+Time: 2026/2/26 下午4:16
+Description: Exception initializing level
+
+java.lang.Error: Unresolved compilation problem: 
+	The default method getHeight() inherited from IBlockReader conflicts with another method inherited from IHeightAccessor
+
+	at net.minecraft.world.chunk.Chunk.<init>(Chunk.java:61)
+	at net.minecraft.world.server.ChunkManager.lambda$33(ChunkManager.java:741)
+	at com.mojang.datafixers.util.Either.lambda$mapLeft$0(Either.java:162)
+	at com.mojang.datafixers.util.Either$Left.map(Either.java:38)
+	at com.mojang.datafixers.util.Either.mapLeft(Either.java:162)
+	at net.minecraft.world.server.ChunkManager.lambda$31(ChunkManager.java:732)
+	at java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:646)
+	at java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:482)
+	at net.minecraft.world.chunk.ChunkTaskPriorityQueueSorter.lambda$2(ChunkTaskPriorityQueueSorter.java:49)
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.run(ThreadTaskExecutor.java:172)
+	at net.minecraft.world.server.ServerChunkProvider$ChunkExecutor.run(ServerChunkProvider.java:636)
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.driveOne(ThreadTaskExecutor.java:134)
+	at net.minecraft.world.server.ServerChunkProvider$ChunkExecutor.driveOne(ServerChunkProvider.java:648)
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.driveUntil(ThreadTaskExecutor.java:150)
+	at net.minecraft.world.server.ServerChunkProvider.getChunk(ServerChunkProvider.java:144)
+	at net.minecraft.world.World.getChunk(World.java:186)
+	at net.minecraft.world.IWorldReader.getChunk(IWorldReader.java:113)
+	at net.minecraft.world.World.getChunk(World.java:182)
+	at net.minecraft.entity.player.SpawnLocationHelper.func_241092_a_(SpawnLocationHelper.java:29)
+	at net.minecraft.entity.player.SpawnLocationHelper.func_241094_a_(SpawnLocationHelper.java:75)
+	at net.minecraft.server.MinecraftServer.func_240786_a_(MinecraftServer.java:461)
+	at net.minecraft.server.MinecraftServer.func_240787_a_(MinecraftServer.java:362)
+	at net.minecraft.server.MinecraftServer.func_240800_l__(MinecraftServer.java:317)
+	at net.minecraft.server.integrated.IntegratedServer.init(IntegratedServer.java:78)
+	at net.minecraft.server.MinecraftServer.func_240802_v_(MinecraftServer.java:720)
+	at net.minecraft.server.MinecraftServer.lambda$1(MinecraftServer.java:234)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Server thread
+Stacktrace:
+	at net.minecraft.world.chunk.Chunk.<init>(Chunk.java:61)
+	at net.minecraft.world.server.ChunkManager.lambda$33(ChunkManager.java:741)
+	at com.mojang.datafixers.util.Either.lambda$mapLeft$0(Either.java:162)
+	at com.mojang.datafixers.util.Either$Left.map(Either.java:38)
+	at com.mojang.datafixers.util.Either.mapLeft(Either.java:162)
+	at net.minecraft.world.server.ChunkManager.lambda$31(ChunkManager.java:732)
+	at java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:646)
+	at java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:482)
+	at net.minecraft.world.chunk.ChunkTaskPriorityQueueSorter.lambda$2(ChunkTaskPriorityQueueSorter.java:49)
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.run(ThreadTaskExecutor.java:172)
+	at net.minecraft.world.server.ServerChunkProvider$ChunkExecutor.run(ServerChunkProvider.java:636)
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.driveOne(ThreadTaskExecutor.java:134)
+	at net.minecraft.world.server.ServerChunkProvider$ChunkExecutor.driveOne(ServerChunkProvider.java:648)
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.driveUntil(ThreadTaskExecutor.java:150)
+	at net.minecraft.world.server.ServerChunkProvider.getChunk(ServerChunkProvider.java:144)
+	at net.minecraft.world.World.getChunk(World.java:186)
+	at net.minecraft.world.IWorldReader.getChunk(IWorldReader.java:113)
+	at net.minecraft.world.World.getChunk(World.java:182)
+	at net.minecraft.entity.player.SpawnLocationHelper.func_241092_a_(SpawnLocationHelper.java:29)
+	at net.minecraft.entity.player.SpawnLocationHelper.func_241094_a_(SpawnLocationHelper.java:75)
+	at net.minecraft.server.MinecraftServer.func_240786_a_(MinecraftServer.java:461)
+
+-- Affected level --
+Details:
+	All players: 0 total; []
+	Chunk stats: ServerChunkCache: 529
+	Level dimension: minecraft:overworld
+	Level spawn location: World: (104,64,88), Chunk: (at 8,4,8 in 6,5; contains blocks 96,0,80 to 111,255,95), Region: (0,0; contains chunks 0,0 to 31,31, blocks 0,0,0 to 511,255,511)
+	Level time: 0 game time, 0 day time
+	Level name: New World
+	Level game mode: Game mode: creative (ID 1). Hardcore: false. Cheats: true
+	Level weather: Rain time: 0 (now: false), thunder time: 0 (now: false)
+	Known server brands: vanilla
+	Level was modded: true
+	Level storage version: 0x04ABD - Anvil
+Stacktrace:
+	at net.minecraft.server.MinecraftServer.func_240787_a_(MinecraftServer.java:362)
+	at net.minecraft.server.MinecraftServer.func_240800_l__(MinecraftServer.java:317)
+	at net.minecraft.server.integrated.IntegratedServer.init(IntegratedServer.java:78)
+	at net.minecraft.server.MinecraftServer.func_240802_v_(MinecraftServer.java:720)
+	at net.minecraft.server.MinecraftServer.lambda$1(MinecraftServer.java:234)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.4
+	Minecraft Version ID: 7e9094bafe324c21926bea1a8a0d6d84
+	Operating System: Windows 11 (amd64) version 10.0
+	Java Version: 17.0.18, Eclipse Adoptium
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Eclipse Adoptium
+	Memory: 476198856 bytes (454 MB) / 931135488 bytes (888 MB) up to 4236247040 bytes (4040 MB)
+	CPUs: 16
+	JVM Flags: 1 total; -XX:+ShowCodeDetailsInExceptionMessages
+	Player Count: 0 / 8; []
+	Data Packs: vanilla
+	Type: Integrated Server (map_client.txt)
+	Is Modded: Definitely; Client brand changed to '1939Games'
+	OptiFine Version: OptiFine_1.16.4_HD_U_G5
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 591.86
+	OpenGlRenderer: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 16

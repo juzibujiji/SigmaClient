@@ -24,6 +24,7 @@ import net.minecraft.world.biome.BiomeContainer;
 import net.minecraft.world.gen.Heightmap;
 import net.minecraft.world.gen.feature.structure.Structure;
 import net.minecraft.world.gen.feature.structure.StructureStart;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import org.apache.logging.log4j.LogManager;
 
 public interface IChunk extends IBlockReader, IStructureReader
@@ -88,19 +89,20 @@ default int getTopFilledSegment()
 
 default boolean isEmptyBetween(int startY, int endY)
     {
-        if (startY < 0)
+        if (startY < WorldHeightHelper.getMinY())
         {
-            startY = 0;
+            startY = WorldHeightHelper.getMinY();
         }
 
-        if (endY >= 256)
+        if (endY >= WorldHeightHelper.getMaxY())
         {
-            endY = 255;
+            endY = WorldHeightHelper.getMaxY() - 1;
         }
 
         for (int i = startY; i <= endY; i += 16)
         {
-            if (!ChunkSection.isEmpty(this.getSections()[i >> 4]))
+            int sectionIndex = (i >> 4) + WorldHeightHelper.getSectionOffset();
+            if (sectionIndex >= 0 && sectionIndex < this.getSections().length && !ChunkSection.isEmpty(this.getSections()[sectionIndex]))
             {
                 return false;
             }

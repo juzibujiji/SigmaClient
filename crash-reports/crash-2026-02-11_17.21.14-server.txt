@@ -1,0 +1,181 @@
+---- Minecraft Crash Report ----
+// Why did you do that?
+
+Time: 2026/2/11 下午5:21
+Description: Feature placement
+
+java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 16
+	at net.minecraft.world.chunk.ChunkPrimer.getBlockState(ChunkPrimer.java:109)
+	at net.minecraft.world.gen.WorldGenRegion.getBlockState(WorldGenRegion.java:166)
+	at net.minecraft.world.gen.feature.OreFeature.func_207803_a(OreFeature.java:144)
+	at net.minecraft.world.gen.feature.OreFeature.func_241855_a(OreFeature.java:44)
+	at net.minecraft.world.gen.feature.OreFeature.func_241855_a(OreFeature.java:1)
+	at net.minecraft.world.gen.feature.ConfiguredFeature.func_242765_a(ConfiguredFeature.java:61)
+	at net.minecraft.world.gen.feature.DecoratedFeature.lambda$0(DecoratedFeature.java:23)
+	at java.base/java.util.stream.Streams$StreamBuilderImpl.forEachRemaining(Streams.java:411)
+	at java.base/java.util.stream.ReferencePipeline$Head.forEach(ReferencePipeline.java:762)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:21)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:1)
+	at net.minecraft.world.gen.feature.ConfiguredFeature.func_242765_a(ConfiguredFeature.java:61)
+	at net.minecraft.world.gen.feature.DecoratedFeature.lambda$0(DecoratedFeature.java:23)
+	at java.base/java.util.stream.Streams$StreamBuilderImpl.forEachRemaining(Streams.java:411)
+	at java.base/java.util.stream.ReferencePipeline$Head.forEach(ReferencePipeline.java:762)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:21)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:1)
+	at net.minecraft.world.gen.feature.ConfiguredFeature.func_242765_a(ConfiguredFeature.java:61)
+	at net.minecraft.world.gen.feature.DecoratedFeature.lambda$0(DecoratedFeature.java:23)
+	at java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:183)
+	at java.base/java.util.stream.IntPipeline$1$1.accept(IntPipeline.java:180)
+	at java.base/java.util.stream.Streams$RangeIntSpliterator.forEachRemaining(Streams.java:104)
+	at java.base/java.util.Spliterator$OfInt.forEachRemaining(Spliterator.java:711)
+	at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+	at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+	at java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:150)
+	at java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:173)
+	at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+	at java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:596)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:21)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:1)
+	at net.minecraft.world.gen.feature.ConfiguredFeature.func_242765_a(ConfiguredFeature.java:61)
+	at net.minecraft.world.biome.Biome.generateFeatures(Biome.java:300)
+	at net.minecraft.world.gen.ChunkGenerator.func_230351_a_(ChunkGenerator.java:221)
+	at net.minecraft.world.chunk.ChunkStatus.lambda$8(ChunkStatus.java:94)
+	at net.minecraft.world.chunk.ChunkStatus.doGenerationWork(ChunkStatus.java:243)
+	at net.minecraft.world.server.ChunkManager.lambda$26(ChunkManager.java:674)
+	at com.mojang.datafixers.util.Either$Left.map(Either.java:38)
+	at net.minecraft.world.server.ChunkManager.lambda$24(ChunkManager.java:672)
+	at java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1150)
+	at java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:482)
+	at net.minecraft.world.chunk.ChunkTaskPriorityQueueSorter.lambda$2(ChunkTaskPriorityQueueSorter.java:49)
+	at net.minecraft.util.concurrent.DelegatedTaskExecutor.driveOne(DelegatedTaskExecutor.java:120)
+	at net.minecraft.util.concurrent.DelegatedTaskExecutor.driveWhile(DelegatedTaskExecutor.java:180)
+	at net.minecraft.util.concurrent.DelegatedTaskExecutor.run(DelegatedTaskExecutor.java:136)
+	at java.base/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1395)
+	at java.base/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:373)
+	at java.base/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1182)
+	at java.base/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1655)
+	at java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1622)
+	at java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:165)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Server thread
+Stacktrace:
+	at net.minecraft.world.chunk.ChunkPrimer.getBlockState(ChunkPrimer.java:109)
+	at net.minecraft.world.gen.WorldGenRegion.getBlockState(WorldGenRegion.java:166)
+	at net.minecraft.world.gen.feature.OreFeature.func_207803_a(OreFeature.java:144)
+	at net.minecraft.world.gen.feature.OreFeature.func_241855_a(OreFeature.java:44)
+	at net.minecraft.world.gen.feature.OreFeature.func_241855_a(OreFeature.java:1)
+	at net.minecraft.world.gen.feature.ConfiguredFeature.func_242765_a(ConfiguredFeature.java:61)
+	at net.minecraft.world.gen.feature.DecoratedFeature.lambda$0(DecoratedFeature.java:23)
+	at java.base/java.util.stream.Streams$StreamBuilderImpl.forEachRemaining(Streams.java:411)
+	at java.base/java.util.stream.ReferencePipeline$Head.forEach(ReferencePipeline.java:762)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:21)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:1)
+	at net.minecraft.world.gen.feature.ConfiguredFeature.func_242765_a(ConfiguredFeature.java:61)
+	at net.minecraft.world.gen.feature.DecoratedFeature.lambda$0(DecoratedFeature.java:23)
+	at java.base/java.util.stream.Streams$StreamBuilderImpl.forEachRemaining(Streams.java:411)
+	at java.base/java.util.stream.ReferencePipeline$Head.forEach(ReferencePipeline.java:762)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:21)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:1)
+	at net.minecraft.world.gen.feature.ConfiguredFeature.func_242765_a(ConfiguredFeature.java:61)
+	at net.minecraft.world.gen.feature.DecoratedFeature.lambda$0(DecoratedFeature.java:23)
+	at java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:183)
+	at java.base/java.util.stream.IntPipeline$1$1.accept(IntPipeline.java:180)
+	at java.base/java.util.stream.Streams$RangeIntSpliterator.forEachRemaining(Streams.java:104)
+	at java.base/java.util.Spliterator$OfInt.forEachRemaining(Spliterator.java:711)
+	at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+	at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+	at java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:150)
+	at java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:173)
+	at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+	at java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:596)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:21)
+	at net.minecraft.world.gen.feature.DecoratedFeature.func_241855_a(DecoratedFeature.java:1)
+	at net.minecraft.world.gen.feature.ConfiguredFeature.func_242765_a(ConfiguredFeature.java:61)
+
+-- Feature --
+Details:
+	Id: minecraft:decorated
+	Config: < DecoratedFeatureConfig [minecraft:decorated | [minecraft:count net.minecraft.world.gen.feature.FeatureSpreadConfig@118ae2a4]] >
+	Description: < DecoratedFeature [minecraft:decorated] >
+Stacktrace:
+	at net.minecraft.world.biome.Biome.generateFeatures(Biome.java:300)
+
+-- Generation --
+Details:
+	CenterX: -9
+	CenterZ: -13
+	Seed: -3054174009599829921
+	Biome: net.minecraft.world.biome.Biome@7ab34c76
+Stacktrace:
+	at net.minecraft.world.gen.ChunkGenerator.func_230351_a_(ChunkGenerator.java:221)
+	at net.minecraft.world.chunk.ChunkStatus.lambda$8(ChunkStatus.java:94)
+	at net.minecraft.world.chunk.ChunkStatus.doGenerationWork(ChunkStatus.java:243)
+
+-- Chunk to be generated --
+Details:
+	Location: -9,-13
+	Position hash: -51539607561
+	Generator: net.minecraft.world.gen.NoiseChunkGenerator@35087269
+Stacktrace:
+	at net.minecraft.world.server.ChunkManager.lambda$26(ChunkManager.java:674)
+	at com.mojang.datafixers.util.Either$Left.map(Either.java:38)
+	at net.minecraft.world.server.ChunkManager.lambda$24(ChunkManager.java:672)
+	at java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1150)
+	at java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:482)
+	at net.minecraft.world.chunk.ChunkTaskPriorityQueueSorter.lambda$2(ChunkTaskPriorityQueueSorter.java:49)
+	at net.minecraft.util.concurrent.DelegatedTaskExecutor.driveOne(DelegatedTaskExecutor.java:120)
+	at net.minecraft.util.concurrent.DelegatedTaskExecutor.driveWhile(DelegatedTaskExecutor.java:180)
+	at net.minecraft.util.concurrent.DelegatedTaskExecutor.run(DelegatedTaskExecutor.java:136)
+
+-- Affected level --
+Details:
+	All players: 0 total; []
+	Chunk stats: ServerChunkCache: 529
+	Level dimension: minecraft:overworld
+	Level spawn location: World: (-136,64,-200), Chunk: (at 8,4,8 in -9,-13; contains blocks -144,0,-208 to -129,255,-193), Region: (-1,-1; contains chunks -32,-32 to -1,-1, blocks -512,0,-512 to -1,255,-1)
+	Level time: 0 game time, 0 day time
+	Level name: New World
+	Level game mode: Game mode: creative (ID 1). Hardcore: false. Cheats: true
+	Level weather: Rain time: 0 (now: false), thunder time: 0 (now: false)
+	Known server brands: vanilla
+	Level was modded: true
+	Level storage version: 0x04ABD - Anvil
+Stacktrace:
+	at net.minecraft.server.MinecraftServer.func_240787_a_(MinecraftServer.java:376)
+	at net.minecraft.server.MinecraftServer.func_240800_l__(MinecraftServer.java:317)
+	at net.minecraft.server.integrated.IntegratedServer.init(IntegratedServer.java:78)
+	at net.minecraft.server.MinecraftServer.func_240802_v_(MinecraftServer.java:720)
+	at net.minecraft.server.MinecraftServer.lambda$1(MinecraftServer.java:234)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.16.4
+	Minecraft Version ID: 4a1f66361e16401ca450d1a78bd27e34
+	Operating System: Windows 11 (amd64) version 10.0
+	Java Version: 17.0.18, Eclipse Adoptium
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Eclipse Adoptium
+	Memory: 488796888 bytes (466 MB) / 937426944 bytes (894 MB) up to 4236247040 bytes (4040 MB)
+	CPUs: 16
+	JVM Flags: 1 total; -XX:+ShowCodeDetailsInExceptionMessages
+	Player Count: 0 / 8; []
+	Data Packs: vanilla
+	Type: Integrated Server (map_client.txt)
+	Is Modded: Very likely; Jar signature invalidated
+	OptiFine Version: OptiFine_1.16.4_HD_U_G5
+	OptiFine Build: ~~NULL~~
+	Render Distance Chunks: 8
+	Mipmaps: 4
+	Anisotropic Filtering: 1
+	Antialiasing: 0
+	Multitexture: false
+	Shaders: null
+	OpenGlVersion: 4.6.0 NVIDIA 591.86
+	OpenGlRenderer: NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2
+	OpenGlVendor: NVIDIA Corporation
+	CpuCount: 16

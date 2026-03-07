@@ -28,7 +28,7 @@ public class Client implements MinecraftUtil {
     public static int currentVersionIndex = 28;
     public static final Logger logger = LogManager.getLogger("Jello");
 
-    public static final String RELEASE_TARGET = "5.1.0";
+    public static final String RELEASE_TARGET = "5.1.1";
     public static final int BETA_ITERATION = 16;
     public static final String FULL_VERSION = RELEASE_TARGET + (BETA_ITERATION > 0 ? "b" + BETA_ITERATION : "");
 

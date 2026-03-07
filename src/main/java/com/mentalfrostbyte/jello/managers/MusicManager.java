@@ -16,6 +16,8 @@ import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeContentType;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeUtil;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
+import com.mentalfrostbyte.jello.util.client.music.LrcParser;
+import com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
@@ -83,6 +85,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
     private double field32168;
     private boolean field32169 = false;
     private double field32170 = 0.0;
+    private List<LrcParser.LyricLine> currentLyrics = new ArrayList<>();
+    private long currentPositionMs = 0;
 
     @Override
     public void init() {
@@ -99,6 +103,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
         }
 
         this.finished = false;
+
+        // Initialize NanoVG font renderer for CJK lyrics
+        NanoVGFontRenderer.init();
     }
 
     public void saveMusicSettings() {
@@ -146,7 +153,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
                 for (int i = 0; i < var4.length; i++) {
                     double var7 = this.amplitudes.get(i) - var4[i];
                     boolean var9 = !(this.amplitudes.get(i) < Double.MAX_VALUE);
-                    this.amplitudes.set(i, Math.min(2.256E7, Math.max(0.0, this.amplitudes.get(i) - var7 * (double) Math.min(0.335F * fps, 1.0F))));
+                    this.amplitudes.set(i, Math.min(2.256E7,
+                            Math.max(0.0, this.amplitudes.get(i) - var7 * (double) Math.min(0.335F * fps, 1.0F))));
                     if (var9) {
                         this.amplitudes.set(i, 0.0);
                     }
@@ -184,8 +192,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 (float) mc.getMainWindow().getHeight() - height,
                                 width,
                                 height,
-                                RenderUtil2.applyAlpha(ClientColors.MID_GREY.getColor(), 0.2F * alphaValue)
-                        );
+                                RenderUtil2.applyAlpha(ClientColors.MID_GREY.getColor(), 0.2F * alphaValue));
                     }
 
                     RenderUtil.initStencilBuffer();
@@ -193,12 +200,14 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     for (int i = 0; (float) i < maxWidth; i++) {
                         float heightRatio = (float) mc.getMainWindow().getHeight() / 1080.0F;
                         float height = ((float) (Math.sqrt(this.amplitudes.get(i)) / 12.0) - 5.0F) * heightRatio;
-                        RenderUtil.drawRoundedRect2((float) i * width, (float) mc.getMainWindow().getHeight() - height, width, height, ClientColors.LIGHT_GREYISH_BLUE.getColor());
+                        RenderUtil.drawRoundedRect2((float) i * width, (float) mc.getMainWindow().getHeight() - height,
+                                width, height, ClientColors.LIGHT_GREYISH_BLUE.getColor());
                     }
 
                     RenderUtil.configureStencilTest();
                     if (this.notificationImage != null && this.songThumbnail != null) {
-                        RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(), (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
+                        RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(),
+                                (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
                     }
 
                     RenderUtil.restorePreviousStencilBuffer();
@@ -209,13 +218,16 @@ public class MusicManager extends Manager implements MinecraftUtil {
                         var9 = Math.max(var9, Math.sqrt(this.amplitudes.get(i)) - 1000.0);
                     }
 
-                    float scale = 1.0F + (float) Math.round((float) (var9 / (double) (var16 - 1000)) * 0.14F * 75.0F) / 75.0F;
+                    float scale = 1.0F
+                            + (float) Math.round((float) (var9 / (double) (var16 - 1000)) * 0.14F * 75.0F) / 75.0F;
                     GL11.glPushMatrix();
                     GL11.glTranslated(60.0, mc.getMainWindow().getHeight() - 55, 0.0);
                     GL11.glScalef(scale, scale, 0.0F);
                     GL11.glTranslated(-60.0, -(mc.getMainWindow().getHeight() - 55), 0.0);
-                    RenderUtil.drawImage(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F, this.notificationImage);
-                    RenderUtil.drawRoundedRect(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F, 14.0F, 0.3F);
+                    RenderUtil.drawImage(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F,
+                            this.notificationImage);
+                    RenderUtil.drawRoundedRect(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F,
+                            14.0F, 0.3F);
                     GL11.glPopMatrix();
                     String[] titleSplit = this.songTitle.split(" - ");
                     if (titleSplit.length <= 1) {
@@ -224,44 +236,72 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 130.0F,
                                 (float) (mc.getMainWindow().getHeight() - 70),
                                 titleSplit[0],
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F)
-                        );
+                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F));
                         RenderUtil.drawString(
                                 ResourceRegistry.JelloLightFont18,
                                 130.0F,
                                 (float) (mc.getMainWindow().getHeight() - 70),
                                 titleSplit[0],
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F)
-                        );
+                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F));
                     } else {
                         RenderUtil.drawString(
                                 ResourceRegistry.JelloMediumFont20_1,
                                 130.0F,
                                 (float) (mc.getMainWindow().getHeight() - 81),
                                 titleSplit[0],
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.4F)
-                        );
+                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.4F));
                         RenderUtil.drawString(
                                 ResourceRegistry.JelloLightFont18_1,
                                 130.0F,
                                 (float) (mc.getMainWindow().getHeight() - 56),
                                 titleSplit[1],
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F)
-                        );
+                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F));
                         RenderUtil.drawString(
                                 ResourceRegistry.JelloLightFont18,
                                 130.0F,
                                 (float) (mc.getMainWindow().getHeight() - 56),
                                 titleSplit[1],
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F)
-                        );
+                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F));
                         RenderUtil.drawString(
                                 ResourceRegistry.JelloMediumFont20,
                                 130.0F,
                                 (float) (mc.getMainWindow().getHeight() - 81),
                                 titleSplit[0],
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F)
-                        );
+                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F));
+                    }
+
+                    // Draw lyrics with gradient progress using NanoVG (CJK support)
+                    String lyric = this.getCurrentLyric();
+                    if (lyric != null && !lyric.isEmpty() && NanoVGFontRenderer.isInitialized()) {
+                        int screenWidth = mc.getMainWindow().getWidth();
+                        int screenHeight = mc.getMainWindow().getHeight();
+                        float fontSize = 20.0f;
+                        float lyricY = (float) (screenHeight - 38);
+                        float lyricX = 130.0F;
+                        float lyricWidth = NanoVGFontRenderer.getTextWidth(lyric, fontSize);
+                        float progress = this.getLyricProgress();
+                        float progressWidth = lyricWidth * progress;
+
+                        // Begin NanoVG frame
+                        NanoVGFontRenderer.beginFrame(screenWidth, screenHeight);
+
+                        // Draw dim base text
+                        int dimColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.35F);
+                        NanoVGFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, dimColor);
+
+                        // End NanoVG frame for base text
+                        NanoVGFontRenderer.endFrame();
+
+                        // Draw highlighted portion with scissor
+                        RenderUtil.startScissor((int) lyricX, (int) lyricY, (int) (lyricX + progressWidth),
+                                (int) (lyricY + fontSize), true);
+
+                        NanoVGFontRenderer.beginFrame(screenWidth, screenHeight);
+                        int brightColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.95F);
+                        NanoVGFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, brightColor);
+                        NanoVGFontRenderer.endFrame();
+
+                        RenderUtil.restoreScissor();
                     }
                 }
             }
@@ -276,7 +316,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
         }
 
         try {
-            if (this.processing && this.thumbnailImage != null && this.scaledThumbnail != null && this.currentVideo == null && !mc.isGamePaused()) {
+            if (this.processing && this.thumbnailImage != null && this.scaledThumbnail != null
+                    && this.currentVideo == null && !mc.isGamePaused()) {
                 if (this.songThumbnail != null) {
                     this.songThumbnail.release();
                 }
@@ -301,9 +342,13 @@ public class MusicManager extends Manager implements MinecraftUtil {
     }
 
     private void startProcessingVideoThumbnail() {
-        if (this.currentVideo != null) {
+        this.startProcessingVideoThumbnail(this.currentVideo);
+    }
+
+    private void startProcessingVideoThumbnail(YoutubeVideoData videoData) {
+        if (videoData != null) {
             this.visualizerData.clear();
-            new Thread(() -> this.processVideoThumbnail(this.currentVideo)).start();
+            new Thread(() -> this.processVideoThumbnail(videoData)).start();
         }
     }
 
@@ -317,12 +362,24 @@ public class MusicManager extends Manager implements MinecraftUtil {
             this.audioThread = new Thread(
                     () -> {
                         byte[] pcmBufferData;
-                        if (this.currentVideoIndex < 0 || this.currentVideoIndex >= this.videoManager.videoList.size()) {
+                        if (this.currentVideoIndex < 0
+                                || this.currentVideoIndex >= this.videoManager.videoList.size()) {
                             this.currentVideoIndex = 0;
                         }
 
                         for (int index = this.currentVideoIndex; index < this.videoManager.videoList.size(); index++) {
-                            URL songUrl = YoutubeUtil.getVideoStreamURL(this.videoManager.videoList.get(index).videoId);
+                            URL songUrl;
+                            YoutubeVideoData videoData = this.videoManager.videoList.get(index);
+                            if (videoData.videoId.startsWith("file:")) {
+                                try {
+                                    songUrl = new URL(videoData.videoId);
+                                } catch (MalformedURLException e) {
+                                    songUrl = YoutubeUtil.getVideoStreamURL(videoData.videoId);
+                                }
+                            } else {
+                                songUrl = YoutubeUtil.getVideoStreamURL(videoData.videoId);
+                            }
+
                             this.currentVideoIndex2 = index;
                             this.currentVideo = this.videoManager.videoList.get(index);
                             this.visualizerData.clear();
@@ -347,6 +404,185 @@ public class MusicManager extends Manager implements MinecraftUtil {
                             try {
                                 URL url = this.resolveAudioStream(songUrl);
                                 if (url != null) {
+                                    // Check if this is a local file (MP3) - use JLayer with frame-by-frame decoding
+                                    if (url.getProtocol().equals("file")) {
+                                        try {
+                                            InputStream fileStream = url.openStream();
+                                            javazoom.jl.decoder.Bitstream bitstream = new javazoom.jl.decoder.Bitstream(
+                                                    fileStream);
+                                            javazoom.jl.decoder.Decoder mp3Decoder = new javazoom.jl.decoder.Decoder();
+
+                                            this.songTitle = videoData.title;
+                                            this.startProcessingVideoThumbnail(videoData);
+                                            Client.getInstance().notificationManager
+                                                    .send(new Notification("Now Playing", videoData.title));
+
+                                            if (url.getProtocol().equals("file")) {
+                                                try {
+                                                    File audioFile = new File(url.toURI());
+                                                    String name = audioFile.getName();
+                                                    String lrcName = name.substring(0, name.lastIndexOf('.')) + ".lrc";
+                                                    File lrcFile = new File(audioFile.getParent(), lrcName);
+                                                    if (lrcFile.exists()) {
+                                                        this.currentLyrics = LrcParser.parse(lrcFile);
+                                                    } else {
+                                                        this.currentLyrics = null;
+                                                    }
+                                                } catch (Exception e) {
+                                                    e.printStackTrace();
+                                                    this.currentLyrics = null;
+                                                }
+                                            }
+
+                                            // Estimate duration (rough estimate based on file size)
+                                            java.io.File audioFile = new java.io.File(new java.net.URI(url.toString()));
+                                            long fileSize = audioFile.length();
+                                            // Estimate ~128kbps bitrate -> duration in seconds = fileSize * 8 / 128000
+                                            this.duration = (fileSize * 8) / 128000;
+
+                                            // Read first frame to get actual sample rate
+                                            javazoom.jl.decoder.Header firstHeader = bitstream.readFrame();
+                                            if (firstHeader == null) {
+                                                Client.getInstance().notificationManager
+                                                        .send(new Notification("Error", "Invalid MP3 file"));
+                                                continue;
+                                            }
+
+                                            int sampleRate = firstHeader.frequency();
+                                            int channels = (firstHeader
+                                                    .mode() == javazoom.jl.decoder.Header.SINGLE_CHANNEL) ? 1 : 2;
+
+                                            // Set up audio output with correct sample rate
+                                            AudioFormat mp3Format = new AudioFormat(sampleRate, 16, channels, true,
+                                                    false);
+                                            this.sourceDataLine = AudioSystem.getSourceDataLine(mp3Format);
+                                            this.sourceDataLine.open(mp3Format);
+                                            this.sourceDataLine.start();
+
+                                            // Start playback state
+                                            this.playing = true;
+
+                                            javazoom.jl.decoder.Header frameHeader = firstHeader;
+                                            int frameCount = 0;
+                                            float msPerFrame = 0;
+                                            byte[] pcmBytes = null; // Initialize pcmBytes here
+
+                                            do {
+                                                if (this.currentVideoIndex2 != this.currentVideoIndex) {
+                                                    this.sourceDataLine.close();
+                                                    bitstream.close();
+                                                    return;
+                                                }
+
+                                                if (this.sourceDataLine == null) {
+                                                    AudioFormat audioFormat = new AudioFormat(
+                                                            (float) frameHeader.frequency(),
+                                                            16,
+                                                            frameHeader.mode() == 3 ? 1 : 2,
+                                                            true,
+                                                            false);
+                                                    this.sourceDataLine = AudioSystem.getSourceDataLine(audioFormat);
+                                                    this.sourceDataLine.open(audioFormat);
+                                                    this.sourceDataLine.start();
+                                                }
+
+                                                // Check for pause
+                                                while (!this.playing) {
+                                                    Thread.sleep(300L);
+                                                    this.visualizerData.clear();
+                                                    if (Thread.interrupted()) {
+                                                        this.sourceDataLine.close();
+                                                        bitstream.close();
+                                                        this.playing = false; // Reset playing state on interrupt
+                                                        return;
+                                                    }
+                                                }
+
+                                                // Decode frame
+                                                javazoom.jl.decoder.SampleBuffer output = (javazoom.jl.decoder.SampleBuffer) mp3Decoder
+                                                        .decodeFrame(frameHeader, bitstream);
+                                                short[] samples = output.getBuffer();
+                                                int len = output.getBufferLength();
+
+                                                if (pcmBytes == null || pcmBytes.length != len * 2) {
+                                                    pcmBytes = new byte[len * 2];
+                                                    mp3Format = new AudioFormat( // Re-initialize mp3Format if needed
+                                                            (float) frameHeader.frequency(),
+                                                            16,
+                                                            frameHeader.mode() == 3 ? 1 : 2,
+                                                            true,
+                                                            false);
+                                                }
+
+                                                for (int i = 0; i < len; i++) {
+                                                    pcmBytes[i * 2] = (byte) (samples[i] & 0xFF);
+                                                    pcmBytes[i * 2 + 1] = (byte) ((samples[i] >> 8) & 0xFF);
+                                                }
+
+                                                this.sourceDataLine.write(pcmBytes, 0, pcmBytes.length);
+
+                                                // Update progress
+                                                if (msPerFrame == 0) {
+                                                    msPerFrame = frameHeader.ms_per_frame();
+                                                }
+                                                frameCount++;
+                                                this.totalDuration = (long) ((frameCount * msPerFrame) / 1000);
+                                                this.currentPositionMs = (long) (frameCount * msPerFrame);
+
+                                                // Visualizer logic
+                                                float[] pcmFloat = MathHelper.convertToPCMFloatArray(pcmBytes,
+                                                        mp3Format);
+
+                                                // Pad to next power of 2 for FFT
+                                                int n = pcmFloat.length;
+                                                int p = 1;
+                                                while (p < n)
+                                                    p <<= 1;
+
+                                                float[] paddedPcm = new float[p];
+                                                System.arraycopy(pcmFloat, 0, paddedPcm, 0, n);
+
+                                                JavaFFT fft = new JavaFFT(paddedPcm.length);
+                                                float[][] transformed = fft.transform(paddedPcm);
+                                                float[] fftLeft = transformed[0];
+                                                float[] fftRight = transformed[1];
+
+                                                this.visualizerData
+                                                        .add(MathHelper.calculateAmplitudes(fftLeft, fftRight));
+                                                if (this.visualizerData.size() > 18) {
+                                                    this.visualizerData.remove(0);
+                                                }
+
+                                                // Volume control
+                                                this.adjustAudioVolume(this.sourceDataLine, this.volume);
+
+                                                // Check for stop
+                                                if (Thread.interrupted()) {
+                                                    this.sourceDataLine.close();
+                                                    bitstream.close();
+                                                    this.playing = false; // Reset playing state on interrupt
+                                                    return;
+                                                }
+
+                                                bitstream.closeFrame();
+                                            } while ((frameHeader = bitstream.readFrame()) != null);
+
+                                            this.sourceDataLine.drain();
+                                            this.sourceDataLine.close();
+                                            bitstream.close();
+                                            fileStream.close();
+                                            this.playing = false; // Reset playing state after loop finishes
+                                        } catch (Exception e) {
+                                            this.playing = false; // Reset playing state on exception
+                                            e.printStackTrace();
+                                            Client.getInstance().notificationManager
+                                                    .send(new Notification("Error",
+                                                            "Failed to play MP3: " + e.getMessage()));
+                                        }
+                                        continue; // Move to next track
+                                    }
+
+                                    // Otherwise use MP4Container for YouTube streams (AAC)
                                     URLConnection connection = url.openConnection();
                                     connection.setConnectTimeout(14000);
                                     connection.setReadTimeout(14000);
@@ -419,8 +655,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                                         if (!var13.hasMoreFrames()
                                                 && (this.repeat == AudioRepeatMode.LOOP_CURRENT
-                                                || this.repeat == AudioRepeatMode.REPEAT
-                                                && this.videoManager.videoList.size() == 1)) {
+                                                        || this.repeat == AudioRepeatMode.REPEAT
+                                                                && this.videoManager.videoList.size() == 1)) {
                                             var13.seek(0.0);
                                             this.totalDuration = 0L;
                                         }
@@ -447,7 +683,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                             if (this.repeat == AudioRepeatMode.LOOP_CURRENT) {
                                 index--;
-                            } else if (this.repeat == AudioRepeatMode.REPEAT && index == this.videoManager.videoList.size() - 1) {
+                            } else if (this.repeat == AudioRepeatMode.REPEAT
+                                    && index == this.videoManager.videoList.size() - 1) {
                                 index = -1;
                             } else if (this.repeat == AudioRepeatMode.NO_REPEAT) {
                                 return;
@@ -474,25 +711,40 @@ public class MusicManager extends Manager implements MinecraftUtil {
     public void processVideoThumbnail(YoutubeVideoData videoData) {
         try {
             this.processing = true;
-            BufferedImage buffImage = ImageIO.read(new URL(videoData.fullUrl));
+            BufferedImage buffImage = null;
+            try {
+                buffImage = ImageIO.read(new URL(videoData.fullUrl));
+            } catch (Exception e) {
+                // If failed to read image (e.g. audio file), use default or null
+            }
+
+            if (buffImage == null) {
+                // Create a default image or handle null
+                buffImage = new BufferedImage(180, 180, BufferedImage.TYPE_INT_ARGB);
+                // Fill with some color or make it transparent
+            }
+
             this.thumbnailImage = ImageUtil.applyBlur(buffImage, 15);
             this.thumbnailImage = this.thumbnailImage
-                    .getSubimage(0, (int) ((float) this.thumbnailImage.getHeight() * 0.75F), this.thumbnailImage.getWidth(),
+                    .getSubimage(0, (int) ((float) this.thumbnailImage.getHeight() * 0.75F),
+                            this.thumbnailImage.getWidth(),
                             (int) ((float) this.thumbnailImage.getHeight() * 0.2F));
             this.songTitle = videoData.title;
             if (buffImage.getHeight() != buffImage.getWidth()) {
                 if (this.songTitle.contains("[NCS Release]")) {
                     this.scaledThumbnail = buffImage.getSubimage(1, 3, 170, 170);
                 } else {
-                    this.scaledThumbnail = buffImage.getSubimage(70, 0, 180, 180);
+                    this.scaledThumbnail = buffImage.getSubimage(0, 0, Math.min(buffImage.getWidth(), 180),
+                            Math.min(buffImage.getHeight(), 180));
                 }
             } else {
                 this.scaledThumbnail = buffImage;
             }
 
             this.currentVideo = null;
-        } catch (IOException | NumberFormatException var5) {
-            throw new RuntimeException(var5);
+        } catch (Exception var5) {
+            var5.printStackTrace();
+            this.processing = false;
         }
     }
 
@@ -573,6 +825,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
     }
 
     public URL resolveAudioStream(URL songURL) {
+        if (songURL.getProtocol().equals("file")) {
+            return songURL;
+        }
         String songURLString = songURL.toString();
         String userHomeDir = System.getProperty("user.home");
         YoutubeDLRequest request = new YoutubeDLRequest(songURLString, userHomeDir);
@@ -591,7 +846,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
             if (exception.getMessage() != null
                     && exception.getMessage().contains("ERROR: This video contains content from")
                     && exception.getMessage().contains("who has blocked it in your country on copyright grounds")) {
-                Client.getInstance().notificationManager.send(new Notification("Now Playing", "Not available in your region."));
+                Client.getInstance().notificationManager
+                        .send(new Notification("Now Playing", "Not available in your region."));
             } else {
                 exception.printStackTrace();
                 this.download();
@@ -609,6 +865,35 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     public Texture getSongThumbnail() {
         return this.songThumbnail;
+    }
+
+    public String getCurrentLyric() {
+        if (currentLyrics == null || currentLyrics.isEmpty())
+            return "";
+        long current = this.currentPositionMs;
+        for (int i = 0; i < currentLyrics.size(); i++) {
+            if (currentLyrics.get(i).timestamp > current) {
+                return i > 0 ? currentLyrics.get(i - 1).content : "";
+            }
+        }
+        return currentLyrics.get(currentLyrics.size() - 1).content;
+    }
+
+    public float getLyricProgress() {
+        if (currentLyrics == null || currentLyrics.isEmpty())
+            return 0.0f;
+        long current = this.currentPositionMs;
+        for (int i = 0; i < currentLyrics.size(); i++) {
+            if (currentLyrics.get(i).timestamp > current) {
+                if (i == 0)
+                    return 0.0f;
+                long start = currentLyrics.get(i - 1).timestamp;
+                long end = currentLyrics.get(i).timestamp;
+                float progress = (float) (current - start) / (float) (end - start);
+                return Math.max(0.0f, Math.min(1.0f, progress));
+            }
+        }
+        return 1.0f;
     }
 
     public Texture getNotificationImage() {
@@ -660,7 +945,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
                 try {
                     File targetFile = new File(Client.getInstance().file + "/music/yt-dlp.exe");
                     CloseableHttpClient client = HttpClients.createDefault();
-                    CloseableHttpResponse response = client.execute(new HttpGet("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"));
+                    CloseableHttpResponse response = client.execute(
+                            new HttpGet("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"));
                     Throwable throwable = null;
 
                     try {
@@ -693,7 +979,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
                 try {
                     File targetFile = new File(Client.getInstance().file + "/music/yt-dlp");
                     CloseableHttpClient client = HttpClients.createDefault();
-                    CloseableHttpResponse response = client.execute(new HttpGet("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"));
+                    CloseableHttpResponse response = client
+                            .execute(new HttpGet("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"));
                     Throwable throwable = null;
 
                     try {
@@ -746,7 +1033,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
             return true; // Windows yt-dlp doesn't require Python
         }
 
-        String[][] commands = {{"python3", "-V"}, {"python", "-V"}};
+        String[][] commands = { { "python3", "-V" }, { "python", "-V" } };
 
         for (String[] cmd : commands) {
             try {
@@ -791,7 +1078,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
                 if (Advapi32Util.registryKeyExists(WinReg.HKEY_LOCAL_MACHINE, key)) {
                     if (Advapi32Util.registryValueExists(WinReg.HKEY_LOCAL_MACHINE, key, "Installed")) {
                         int installed = Advapi32Util.registryGetIntValue(WinReg.HKEY_LOCAL_MACHINE, key, "Installed");
-                        if (installed == 1) return true;
+                        if (installed == 1)
+                            return true;
                     } else {
                         // Some VC Redists don't use "Installed" but can be detected by presence
                         return true;
