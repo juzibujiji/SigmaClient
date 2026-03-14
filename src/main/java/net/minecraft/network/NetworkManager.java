@@ -223,8 +223,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
         count1_19 = count;
     }
 
-    public void sendPacket(IPacket<?> packetIn,
-            @Nullable GenericFutureListener<? extends Future<? super Void>> p_201058_2_) {
+    public void sendPacket(IPacket<?> packetIn, @Nullable GenericFutureListener<? extends Future<? super Void>> p_201058_2_) {
         EventSendPacket event = new EventSendPacket(packetIn);
         EventBus.call(event);
 

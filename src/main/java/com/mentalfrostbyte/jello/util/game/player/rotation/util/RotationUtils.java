@@ -2,7 +2,6 @@ package com.mentalfrostbyte.jello.util.game.player.rotation.util;
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.module.impl.movement.BlockFly;
-import com.mentalfrostbyte.jello.module.impl.player.AutoSprint;
 import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.util.MouseSmoother;
@@ -33,58 +32,17 @@ public class RotationUtils {
     }
 
     public static float[] gcdFix(float[] currentRotation, float[] lastRotation) {
-        float currentYaw = currentRotation[0];
-        float currentPitch = currentRotation[1];
-        float lastYaw = lastRotation[0];
-        float lastPitch = lastRotation[1];
-        boolean bypass = Client.getInstance().moduleManager.getModuleByClass(BlockFly.class).isEnabled()
-                && (Client.getInstance().moduleManager.getModuleByClass(BlockFly.class).getStringSettingValueByName("Mode").equals("Grim")
-                || Client.getInstance().moduleManager.getModuleByClass(BlockFly.class).getStringSettingValueByName("Mode").equals("Clutch"));
+        final float f = (float) (mc.gameSettings.mouseSensitivity * 0.6F + 0.2F);
+        final float gcd = f * f * f * 1.2F;
 
-        // Get the mouse sensitivity
-        float sensitivity = bypass ? 0.5f : (float) mc.gameSettings.mouseSensitivity;
+        final float deltaYaw = currentRotation[0] - lastRotation[0];
+        final float deltaPitch = currentRotation[1] - lastRotation[1];
 
-        // Calculate GCD
-        float f = sensitivity * 0.6F + 0.2F;
-        float gcd = f * f * f * (bypass ? 1.2F : 8.0F);
+        final float fixedDeltaYaw = deltaYaw - (deltaYaw % gcd);
+        final float fixedDeltaPitch = deltaPitch - (deltaPitch % gcd);
 
-        // Calculate rotation differences
-        float deltaYaw = currentYaw - lastYaw;
-        float deltaPitch = currentPitch - lastPitch;
-
-        // Apply a human-like rotation pattern
-        // This simulates how mouse movements would actually work
-        float fixedYaw = lastYaw;
-        float fixedPitch = lastPitch;
-
-        // Calculate how many "mouse steps" this would take
-        int yawSteps = Math.round(deltaYaw / gcd);
-        int pitchSteps = Math.round(deltaPitch / gcd);
-
-        // Apply the steps with slight variations
-        if (yawSteps != 0) {
-            // Add a tiny bit of randomness to each step
-            float yawPerStep = gcd * (0.99f + ThreadLocalRandom.current().nextFloat() * 0.02f);
-            fixedYaw = lastYaw + yawSteps * yawPerStep;
-        }
-
-        if (pitchSteps != 0) {
-            // Add a tiny bit of randomness to each step
-            float pitchPerStep = gcd * (0.99f + ThreadLocalRandom.current().nextFloat() * 0.02f);
-            fixedPitch = lastPitch + pitchSteps * pitchPerStep;
-        }
-
-        // Apply smoothing if needed
-        if (bypass) {
-            MouseSmoother filterX = new MouseSmoother();
-            MouseSmoother filterY = new MouseSmoother();
-            fixedYaw = (float) filterX.smooth(fixedYaw - lastYaw, 3800F * gcd) + lastYaw;
-            fixedPitch = (float) filterY.smooth(fixedPitch - lastPitch, 3800F * gcd) + lastPitch;
-        }
-
-        // Ensure pitch is within bounds
-        fixedPitch = MathHelper.clamp(fixedPitch, -90.0F, 90.0F);
-
+        final float fixedYaw = lastRotation[0] + fixedDeltaYaw;
+        final float fixedPitch = lastRotation[1] + fixedDeltaPitch;
         return new float[]{fixedYaw, fixedPitch};
     }
 

@@ -41,8 +41,12 @@ public class BlockFly extends ModuleWithModuleSettings {
     public int blockCount = 0;
 
     public BlockFly() {
-        super(ModuleCategory.MOVEMENT, "BlockFly", "Allows you to automatically bridge", new BlockFlyNCPMode(),
-                new BlockFlyAACMode(), new BlockFlySmoothMode(), new BlockFlyHypixelMode());
+        super(ModuleCategory.MOVEMENT, "BlockFly", "Allows you to automatically bridge",
+                new BlockFlyNCPMode(),
+                new BlockFlyAACMode(),
+                new BlockFlySmoothMode(),
+                new BlockFlyHypixelMode()
+        );
         this.registerSetting(
                 new ModeSetting("ItemSpoof", "Item spoofing mode", 2, "None", "Switch", "Spoof", "LiteSpoof"));
         this.registerSetting(new ModeSetting("Tower Mode", "Tower mode", 1, "None", "NCP", "AAC", "Vanilla"));
@@ -55,6 +59,12 @@ public class BlockFly extends ModuleWithModuleSettings {
         this.registerSetting(
                 new BooleanSetting("Intelligent Block Picker", "Always get the biggest blocks stack.", true));
         this.registerSetting(new BooleanSetting("No Sprint", "Disable sprint.", false));
+        this.registerSetting(new BooleanSetting("UesGameSprint", "Not (Keep No sprint).", true) {
+            @Override
+            public boolean isHidden() {
+                return getBooleanValueFromSettingName("No Sprint");
+            }
+        });
     }
 
     public boolean isEnabled2() {
@@ -311,8 +321,9 @@ public class BlockFly extends ModuleWithModuleSettings {
                     && !this.getStringSettingValueByName("Tower Mode").equals("Vanilla")
                     && BlockUtil.isAboveBounds(mc.player, 0.001F)
                     && mc.gameSettings.keyBindJump.isPressed()) {
-                mc.player.jumpTicks = 20;
-                var1.setY(MovementUtil.getJumpValue());
+                //mc.player.jumpTicks = 20;
+                //跳你妈妈呢跳
+                //var1.setY(MovementUtil.getJumpValue());
             }
         } else if (!MovementUtil.isMoving() || this.getBooleanValueFromSettingName("Tower while moving")) {
             mc.player.jumpTicks = 0;

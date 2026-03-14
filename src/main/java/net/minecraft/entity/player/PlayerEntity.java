@@ -3,8 +3,10 @@ package net.minecraft.entity.player;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.EventKeepSprint;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventSafeWalk;
+import com.mentalfrostbyte.jello.module.impl.player.AutoSprint;
 import com.mojang.authlib.GameProfile;
 import com.mojang.datafixers.util.Either;
 import net.minecraft.advancements.CriteriaTriggers;
@@ -1162,7 +1164,9 @@ public abstract class PlayerEntity extends LivingEntity {
                             }
 
                             this.setMotion(this.getMotion().mul(0.6D, 1.0D, 0.6D));
-                            this.setSprinting(false);
+                            if (!Client.getInstance().moduleManager.getModuleByClass(AutoSprint.class).getBooleanValueFromSettingName("KeepSprint")) {
+                                this.setSprinting(false);
+                            }
                         }
 
                         if (flag3) {
