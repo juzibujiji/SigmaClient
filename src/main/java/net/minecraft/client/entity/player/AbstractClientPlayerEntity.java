@@ -3,6 +3,7 @@ package net.minecraft.client.entity.player;
 import com.google.common.hash.Hashing;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventGetLocationSkin;
 import com.mentalfrostbyte.jello.event.impl.player.EventGetFovModifier;
+import com.mentalfrostbyte.jello.event.impl.player.EventLook;
 import com.mojang.authlib.GameProfile;
 import java.io.File;
 import javax.annotation.Nullable;
@@ -19,6 +20,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BowItem;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.StringUtils;
+import net.minecraft.util.math.vector.Vector3d;
 import net.minecraft.world.GameType;
 import net.optifine.Config;
 import net.optifine.player.CapeUtils;
@@ -291,5 +293,21 @@ public abstract class AbstractClientPlayerEntity extends PlayerEntity
     public void setReloadCapeTimeMs(long p_setReloadCapeTimeMs_1_)
     {
         this.reloadCapeTimeMs = p_setReloadCapeTimeMs_1_;
+    }
+
+    public Vector3d getLook(float partialTicks) {
+        float yaw = this.rotationYaw;
+        float pitch = this.rotationPitch;
+
+        EventLook lookEvent = new EventLook(yaw, pitch);
+        EventBus.call(lookEvent);
+        yaw = lookEvent.yaw;
+        pitch = lookEvent.pitch;
+
+        return this.getVectorForRotation(pitch, yaw);
+    }
+
+    public Vector3d getLook(float yaw, float pitch) {
+        return this.getVectorForRotation(pitch, yaw);
     }
 }

@@ -4,18 +4,22 @@ import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
 import com.mentalfrostbyte.jello.event.impl.player.EventGetFovModifier;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventJump;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventSafeWalk;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
+import com.mentalfrostbyte.jello.event.impl.player.action.EventPlace;
+import com.mentalfrostbyte.jello.event.impl.player.movement.*;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.movement.BlockFly;
 import com.mentalfrostbyte.jello.module.impl.movement.SafeWalk;
 import com.mentalfrostbyte.jello.module.impl.movement.speed.AACSpeed;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
+import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.game.player.InvManagerUtil;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
+import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
+import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
+import com.mentalfrostbyte.jello.util.game.player.rotation.util.RotationUtils;
 import com.mentalfrostbyte.jello.util.game.world.PositionFacing;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
 import net.minecraft.block.Block;
@@ -29,7 +33,11 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockRayTraceResult;
 import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.util.text.event.ClickEvent;
+import org.lwjgl.glfw.GLFW;
 import team.sdhq.eventBus.annotations.EventTarget;
+import team.sdhq.eventBus.annotations.priority.HigherPriority;
+import team.sdhq.eventBus.annotations.priority.HighestPriority;
 import team.sdhq.eventBus.annotations.priority.LowerPriority;
 import team.sdhq.eventBus.annotations.priority.LowestPriority;
 
@@ -44,10 +52,17 @@ public class BlockFlyAACMode extends Module {
     /** IDK, it's set to 0 when you get setback though. Speed value? **/
     private int speedValue;
     private double field23526;
+    private final NumberSetting<Float> vrotationSpeed;
+    private final NumberSetting<Float> hrotationSpeed;
+    private final BooleanSetting useRotationSpeed;
 
     public BlockFlyAACMode() {
         super(ModuleCategory.MOVEMENT, "AAC", "Places block underneath if it is in hand");
+        this.registerSetting(new BooleanSetting("Telly", "SpeedTelly", true));
         this.registerSetting(new BooleanSetting("Haphe (AACAP)", "Never let's you touch the ground.", false));
+        this.registerSetting(this.useRotationSpeed = new BooleanSetting("Use Rotation Speed", "Max rotation change per tick.", true));
+        this.registerSetting(this.hrotationSpeed = new NumberSetting<>("Rotation HSpeed", "Max rotation change per tick.", 6.0F, 6.0F, 360, 6F));
+        this.registerSetting(this.vrotationSpeed = new NumberSetting<>("Rotation VSpeed", "Max rotation change per tick.", 6.0F, 6.0F, 360, 6F));
     }
 
     @Override
@@ -58,6 +73,9 @@ public class BlockFlyAACMode extends Module {
         this.placeY = (int) mc.player.getPosY();
         this.speedValue = -1;
         ((BlockFly) this.access()).lastSpoofedSlot = -1;
+        if (this.access().getStringSettingValueByName("ItemSpoof").equals("Switch")) {
+            ((BlockFly) this.access()).switchToValidHotbarItem();
+        }
     }
 
     @Override
@@ -65,7 +83,9 @@ public class BlockFlyAACMode extends Module {
         if (this.previousSlot != -1 && this.access().getStringSettingValueByName("ItemSpoof").equals("Switch")) {
             mc.player.inventory.currentItem = this.previousSlot;
         }
-
+        if (this.getBooleanValueFromSettingName("Telly") && GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {
+            mc.gameSettings.keyBindJump.setPressed(false);
+        }
         this.previousSlot = -1;
         if (((BlockFly) this.access()).lastSpoofedSlot >= 0) {
             mc.getConnection().sendPacket(new CHeldItemChangePacket(mc.player.inventory.currentItem));
@@ -108,12 +128,18 @@ public class BlockFlyAACMode extends Module {
         if (this.isEnabled()) {
             if (this.access().getBooleanValueFromSettingName("No Sprint")) {
                 mc.player.setSprinting(false);
+            } else {
+                if (this.access().getBooleanValueFromSettingName("UesGameSprint")) {
+
+                } else {
+                    mc.player.setSprinting(true);
+                }
             }
 
-            if (!this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
+            /*if (!this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
                 mc.gameSettings.keyBindSprint.setPressed(false);
                 mc.player.setSprinting(false);
-            }
+            }*/
 
             ((BlockFly) this.access()).onMove(var1);
             if (this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
@@ -152,7 +178,7 @@ public class BlockFlyAACMode extends Module {
     }
 
     private boolean method16207() {
-        BlockRayTraceResult var3 = (BlockRayTraceResult) BlockUtil.method34569(mc.player.lastReportedYaw, mc.player.lastReportedPitch, BlockUtil.getBlockReachDistance(), 0.0F);
+        BlockRayTraceResult var3 = (BlockRayTraceResult) BlockUtil.method34569(RotationCore.currentYaw, RotationCore.currentPitch, BlockUtil.getBlockReachDistance(), 0.0F);
         boolean var4 = false;
         if (var3 != null && var3.getType() == RayTraceResult.Type.BLOCK) {
             if (this.access().getStringSettingValueByName("ItemSpoof").equals("None")) {
@@ -169,6 +195,16 @@ public class BlockFlyAACMode extends Module {
                 if (var3.getPos().getY() != this.placeY - 1) {
                     return false;
                 }
+            }
+
+            if (this.getBooleanValueFromSettingName("Telly") && GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {
+                if (var3.getFace() == Direction.UP) {
+                    return false;
+                }
+
+                /*if (var3.getPos().getY() != this.placeY - 1) {
+                    return false;
+                }*/
             }
 
             if (var3.getFace() == Direction.UP
@@ -214,57 +250,97 @@ public class BlockFlyAACMode extends Module {
         return BlockFlyHelper.method35030(var1, var2, (int) mc.playerController.getBlockReachDistance());
     }
 
-    @EventTarget
+    /*@EventTarget
     @LowestPriority
     public void onUpdate(EventMotion event) {
         if (this.isEnabled()) {
-            if (!event.isPre()) {
-                if (MovementUtil.isMoving() && mc.player.isOnGround() && this.getBooleanValueFromSettingName("Haphe (AACAP)") && !mc.player.isJumping) {
-                    mc.player.jump();
+            event.setYaw(RotationCore.currentYaw);
+            event.setPitch(RotationCore.currentPitch);
+        }
+    }*/
+
+    //EventUpdate -> Motion -> LivingUpdate ->
+
+    @EventTarget
+    @LowestPriority
+    public void onUpdate(EventUpdate event) {
+        if (this.isEnabled()) {
+            double placeY = mc.player.getPosY();
+            if (this.getBooleanValueFromSettingName("Telly") && GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {
+                placeY = this.placeY;
+            }
+            if (MovementUtil.isMoving() && mc.player.isOnGround() && this.getBooleanValueFromSettingName("Haphe (AACAP)") && !mc.player.isJumping) {
+                mc.player.jump();
+            }
+            if (!mc.player.isJumping && this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
+                placeY = this.placeY;
+            }
+            BlockPos var6 = new BlockPos(mc.player.getPosX(), (double) Math.round(placeY - 1.0), mc.player.getPosZ());
+            List var7 = this.method16208(Blocks.STONE, var6);
+
+            if (!var7.isEmpty()) {
+                PositionFacing var8 = (PositionFacing) var7.get(var7.size() - 1);
+                BlockRayTraceResult var9 = BlockUtil.rayTrace(this.yaw, this.pitch, 5.0F);
+                if (!var9.getPos().equals(var8.blockPos()) || !var9.getFace().equals(var8.direction())) {
+                    float[] var10 = BlockUtil.rotationsToBlock(var8.blockPos(), var8.direction());
+                    this.yaw = var10[0];
+                    this.pitch = var10[1];
                 }
-
-                if (!this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
-                    if (!this.method16207()) {
-                        float var11 = 0.0F;
-
-                        while (var11 < 0.7F && !this.method16207()) {
-                            var11 += 0.1F;
-                        }
-                    }
+            }
+            if (this.getBooleanValueFromSettingName("Telly") && mc.player.isOnGround()) {
+                if (useRotationSpeed.getCurrentValue()) {
+                    //Rotation limitrot = RotationUtils.limitAngleChange(new Rotation(RotationCore.lastYaw, RotationCore.lastPitch), new Rotation(mc.player.rotationYaw, this.pitch), rotationSpeed.getCurrentValue(), rotationSpeed.getCurrentValue());
+                    //RotationManager.setRotations(limitrot.yaw, limitrot.pitch);
                 } else {
-                    this.method16207();
+                    //RotationManager.setRotations(mc.player.rotationYaw, this.pitch);
                 }
             } else {
-                double placeY = mc.player.getPosY();
-                if (!mc.player.isJumping && this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
-                    placeY = this.placeY;
+                if (useRotationSpeed.getCurrentValue()) {
+                    float[] limitrot = RotationUtils.gcdFix(new float[]{
+                            RotationUtils.limitAngleChange(new Rotation(RotationCore.lastYaw, RotationCore.lastPitch), new Rotation(this.yaw, this.pitch), hrotationSpeed.getCurrentValue(), vrotationSpeed.getCurrentValue()).yaw,
+                            RotationUtils.limitAngleChange(new Rotation(RotationCore.lastYaw, RotationCore.lastPitch), new Rotation(this.yaw, this.pitch), hrotationSpeed.getCurrentValue(), vrotationSpeed.getCurrentValue()).pitch},
+                            new float[]{mc.player.lastReportedYaw, mc.player.lastReportedPitch}
+                    );
+                    RotationManager.setRotations(limitrot[0], limitrot[1]);
+                } else {
+                    RotationManager.setRotations(this.yaw, this.pitch);
                 }
+            }
 
-                BlockPos var6 = new BlockPos(mc.player.getPosX(), (double) Math.round(placeY - 1.0), mc.player.getPosZ());
-                List var7 = this.method16208(Blocks.STONE, var6);
-                if (!var7.isEmpty()) {
-                    PositionFacing var8 = (PositionFacing) var7.get(var7.size() - 1);
-                    BlockRayTraceResult var9 = BlockUtil.rayTrace(this.yaw, this.pitch, 5.0F);
-                    if (!var9.getPos().equals(var8.blockPos()) || !var9.getFace().equals(var8.direction())) {
-                        float[] var10 = BlockUtil.rotationsToBlock(var8.blockPos(), var8.direction());
-                        this.yaw = var10[0];
-                        this.pitch = var10[1];
+            if (this.getBooleanValueFromSettingName("Telly") && mc.player.isOnGround() && MovementUtil.isMoving()) {
+                mc.gameSettings.keyBindJump.setPressed(true);
+            }
+
+            if (this.getBooleanValueFromSettingName("Telly") && !MovementUtil.isMoving() && GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {
+                mc.gameSettings.keyBindJump.setPressed(false);
+            }
+            if (!this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
+                if (!this.method16207()) {
+                    float var11 = 0.0F;
+
+                    while (var11 < 0.7F && !this.method16207()) {
+                        var11 += 0.1F;
                     }
                 }
-
-                event.setYaw(this.yaw);
-                event.setPitch(this.pitch);
+            } else {
+                this.method16207();
             }
         }
     }
+
+    @EventTarget
+    public void onClick(EventPlace event) {
+
+    }
+
 
     @EventTarget
     public void method16211(EventJump var1) {
         if (this.isEnabled()) {
-            if (this.access().getStringSettingValueByName("Tower Mode").equalsIgnoreCase("Vanilla")
-                    && (!MovementUtil.isMoving() || this.access().getBooleanValueFromSettingName("Tower while moving"))) {
+            if (this.access().getStringSettingValueByName("Tower Mode").equalsIgnoreCase("Vanilla") && (!MovementUtil.isMoving() || this.access().getBooleanValueFromSettingName("Tower while moving"))) {
                 var1.cancelled = true;
             }
         }
     }
+
 }

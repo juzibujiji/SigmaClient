@@ -57,6 +57,7 @@ public class Client implements MinecraftUtil {
     public MusicManager musicManager;
     public PlayerStateTracker playerTracker;
     public MinerTracker minerTracker;
+    public RotationManager rotationManager;
 
     public static boolean dontRenderHand = false;
     public boolean loading = true;
@@ -75,6 +76,8 @@ public class Client implements MinecraftUtil {
         } catch (IOException exception) {
             logger.error(exception);
         }
+        rotationManager = new RotationManager();
+        rotationManager.init();
 
         JelloAI.init();
         guiManager = new GuiManager();
