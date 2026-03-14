@@ -200,14 +200,12 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     for (int i = 0; (float) i < maxWidth; i++) {
                         float heightRatio = (float) mc.getMainWindow().getHeight() / 1080.0F;
                         float height = ((float) (Math.sqrt(this.amplitudes.get(i)) / 12.0) - 5.0F) * heightRatio;
-                        RenderUtil.drawRoundedRect2((float) i * width, (float) mc.getMainWindow().getHeight() - height,
-                                width, height, ClientColors.LIGHT_GREYISH_BLUE.getColor());
+                        RenderUtil.drawRoundedRect2((float) i * width, (float) mc.getMainWindow().getHeight() - height, width, height, ClientColors.LIGHT_GREYISH_BLUE.getColor());
                     }
 
                     RenderUtil.configureStencilTest();
                     if (this.notificationImage != null && this.songThumbnail != null) {
-                        RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(),
-                                (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
+                        RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(), (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
                     }
 
                     RenderUtil.restorePreviousStencilBuffer();
