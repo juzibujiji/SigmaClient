@@ -207,7 +207,10 @@ public class InvManagerUtil {
 
     public static int getArmorProtectionValue(ItemStack itemStack) {
         if (itemStack != null) {
-            return itemStack.getItem() instanceof ArmorItem ? ((ArmorItem) itemStack.getItem()).getDamageReduceAmount() + EnchantmentHelper.getEnchantmentLevel(Enchantments.PROTECTION, itemStack) : 0;
+            return itemStack.getItem() instanceof ArmorItem ? ((ArmorItem) itemStack.getItem()).getDamageReduceAmount() * 10
+                    //+ (int) ((ArmorItem) itemStack.getItem()).func_234657_f_()
+                    //+ (int) ((ArmorItem) itemStack.getItem()).getArmorMaterial().getKnockbackResistance()
+                    + EnchantmentHelper.getEnchantmentLevel(Enchantments.PROTECTION, itemStack) : 0;
         } else {
             return 0;
         }

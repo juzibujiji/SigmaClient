@@ -55,6 +55,8 @@ public class NoteblockPlayer extends Module {
             if (var5.length > 0) {
                 this.registerSetting(new ModeSetting("Song", "songs", 0, var5));
             }
+        } else {
+            nbsFile.mkdirs();
         }
     }
 
