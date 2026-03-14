@@ -37,38 +37,56 @@ public class SwitchScreen extends Screen {
         int y = (this.getHeightA() - bigHeight) / 2 + 14;
 
         FadedImage none;
+        FadedImage mgwt;
         FadedImage jello;
         FadedImage classic;
 
-        this.addToList(none = new FadedImage(this, "pb", x, y, bigWidth, bigHeight, Resources.noaddonsPNG));
-        this.addToList(classic = new FadedImage(this, "pb2", x, bigHeight + y + 9, smallWidth, smallHeight, Resources.sigmaLigmaPNG));
-        this.addToList(jello = new FadedImage(this, "pb3", x + smallWidth + 9, bigHeight + y + 9, smallWidth, smallHeight, Resources.jelloPNG));
+        this.addToList(none = new FadedImage(this, "pb", x, y, smallWidth, smallHeight, Resources.noaddonsPNG));
+        this.addToList(
+                mgwt = new FadedImage(this, "pb4", x + smallWidth + 9, y, smallWidth, smallHeight, Resources.mgwtPNG));
+        this.addToList(classic = new FadedImage(this, "pb2", x, smallHeight + y + 9, smallWidth, smallHeight,
+                Resources.sigmaLigmaPNG));
+        this.addToList(jello = new FadedImage(this, "pb3", x + smallWidth + 9, smallHeight + y + 9, smallWidth,
+                smallHeight, Resources.jelloPNG));
 
         none.onClick((var0, var1) -> {
+            Client.getInstance().isMGWT = false;
             Client.getInstance().setupClient(ClientMode.NOADDONS);
             Minecraft.getInstance().displayGuiScreen(new MainMenuHolder());
         });
 
+        mgwt.onClick((var0, var1) -> {
+            Client.getInstance().isMGWT = true;
+            Client.getInstance().setupClient(ClientMode.JELLO);
+            Minecraft.getInstance().displayGuiScreen(new MainMenuHolder());
+        });
+
         jello.onClick((var0, var1) -> {
+            Client.getInstance().isMGWT = false;
             Client.getInstance().setupClient(ClientMode.JELLO);
             Minecraft.getInstance().displayGuiScreen(new MainMenuHolder());
         });
 
         classic.onClick((var0, var1) -> {
+            Client.getInstance().isMGWT = false;
             Client.getInstance().setupClient(ClientMode.CLASSIC);
             Minecraft.getInstance().displayGuiScreen(new MainMenuHolder());
         });
 
-        CustomGuiScreen socialButtonPanel = new CustomGuiScreen(this, "socialbtns", (this.getWidthA() - 174) / 2, this.getHeightA() - 70, 174, 34);
+        CustomGuiScreen socialButtonPanel = new CustomGuiScreen(this, "socialbtns", (this.getWidthA() - 174) / 2,
+                this.getHeightA() - 70, 174, 34);
         Image youtubeBtn;
 
-        socialButtonPanel.addToList(youtubeBtn = new Image(socialButtonPanel, "youtube", 0, 0, 65, 34, Resources.youtubePNG));
+        socialButtonPanel
+                .addToList(youtubeBtn = new Image(socialButtonPanel, "youtube", 0, 0, 65, 34, Resources.youtubePNG));
         Image redditBtn;
 
-        socialButtonPanel.addToList(redditBtn = new Image(socialButtonPanel, "reddit", 85, 0, 36, 34, Resources.redditPNG));
+        socialButtonPanel
+                .addToList(redditBtn = new Image(socialButtonPanel, "reddit", 85, 0, 36, 34, Resources.redditPNG));
         Image discordBtn;
 
-        socialButtonPanel.addToList(discordBtn = new Image(socialButtonPanel, "guilded", 142, 0, 32, 34, Resources.guildedPNG));
+        socialButtonPanel
+                .addToList(discordBtn = new Image(socialButtonPanel, "guilded", 142, 0, 32, 34, Resources.guildedPNG));
 
         youtubeBtn.onClick((var0, var1) -> {
             try {
@@ -115,18 +133,17 @@ public class SwitchScreen extends Screen {
                     (float) var4 * var6,
                     (float) (Minecraft.getInstance().getMainWindow().getWidth() + var4),
                     (float) (Minecraft.getInstance().getMainWindow().getHeight() + var4),
-                    LoadingScreen.back
-            );
+                    LoadingScreen.back);
             float var7 = SmoothInterpolator.interpolate(anim.calcPercent(), 0.16, 0.71, 0.0, 0.99);
             int var8 = (Minecraft.getInstance().getMainWindow().getWidth() - 455) / 2;
-            int var9 = (int) ((float) ((Minecraft.getInstance().getMainWindow().getHeight() - 78) / 2 - 14) - 116.0F * var7);
+            int var9 = (int) ((float) ((Minecraft.getInstance().getMainWindow().getHeight() - 78) / 2 - 14)
+                    - 116.0F * var7);
             RenderUtil.drawRoundedRect2(
                     0.0F,
                     0.0F,
                     (float) Minecraft.getInstance().getMainWindow().getWidth(),
                     (float) Minecraft.getInstance().getMainWindow().getHeight(),
-                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.3F)
-            );
+                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.3F));
             super.draw(partialTicks);
             RenderUtil.drawImage(
                     0.0F,
@@ -134,15 +151,13 @@ public class SwitchScreen extends Screen {
                     (float) Minecraft.getInstance().getMainWindow().getWidth(),
                     (float) Minecraft.getInstance().getMainWindow().getHeight(),
                     LoadingScreen.background,
-                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 1.0F - anim.calcPercent())
-            );
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 1.0F - anim.calcPercent()));
             RenderUtil.drawRoundedRect2(
                     0.0F,
                     0.0F,
                     (float) Minecraft.getInstance().getMainWindow().getWidth(),
                     (float) Minecraft.getInstance().getMainWindow().getHeight(),
-                    RenderUtil2.applyAlpha(0, 0.75F * (1.0F - anim.calcPercent()))
-            );
+                    RenderUtil2.applyAlpha(0, 0.75F * (1.0F - anim.calcPercent())));
             RenderUtil.drawImage((float) var8, (float) var9, 455.0F, 78.0F, LoadingScreen.sigmaLogo);
         }
     }

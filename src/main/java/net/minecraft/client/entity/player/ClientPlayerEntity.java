@@ -300,9 +300,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
             ++this.positionUpdateTicks;
 
-            final var targetVersion = JelloPortal.getVersion();
-            final var isLegacy = targetVersion.equalTo(ProtocolVersion.v1_8);
-            final var minimumMovement = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_18_2) ? 4.0E-8D : 9.0E-4D;
+            final ProtocolVersion targetVersion = JelloPortal.getVersion();
+            final boolean isLegacy = targetVersion.equalTo(ProtocolVersion.v1_8);
+            final double minimumMovement = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_18_2) ? 4.0E-8D
+                    : 9.0E-4D;
 
             boolean posMoved = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ > minimumMovement
                     || (isLegacy ? this.positionUpdateTicks >= 21 : this.positionUpdateTicks >= 19);

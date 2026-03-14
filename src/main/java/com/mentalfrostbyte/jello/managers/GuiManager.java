@@ -82,12 +82,14 @@ public class GuiManager {
 
     public GuiManager() {
         // https://www.glfw.org/docs/3.4/group__shapes.html
-        // convert the shape parameters to hex and prepend a few `0`s because the site adds those.
+        // convert the shape parameters to hex and prepend a few `0`s because the site
+        // adds those.
         arrowCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_ARROW_CURSOR);
         pointingHandCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_POINTING_HAND_CURSOR);
         iBeamCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_IBEAM_CURSOR);
         GLFW.glfwSetCursor(Minecraft.getInstance().getMainWindow().getHandle(), arrowCursor);
-        scaleFactor = (float) (Minecraft.getInstance().getMainWindow().getFramebufferHeight() / Minecraft.getInstance().getMainWindow().getHeight());
+        scaleFactor = (float) (Minecraft.getInstance().getMainWindow().getFramebufferHeight()
+                / Minecraft.getInstance().getMainWindow().getHeight());
     }
 
     public static boolean method33457(net.minecraft.client.gui.screen.Screen screen) {
@@ -99,7 +101,14 @@ public class GuiManager {
             Minecraft.getInstance().currentScreen = null;
             Minecraft.getInstance().displayGuiScreen(new JelloOptionsButton());
             return true;
-        } else if (Client.getInstance().clientMode == ClientMode.NOADDONS && screen instanceof MainMenuHolder && !(screen instanceof NoAddonHolder)) {
+        } else if (Client.getInstance().clientMode == ClientMode.JELLO && Client.getInstance().isMGWT
+                && screen instanceof MainMenuHolder
+                && !(screen instanceof com.mentalfrostbyte.jello.gui.combined.holders.MGWTHolder)) {
+            Minecraft.getInstance().currentScreen = null;
+            Minecraft.getInstance().displayGuiScreen(new com.mentalfrostbyte.jello.gui.combined.holders.MGWTHolder());
+            return true;
+        } else if (Client.getInstance().clientMode == ClientMode.NOADDONS && screen instanceof MainMenuHolder
+                && !(screen instanceof NoAddonHolder)) {
             Minecraft.getInstance().currentScreen = null;
             Minecraft.getInstance().displayGuiScreen(new NoAddonHolder());
             return true;
@@ -107,10 +116,10 @@ public class GuiManager {
             return false;
         }
     }
+
     public Screen getScreen() {
         return this.screen;
     }
-
 
     public static Screen handleScreen(net.minecraft.client.gui.screen.Screen screen) {
         if (screen == null) {
@@ -124,12 +133,12 @@ public class GuiManager {
         } else {
             try {
                 return replacementScreens.get(screen.getClass()).getConstructor().newInstance();
-            } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
-					 NoSuchMethodException e) {
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException
+                    | NoSuchMethodException e) {
                 Client.logger.error("Error creating replacement screen", e);
             }
 
-			return null;
+            return null;
         }
     }
 
@@ -160,7 +169,7 @@ public class GuiManager {
 
     /**
      * @see net.minecraft.client.KeyboardListener#onKeyEvent
-	 */
+     */
     public void handleKeyEvent(int key, int action) {
         if (action == 1 || action == 2) {
             this.keysPressed.add(key);
@@ -189,8 +198,10 @@ public class GuiManager {
 
     public void endTick() {
         if (this.screen != null) {
-            this.field41354[0] = Math.max(0, Math.min(Minecraft.getInstance().getMainWindow().getWidth(), (int) Minecraft.getInstance().mouseHelper.getMouseX()));
-            this.field41354[1] = Math.max(0, Math.min(Minecraft.getInstance().getMainWindow().getHeight(), (int) Minecraft.getInstance().mouseHelper.getMouseY()));
+            this.field41354[0] = Math.max(0, Math.min(Minecraft.getInstance().getMainWindow().getWidth(),
+                    (int) Minecraft.getInstance().mouseHelper.getMouseX()));
+            this.field41354[1] = Math.max(0, Math.min(Minecraft.getInstance().getMainWindow().getHeight(),
+                    (int) Minecraft.getInstance().mouseHelper.getMouseY()));
 
             for (int key : this.keysPressed) {
                 this.onKeyPressed(key);
@@ -263,25 +274,33 @@ public class GuiManager {
             if (Client.getInstance().clientMode != ClientMode.JELLO) {
                 float var7 = 0.5F + TabGUI.animationProgress.calcPercent() * 0.5F;
                 GL11.glAlphaFunc(516, 0.1F);
-                RenderUtil.drawRoundedRect2(4.0F, 2.0F, 106.0F, 28.0F, RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.6F * var7));
-                RenderUtil.drawString(Resources.bold22, 9.0F, 2.0F, "Sigma", RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F * var7));
+                RenderUtil.drawRoundedRect2(4.0F, 2.0F, 106.0F, 28.0F,
+                        RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.6F * var7));
+                RenderUtil.drawString(Resources.bold22, 9.0F, 2.0F, "Sigma",
+                        RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F * var7));
                 RenderUtil.drawString(
-                        Resources.bold22, 8.0F, 1.0F, "Sigma", RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), Math.min(1.0F, var7 * 1.2F))
-                );
-                int var8 = Color.getHSBColor((float) (System.currentTimeMillis() % 4000L) / 4000.0F, 1.0F, 1.0F).getRGB();
-                RenderUtil.drawString(Resources.bold14, 73.0F, 2.0F, "5.1.0", RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F));
-                RenderUtil.drawString(Resources.bold14, 72.0F, 1.0F, "5.1.0", RenderUtil2.applyAlpha(var8, Math.min(1.0F, var7 * 1.4F)));
+                        Resources.bold22, 8.0F, 1.0F, "Sigma", RenderUtil2
+                                .applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), Math.min(1.0F, var7 * 1.2F)));
+                int var8 = Color.getHSBColor((float) (System.currentTimeMillis() % 4000L) / 4000.0F, 1.0F, 1.0F)
+                        .getRGB();
+                RenderUtil.drawString(Resources.bold14, 73.0F, 2.0F, "5.1.0",
+                        RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F));
+                RenderUtil.drawString(Resources.bold14, 72.0F, 1.0F, "5.1.0",
+                        RenderUtil2.applyAlpha(var8, Math.min(1.0F, var7 * 1.4F)));
             } else {
                 if (!(scaleFactor > 1.0F)) {
-                    Minecraft.getInstance().getTextureManager().bindTexture(new ResourceLocation("com/mentalfrostbyte/gui/resources/sigma/jello_watermark.png"));
+                    Minecraft.getInstance().getTextureManager().bindTexture(
+                            new ResourceLocation("com/mentalfrostbyte/gui/resources/sigma/jello_watermark.png"));
                 } else {
-                    Minecraft.getInstance().getTextureManager().bindTexture(new ResourceLocation("com/mentalfrostbyte/gui/resources/sigma/jello_watermark@2x.png"));
+                    Minecraft.getInstance().getTextureManager().bindTexture(
+                            new ResourceLocation("com/mentalfrostbyte/gui/resources/sigma/jello_watermark@2x.png"));
                 }
 
                 RenderSystem.enableBlend();
                 RenderSystem.defaultBlendFunc();
                 RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
-                AbstractGui.blit(new MatrixStack(), var3, var4, 0, 0, (int) 170.0F, (int) 104.0F, (int) 170.0F, (int) 104.0F);
+                AbstractGui.blit(new MatrixStack(), var3, var4, 0, 0, (int) 170.0F, (int) 104.0F, (int) 170.0F,
+                        (int) 104.0F);
 
                 // Reset states
                 RenderSystem.disableBlend();
@@ -409,11 +428,13 @@ public class GuiManager {
             this.loadUIConfig(Client.getInstance().config);
         }
 
-        if (Minecraft.getInstance().getMainWindow().getWidth() != 0 && Minecraft.getInstance().getMainWindow().getHeight() != 0) {
+        if (Minecraft.getInstance().getMainWindow().getWidth() != 0
+                && Minecraft.getInstance().getMainWindow().getHeight() != 0) {
             scaleFactor = (float) Math.max(
-                    Minecraft.getInstance().getMainWindow().getFramebufferWidth() / Minecraft.getInstance().getMainWindow().getWidth(),
-                    Minecraft.getInstance().getMainWindow().getFramebufferHeight() / Minecraft.getInstance().getMainWindow().getHeight()
-            );
+                    Minecraft.getInstance().getMainWindow().getFramebufferWidth()
+                            / Minecraft.getInstance().getMainWindow().getWidth(),
+                    Minecraft.getInstance().getMainWindow().getFramebufferHeight()
+                            / Minecraft.getInstance().getMainWindow().getHeight());
         }
     }
 

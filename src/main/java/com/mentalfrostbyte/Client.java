@@ -38,6 +38,7 @@ public class Client implements MinecraftUtil {
 
     private static Client instance;
     public ClientMode clientMode = ClientMode.INDETERMINATE;
+    public boolean isMGWT = false;
     public DiscordRichPresence discordRichPresence;
     public FriendManager friendManager;
     public SlotChangeTracker slotChangeTracker;

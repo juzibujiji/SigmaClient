@@ -40,3 +40,41 @@ replay_*.log
 *.hprof
 *.jfr
 .aider*
+
+# 排除日志和崩溃报告
+/logs/
+/crash-reports/
+
+# 排除游戏运行数据
+/saves/
+/screenshots/
+
+# 排除 IDE 配置文件
+.idea/
+*.iml
+.run/
+
+# 排除压缩包和构建产物
+*.zip
+*.jar
+/release/
+
+# 游戏运行生成的数据与配置
+/assets/
+/resourcepacks/
+/shaderpacks/
+/sigma5/
+/jello/
+/versions/
+/ViaVersion/
+servers.dat
+servers.dat_old
+usercache.json
+options.txt
+optionsof.txt
+realms_persistence.json
+
+# 编译和脚本产生的日志
+build_status.txt
+build_verify.log
+compile_output.txt
