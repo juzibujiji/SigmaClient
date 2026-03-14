@@ -67,6 +67,7 @@ replay_*.log
 /jello/
 /versions/
 /ViaVersion/
+/ViaMCP/
 servers.dat
 servers.dat_old
 usercache.json
