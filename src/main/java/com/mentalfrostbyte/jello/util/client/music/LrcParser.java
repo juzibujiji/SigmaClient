@@ -3,6 +3,7 @@ package com.mentalfrostbyte.jello.util.client.music;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -32,8 +33,21 @@ public class LrcParser {
         if (!file.exists())
             return lyrics;
 
+        try (FileInputStream fis = new FileInputStream(file)) {
+            return parse(fis);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return lyrics;
+    }
+
+    public static List<LyricLine> parse(InputStream inputStream) {
+        List<LyricLine> lyrics = new ArrayList<>();
+        if (inputStream == null)
+            return lyrics;
+
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+                new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             String line;
             Pattern pattern = Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)");
             while ((line = reader.readLine()) != null) {

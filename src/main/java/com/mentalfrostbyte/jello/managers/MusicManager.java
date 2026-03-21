@@ -87,6 +87,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
     private double field32170 = 0.0;
     private List<LrcParser.LyricLine> currentLyrics = new ArrayList<>();
     private long currentPositionMs = 0;
+    private volatile long mp3SeekTargetSec = -1;
 
     @Override
     public void init() {
@@ -200,12 +201,14 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     for (int i = 0; (float) i < maxWidth; i++) {
                         float heightRatio = (float) mc.getMainWindow().getHeight() / 1080.0F;
                         float height = ((float) (Math.sqrt(this.amplitudes.get(i)) / 12.0) - 5.0F) * heightRatio;
-                        RenderUtil.drawRoundedRect2((float) i * width, (float) mc.getMainWindow().getHeight() - height, width, height, ClientColors.LIGHT_GREYISH_BLUE.getColor());
+                        RenderUtil.drawRoundedRect2((float) i * width, (float) mc.getMainWindow().getHeight() - height,
+                                width, height, ClientColors.LIGHT_GREYISH_BLUE.getColor());
                     }
 
                     RenderUtil.configureStencilTest();
                     if (this.notificationImage != null && this.songThumbnail != null) {
-                        RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(), (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
+                        RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(),
+                                (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
                     }
 
                     RenderUtil.restorePreviousStencilBuffer();
@@ -330,8 +333,10 @@ public class MusicManager extends Manager implements MinecraftUtil {
                         .send(new Notification("Now Playing", this.songTitle, 7000, this.notificationImage));
                 this.processing = false;
             }
-        } catch (IOException exc) {
-            throw new RuntimeException(exc);
+        } catch (Exception exc) {
+            // Catch all exceptions to prevent crash during song transitions
+            exc.printStackTrace();
+            this.processing = false;
         }
 
         if (!this.processing) {
@@ -462,8 +467,33 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                                             javazoom.jl.decoder.Header frameHeader = firstHeader;
                                             int frameCount = 0;
-                                            float msPerFrame = 0;
+                                            float msPerFrame = firstHeader.ms_per_frame();
                                             byte[] pcmBytes = null; // Initialize pcmBytes here
+
+                                            // Handle seek: skip frames to target position
+                                            if (this.mp3SeekTargetSec >= 0 && msPerFrame > 0) {
+                                                int targetFrame = (int) (this.mp3SeekTargetSec * 1000 / msPerFrame);
+                                                bitstream.closeFrame(); // close the first frame
+                                                for (int skipI = 1; skipI < targetFrame; skipI++) {
+                                                    javazoom.jl.decoder.Header skipHeader = bitstream.readFrame();
+                                                    if (skipHeader == null)
+                                                        break;
+                                                    bitstream.closeFrame();
+                                                }
+                                                // Read the frame we'll start playing from
+                                                frameHeader = bitstream.readFrame();
+                                                if (frameHeader == null) {
+                                                    this.mp3SeekTargetSec = -1;
+                                                    this.sourceDataLine.close();
+                                                    bitstream.close();
+                                                    fileStream.close();
+                                                    continue;
+                                                }
+                                                frameCount = targetFrame;
+                                                this.totalDuration = this.mp3SeekTargetSec;
+                                                this.currentPositionMs = this.mp3SeekTargetSec * 1000;
+                                                this.mp3SeekTargetSec = -1;
+                                            }
 
                                             do {
                                                 if (this.currentVideoIndex2 != this.currentVideoIndex) {
@@ -526,6 +556,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                 frameCount++;
                                                 this.totalDuration = (long) ((frameCount * msPerFrame) / 1000);
                                                 this.currentPositionMs = (long) (frameCount * msPerFrame);
+                                                this.field32170 = this.duration > 0
+                                                        ? (double) this.totalDuration / (double) this.duration
+                                                        : 0.0;
 
                                                 // Visualizer logic
                                                 float[] pcmFloat = MathHelper.convertToPCMFloatArray(pcmBytes,
@@ -717,23 +750,27 @@ public class MusicManager extends Manager implements MinecraftUtil {
             }
 
             if (buffImage == null) {
-                // Create a default image or handle null
                 buffImage = new BufferedImage(180, 180, BufferedImage.TYPE_INT_ARGB);
-                // Fill with some color or make it transparent
             }
 
             this.thumbnailImage = ImageUtil.applyBlur(buffImage, 15);
-            this.thumbnailImage = this.thumbnailImage
-                    .getSubimage(0, (int) ((float) this.thumbnailImage.getHeight() * 0.75F),
-                            this.thumbnailImage.getWidth(),
-                            (int) ((float) this.thumbnailImage.getHeight() * 0.2F));
+            // Safe subimage extraction - clamp to valid bounds
+            int blurH = this.thumbnailImage.getHeight();
+            int blurW = this.thumbnailImage.getWidth();
+            int subY = Math.min((int) (blurH * 0.75F), blurH - 1);
+            int subH = Math.max(1, Math.min((int) (blurH * 0.2F), blurH - subY));
+            this.thumbnailImage = this.thumbnailImage.getSubimage(0, subY, blurW, subH);
+
             this.songTitle = videoData.title;
-            if (buffImage.getHeight() != buffImage.getWidth()) {
-                if (this.songTitle.contains("[NCS Release]")) {
+            int imgW = buffImage.getWidth();
+            int imgH = buffImage.getHeight();
+            if (imgH != imgW) {
+                if (this.songTitle.contains("[NCS Release]") && imgW >= 173 && imgH >= 173) {
                     this.scaledThumbnail = buffImage.getSubimage(1, 3, 170, 170);
                 } else {
-                    this.scaledThumbnail = buffImage.getSubimage(0, 0, Math.min(buffImage.getWidth(), 180),
-                            Math.min(buffImage.getHeight(), 180));
+                    int cropW = Math.min(imgW, 180);
+                    int cropH = Math.min(imgH, 180);
+                    this.scaledThumbnail = buffImage.getSubimage(0, 0, cropW, cropH);
                 }
             } else {
                 this.scaledThumbnail = buffImage;
@@ -848,6 +885,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
                         .send(new Notification("Now Playing", "Not available in your region."));
             } else {
                 exception.printStackTrace();
+                Client.getInstance().notificationManager
+                        .send(new Notification("Music", "Downloading yt-dlp, please try again..."));
                 this.download();
             }
         } catch (MalformedURLException exception) {
@@ -920,6 +959,15 @@ public class MusicManager extends Manager implements MinecraftUtil {
         this.field32168 = duration;
         this.totalDuration = (long) this.field32168;
         this.field32169 = true;
+
+        // For MP3: seek by interrupting and restarting with a target frame
+        this.mp3SeekTargetSec = (long) duration;
+        // Keep playing state so seek doesn't pause
+        boolean wasPlaying = this.playing;
+        this.initializeAudioPlayback();
+        if (wasPlaying) {
+            this.playing = true;
+        }
     }
 
     public boolean doesYTDLPExist() {

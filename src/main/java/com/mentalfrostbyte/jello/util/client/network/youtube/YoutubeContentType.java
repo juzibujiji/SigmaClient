@@ -4,5 +4,6 @@ public enum YoutubeContentType {
     PLAYLIST,
     CHANNEL,
     SEARCH,
-    LOCAL
+    LOCAL,
+    BUNDLED
 }

@@ -65,8 +65,20 @@ public class MusicPlayer extends AnimatedIconPanel {
         super(parent, var2, 875, 55, 800, 600, false);
         this.parent = parent;
 
-        if (videos.isEmpty()) {
+        if (videos.size() != 10) {
             videos.clear();
+            videos.add(
+                    new Thumbnails("Trap Nation", "PLC1og_v3eb4hrv4wsqG1G5dsNZh9bIscJ", YoutubeContentType.PLAYLIST));
+            videos.add(
+                    new Thumbnails("Chill Nation", "PL3EfCK9aCbkptFjtgWYJ8wiXgJQw5k3M3", YoutubeContentType.PLAYLIST));
+            videos.add(new Thumbnails("VEVO", "PL9tY0BWXOZFu8MzzbNVtUvHs0cQ_gZ03m", YoutubeContentType.PLAYLIST));
+            videos.add(new Thumbnails("Rap Nation", "PLayVKgoNNljOZifkJNtvwfmrmh2OglYzx", YoutubeContentType.PLAYLIST));
+            videos.add(new Thumbnails("MrSuicideSheep", "PLyqoPTKp-zlrI_PEqytQ7J9FgPhptcC64",
+                    YoutubeContentType.PLAYLIST));
+            videos.add(new Thumbnails("Trap City", "PLU_bQfSFrM2PemIeyVUSjZjJhm6G7auOY", YoutubeContentType.PLAYLIST));
+            videos.add(new Thumbnails("CloudKid", "PLejelFTZDTZM1yOroUyveJkjE7IY9Zj73", YoutubeContentType.PLAYLIST));
+            videos.add(new Thumbnails("NCS", "PLRBp0Fe2Gpgm_u2w2a2isHw29SugZ34cD", YoutubeContentType.PLAYLIST));
+            videos.add(new Thumbnails("Bundled Music", "bundled_music", YoutubeContentType.BUNDLED));
             videos.add(new Thumbnails("Local Music", "local_music", YoutubeContentType.LOCAL));
         }
 
@@ -76,7 +88,7 @@ public class MusicPlayer extends AnimatedIconPanel {
         this.setXA(Math.abs(this.getXA()));
         this.setYA(Math.abs(this.getYA()));
         this.addToList(this.musicTabs = new ScrollableContentPanel(this, "musictabs", 0, this.field20847 + 14,
-                this.width, this.getHeightA() - 64 - this.field20848));
+                this.width, this.getHeightA() - 170 - (this.field20847 + 14)));
         this.addToList(
                 this.musicControls = new ScrollableContentPanel(
                         this, "musiccontrols", this.width, this.getHeightA() - this.field20848,

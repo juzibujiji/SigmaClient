@@ -16,15 +16,20 @@ public class ProgressBar extends Element {
     public ProgressBar(CustomGuiScreen parentScreen, String var2, int var3, int var4, int var5, int var6) {
         super(parentScreen, var2, var3, var4, var5, var6, false);
         this.method13247((var1x, var2x) -> {
-            int var5x = (int) this.musicManager.getDuration();
-            int var6x = this.musicManager.getDurationInt();
-            this.field21315 = Math.min((float) var5x / (float) var6x, 1.0F);
+            int durationCurrent = (int) this.musicManager.getDuration();
+            int durationTotal = this.musicManager.getDurationInt();
+            if (durationTotal > 0) {
+                this.field21315 = Math.min((float) durationCurrent / (float) durationTotal, 1.0F);
+            }
         });
         this.method13249((var1x, var2x) -> {
             if (this.method13298() && this.isFocused()) {
-                int var5x = (int) Math.min((int) (this.field21315 * (float) this.musicManager.getDurationInt()),
-                        this.musicManager.method24322());
-                this.musicManager.setDuration(var5x);
+                int durationTotal = this.musicManager.getDurationInt();
+                if (durationTotal > 0) {
+                    int var5x = (int) Math.min((int) (this.field21315 * (float) durationTotal),
+                            this.musicManager.method24322());
+                    this.musicManager.setDuration(var5x);
+                }
             }
         });
     }
@@ -34,11 +39,12 @@ public class ProgressBar extends Element {
         long durationLong = (int) this.musicManager.getDuration();
         double var5 = this.musicManager.method24322();
         int durationInt = this.musicManager.getDurationInt();
-        float var8 = Math.max(0.0F, Math.min((float) durationLong / (float) durationInt, 1.0F));
-        float var9 = Math.max(0.0F, Math.min((float) var5 / (float) durationInt, 1.0F));
-        if (this.method13212() && this.method13298() && var5 != 0.0) {
+        float var8 = durationInt > 0 ? Math.max(0.0F, Math.min((float) durationLong / (float) durationInt, 1.0F))
+                : 0.0F;
+        float var9 = durationInt > 0 ? Math.max(0.0F, Math.min((float) var5 / (float) durationInt, 1.0F)) : 0.0F;
+        if (this.method13212() && this.method13298() && durationInt > 0) {
             int var10 = this.getHeightO() - this.method13271();
-            this.field21315 = Math.min(Math.max((float) var10 / (float) this.getWidthA(), 0.0F), var9);
+            this.field21315 = Math.min(Math.max((float) var10 / (float) this.getWidthA(), 0.0F), 1.0F);
             var8 = this.field21315;
         }
 

@@ -9,6 +9,7 @@ import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -68,6 +69,111 @@ public class Thumbnails {
                 }
             } else {
                 System.out.println("Music path is not a directory!");
+            }
+            return;
+        }
+
+        if (this.contentType == YoutubeContentType.BUNDLED) {
+            System.out.println("Scanning for bundled music in classpath resources...");
+            try {
+                // Read manifest.txt from classpath
+                InputStream manifestStream = Thumbnails.class.getClassLoader()
+                        .getResourceAsStream("bundled_music/manifest.txt");
+                if (manifestStream == null) {
+                    System.out.println("No bundled_music/manifest.txt found in classpath.");
+                    return;
+                }
+
+                // Parse manifest: lines like "xilian.mp3=昔涟-张韶涵_HOYO-MiX[iq].mp3"
+                java.util.Properties manifest = new java.util.Properties();
+                java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(manifestStream, java.nio.charset.StandardCharsets.UTF_8));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    if (line.isEmpty() || line.startsWith("#"))
+                        continue;
+                    int eq = line.indexOf('=');
+                    if (eq > 0) {
+                        manifest.setProperty(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+                    }
+                }
+                reader.close();
+                manifestStream.close();
+
+                // Collect unique base names from MP3 entries
+                java.util.Set<String> baseNames = new java.util.LinkedHashSet<>();
+                for (String key : manifest.stringPropertyNames()) {
+                    if (key.endsWith(".mp3")) {
+                        baseNames.add(key.substring(0, key.lastIndexOf('.')));
+                    }
+                }
+
+                // Create temp directory for extracted bundled music
+                File tempDir = new File(System.getProperty("java.io.tmpdir"), "sigma_bundled_music");
+                if (!tempDir.exists()) {
+                    tempDir.mkdirs();
+                }
+
+                for (String baseName : baseNames) {
+                    String mp3Key = baseName + ".mp3";
+                    String displayName = manifest.getProperty(mp3Key, mp3Key);
+                    // Remove extension from display name for title
+                    String title = displayName;
+                    if (title.lastIndexOf('.') > 0) {
+                        title = title.substring(0, title.lastIndexOf('.'));
+                    }
+
+                    // Extract MP3 to temp file
+                    File tempMp3 = new File(tempDir, baseName + ".mp3");
+                    if (!tempMp3.exists()) {
+                        InputStream mp3Stream = Thumbnails.class.getClassLoader()
+                                .getResourceAsStream("bundled_music/" + mp3Key);
+                        if (mp3Stream == null) {
+                            System.out.println("Bundled MP3 not found: " + mp3Key);
+                            continue;
+                        }
+                        java.nio.file.Files.copy(mp3Stream, tempMp3.toPath(),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        mp3Stream.close();
+                    }
+
+                    String audioUri = tempMp3.toURI().toString();
+
+                    // Extract cover image (PNG)
+                    String imageUri = Resources.artworkPNG.toString();
+                    String pngKey = baseName + ".png";
+                    InputStream pngStream = Thumbnails.class.getClassLoader()
+                            .getResourceAsStream("bundled_music/" + pngKey);
+                    if (pngStream != null) {
+                        File tempPng = new File(tempDir, pngKey);
+                        if (!tempPng.exists()) {
+                            java.nio.file.Files.copy(pngStream, tempPng.toPath(),
+                                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        imageUri = tempPng.toURI().toString();
+                        pngStream.close();
+                    }
+
+                    // Extract LRC lyrics
+                    String lrcKey = baseName + ".lrc";
+                    InputStream lrcStream = Thumbnails.class.getClassLoader()
+                            .getResourceAsStream("bundled_music/" + lrcKey);
+                    if (lrcStream != null) {
+                        File tempLrc = new File(tempDir, lrcKey);
+                        if (!tempLrc.exists()) {
+                            java.nio.file.Files.copy(lrcStream, tempLrc.toPath(),
+                                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        lrcStream.close();
+                    }
+
+                    System.out.println("Adding bundled track: " + title + ", Cover: " + imageUri);
+                    this.videoList.add(new YoutubeVideoData(audioUri, title, imageUri));
+                }
+            } catch (Exception e) {
+                System.out.println("Error loading bundled music: " + e.getMessage());
+                e.printStackTrace();
             }
             return;
         }
