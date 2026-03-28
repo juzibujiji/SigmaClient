@@ -2,6 +2,7 @@ package net.minecraft.network;
 
 import com.google.common.collect.Queues;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.mentalfrostbyte.jello.event.impl.game.network.EventGlobalReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
 import com.viaversion.viabackwards.protocol.v1_19to1_18_2.Protocol1_19To1_18_2;
@@ -179,6 +180,12 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
     protected void channelRead0(ChannelHandlerContext context, IPacket<?> packet) {
         if (this.channel.isOpen()) {
             try {
+                EventGlobalReceivePacket globalpacketEvent = new EventGlobalReceivePacket(packet);
+                EventBus.call(globalpacketEvent);
+                if (globalpacketEvent.cancelled) {
+                    return;
+                }
+
                 EventReceivePacket packetEvent = new EventReceivePacket(packet);
                 EventBus.call(packetEvent);
 

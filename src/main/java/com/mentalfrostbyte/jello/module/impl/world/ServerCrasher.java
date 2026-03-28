@@ -50,7 +50,7 @@ public class ServerCrasher extends Module {
 		if (!this.isEnabled()) return;
 
 		if (mc.isSingleplayer()) {
-			//this.toggle();
+			this.toggle();
 			return;
 		}
 
