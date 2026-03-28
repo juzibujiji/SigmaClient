@@ -235,7 +235,6 @@ public class KillAura extends Module {
         if (this.isEnabled()) {
             if (!this.getStringSettingValueByName("Autoblock Mode").equals("None")
                     && !this.getStringSettingValueByName("Autoblock Mode").equals("Fake")
-                    && !this.getStringSettingValueByName("Autoblock Mode").equals("Fake")
                     && !this.getStringSettingValueByName("Autoblock Mode").equals("Vanilla")
                     && (mc.player.getHeldItemMainhand().getItem() instanceof SwordItem
                             || this.blockDelay != mc.player.inventory.currentItem)
@@ -512,7 +511,6 @@ public class KillAura extends Module {
                 && mc.player.getHeldItemMainhand() != null
                 && mc.player.getHeldItemMainhand().getItem() instanceof SwordItem
                 && !this.getStringSettingValueByName("Autoblock Mode").equals("None")
-                && !this.getStringSettingValueByName("Autoblock Mode").equals("Fake")
                 && !this.getStringSettingValueByName("Autoblock Mode").equals("Fake")
                 && !this.getStringSettingValueByName("Autoblock Mode").equals("Vanilla");
     }
