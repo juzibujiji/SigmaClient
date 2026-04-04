@@ -6,6 +6,7 @@ import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.EventSprint;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventUpdatePlayerActionState;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
+import com.mentalfrostbyte.jello.event.impl.player.movement.EventMovePacketAfter;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventSlowDown;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
@@ -323,6 +324,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             } else if (this.prevOnGround != this.onGround || isLegacy) {
                 this.connection.sendPacket(new CPlayerPacket(onGround));
             }
+            EventBus.call(new EventMovePacketAfter());
 
             if (posMoved) {
                 this.lastReportedPosX = event.getX();

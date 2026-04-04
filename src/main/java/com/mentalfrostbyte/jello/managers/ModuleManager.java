@@ -86,6 +86,7 @@ public class ModuleManager {
         this.register(new Aimbot());
         this.register(new AntiBot());
         this.register(new AutoLog());
+        this.register(new BackTrack());
         this.register(new FastBow());
         this.register(new HitSounds());
         this.register(new KillAura());

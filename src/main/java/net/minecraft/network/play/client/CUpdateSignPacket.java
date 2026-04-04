@@ -8,8 +8,8 @@ import net.minecraft.util.math.BlockPos;
 
 public class CUpdateSignPacket implements IPacket<IServerPlayNetHandler>
 {
-    private BlockPos pos;
-    private String[] lines;
+    public BlockPos pos;
+    public String[] lines;
 
     public CUpdateSignPacket()
     {
