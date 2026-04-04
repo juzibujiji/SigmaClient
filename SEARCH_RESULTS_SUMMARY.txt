@@ -1,0 +1,183 @@
+================================================================================
+CODEBASE SEARCH RESULTS SUMMARY
+================================================================================
+
+1. ZXing DEPENDENCY IN pom.xml
+================================================================================
+   Location: /e/.sigma/SigmaClient/pom.xml
+   Status: ❌ NOT FOUND
+   
+   Current Dependencies Include:
+   - LWJGL 3.3.6 (graphics library)
+   - ViaVersion 5.7.1-SNAPSHOT
+   - ViaBackwards 5.7.1-SNAPSHOT
+   - ViaRewind 4.0.14-SNAPSHOT
+   - Discord RPC 2.0.1
+   - YouTube-DL Java wrapper
+   - Minecraft authlib 2.1.28
+   - Guava 21.0
+   - GSON 2.8.9
+   - Apache Commons (codec, compress, io, lang3, logging)
+   - HTTP Components (httpclient 4.3.3, httpcore 4.3.2)
+   - Netty 4.1.42.Final
+   - JInput (joystick/gamepad support)
+   - JNA (Java Native Access)
+   - Log4j, SLF4J
+   - Classgraph 4.8.179
+   
+   MISSING: com.google.zxing:core (needed for QR code generation)
+
+
+2. EXISTING QR CODE / ZXING RELATED CODE
+================================================================================
+   Search Pattern: "QR", "zxing", "qrcode"
+   Status: ❌ NO MATCHES FOUND
+   
+   This indicates:
+   - No existing QR code implementation
+   - No ZXing library usage anywhere
+   - Clean slate for QR code feature development
+
+
+3. ResourceRegistry.java - FONT DECLARATIONS
+================================================================================
+   Location: /e/.sigma/SigmaClient/src/main/java/com/mentalfrostbyte/jello/util/client/render/ResourceRegistry.java
+   Status: ✅ FOUND
+   
+   Font Classes Using getFont():
+   ================================
+   Light Weight Fonts (Helvetica Neue Light):
+   - JelloLightFont12  (size: 12.0F)
+   - JelloLightFont14  (size: 14.0F) ← REQUESTED
+   - JelloLightFont18  (size: 18.0F)
+   - JelloLightFont20  (size: 20.0F) ← REQUESTED
+   - JelloLightFont24  (size: 24.0F)
+   - JelloLightFont25  (size: 25.0F) ← REQUESTED
+   - JelloLightFont28  (size: 28.0F)
+   - JelloLightFont36  (size: 36.0F)
+   - JelloLightFont40  (size: 40.0F) ← REQUESTED
+   - JelloLightFont50  (size: 50.0F)
+   
+   Medium Weight Fonts (Helvetica Neue Medium):
+   - JelloMediumFont20 (size: 20.0F) ← REQUESTED
+   - JelloMediumFont25 (size: 25.0F) ← REQUESTED
+   - JelloMediumFont40 (size: 40.0F)
+   - JelloMediumFont50 (size: 50.0F)
+   
+   Regular Fonts:
+   - RegularFont20 (size: 20.0F)
+   - RegularFont40 (size: 40.0F)
+   
+   Special Fonts:
+   - DefaultClientFont
+   - LyricsFont (CJK character support)
+   
+   Font Creation Methods:
+   - getFont(String fontPath, int style, float size) → TrueTypeFont
+   - getFont2(String fontPath, int style, float size) → TrueTypeFont
+   
+   Font Sources:
+   - Light: "com/mentalfrostbyte/gui/resources/font/helvetica-neue-light.ttf"
+   - Medium: "com/mentalfrostbyte/gui/resources/font/helvetica-neue medium.ttf"
+   - Regular: "com/mentalfrostbyte/gui/resources/font/regular.ttf"
+
+
+4. RenderUtil.drawString METHOD SIGNATURES
+================================================================================
+   Location: /e/.sigma/SigmaClient/src/main/java/com/mentalfrostbyte/jello/util/game/render/RenderUtil.java
+   Status: ✅ FOUND
+   
+   Method Overload 1 (Lines 641-643):
+   ===================================
+   public static void drawString(
+       TrueTypeFont res,
+       float var1,
+       float var2,
+       String string,
+       int var4,
+       FontSizeAdjust var5,
+       FontSizeAdjust var6
+   )
+   
+   → Delegates to: drawString(res, var1, var2, string, var4, var5, var6, false)
+   
+   
+   Method Overload 2 - MAIN IMPLEMENTATION (Lines 645-710):
+   ========================================================
+   public static void drawString(
+       TrueTypeFont font,
+       float x,
+       float y,
+       String text,
+       int color,
+       FontSizeAdjust widthAdjust,
+       FontSizeAdjust heightAdjust,
+       boolean var7
+   )
+   
+   Key Implementation Details:
+   - Extracts ARGB color components using bit shifting
+   - Sets GL blend mode: GL11.glBlendFunc(770, 771)
+   - Handles FontSizeAdjust enum for alignment:
+     * NEGATE_AND_DIVIDE_BY_2: Center alignment
+     * WIDTH_NEGATE: Right align (width only)
+     * HEIGHT_NEGATE: Bottom align (height only)
+   
+   - Dynamic Font Scaling (when GuiManager.scaleFactor == 2.0):
+     * JelloLightFont12  → JelloLightFont24
+     * JelloLightFont14  → JelloLightFont28
+     * JelloLightFont18  → JelloLightFont36
+     * JelloLightFont20  → JelloLightFont40
+     * JelloLightFont25  → JelloLightFont50
+     * RegularFont20     → RegularFont40
+     * JelloMediumFont20 → JelloMediumFont40
+     * JelloMediumFont25 → JelloMediumFont50
+   
+   - Shadow Support: if var7 is true, draws shadow text at (x, y+2)
+     with Color(0.0F, 0.0F, 0.0F, 0.35F) (semi-transparent black)
+   
+   - Null check: Only renders if text is not null
+   - GL matrix operations for proper rendering
+   
+   
+   Method Overload 3 - CONVENIENCE (Lines 728-730):
+   =================================================
+   public static void drawString(
+       TrueTypeFont font,
+       float x,
+       float y,
+       String text,
+       int color
+   )
+   
+   → Delegates to: drawString(font, x, y, text, color, 
+                              FontSizeAdjust.field14488, 
+                              FontSizeAdjust.field14489, false)
+   
+   Uses default alignment values and no shadow.
+
+
+USAGE PATTERNS OBSERVED:
+========================
+The RenderUtil.drawString methods are designed for:
+1. Flexible text rendering with color support (ARGB format)
+2. Text alignment control (left, center, right, top, bottom)
+3. Shadow/drop-shadow effects for enhanced visibility
+4. DPI-aware scaling (respects GuiManager.scaleFactor)
+5. GL state management and blending
+
+
+================================================================================
+FILE PATHS REFERENCE
+================================================================================
+
+pom.xml:
+  /e/.sigma/SigmaClient/pom.xml
+
+ResourceRegistry.java:
+  /e/.sigma/SigmaClient/src/main/java/com/mentalfrostbyte/jello/util/client/render/ResourceRegistry.java
+
+RenderUtil.java:
+  /e/.sigma/SigmaClient/src/main/java/com/mentalfrostbyte/jello/util/game/render/RenderUtil.java
+
+================================================================================

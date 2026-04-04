@@ -1,9 +1,9 @@
 package com.mentalfrostbyte.jello.managers.util;
 
+import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiSearch;
+import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseRequestApi;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeContentType;
-import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeJPGThumbnail;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
-import com.mentalfrostbyte.jello.util.client.network.youtube.ThumbnailUtil;
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
@@ -48,7 +48,7 @@ public class Thumbnails {
                         String fileName = file.getName();
                         String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
                         String audioUri = file.toURI().toString();
-                        String imageUri = Resources.artworkPNG.toString();
+                        String imageUri = null;
 
                         File pngFile = new File(musicDir, baseName + ".png");
                         File jpgFile = new File(musicDir, baseName + ".jpg");
@@ -141,7 +141,7 @@ public class Thumbnails {
                     String audioUri = tempMp3.toURI().toString();
 
                     // Extract cover image (PNG)
-                    String imageUri = Resources.artworkPNG.toString();
+                    String imageUri = null;
                     String pngKey = baseName + ".png";
                     InputStream pngStream = Thumbnails.class.getClassLoader()
                             .getResourceAsStream("bundled_music/" + pngKey);
@@ -178,18 +178,56 @@ public class Thumbnails {
             return;
         }
 
-        YoutubeJPGThumbnail[] thumbnails = new YoutubeJPGThumbnail[0];
-        if (this.contentType != YoutubeContentType.CHANNEL) {
-            if (this.contentType == YoutubeContentType.PLAYLIST) {
-                thumbnails = ThumbnailUtil.getFromPlaylist(this.videoId);
+        // 网易云音乐热歌/新歌榜 (使用真正的歌单 API)
+        // 只获取列表概要数据（歌名、歌手、封面、ID），不获取播放URL
+        // 播放URL在用户点击播放时才延迟获取，避免N次同步网络请求阻塞
+        if (this.contentType == YoutubeContentType.NETEASE) {
+            System.out.println("Loading Netease Cloud Music list: " + this.name);
+            try {
+                List<NeteaseApiSearch.NeteaseTrack> tracks;
+
+                if ("netease_hot".equals(this.videoId)) {
+                    tracks = NeteaseRequestApi.getPlaylistDetail(NeteaseRequestApi.PLAYLIST_HOT_SONGS, 30, 0);
+                } else if ("netease_new".equals(this.videoId)) {
+                    tracks = NeteaseRequestApi.getPlaylistDetail(NeteaseRequestApi.PLAYLIST_NEW_SONGS, 30, 0);
+                } else if (this.videoId != null && this.videoId.startsWith("netease_playlist:")) {
+                    long playlistId = Long.parseLong(this.videoId.substring("netease_playlist:".length()));
+                    tracks = NeteaseRequestApi.getPlaylistDetail(playlistId, 100, 0);
+                } else {
+                    tracks = NeteaseApiSearch.search(this.name, 30, 0);
+                }
+
+                // 如果歌单 API 返回为空，回退到搜索
+                if (tracks.isEmpty() && ("netease_hot".equals(this.videoId) || "netease_new".equals(this.videoId))) {
+                    String keyword = "netease_hot".equals(this.videoId) ? "热歌榜" : "新歌榜";
+                    System.out.println("[Thumbnails] Playlist API returned empty, falling back to search: " + keyword);
+                    tracks = NeteaseApiSearch.search(keyword, 30, 0);
+                }
+
+                for (NeteaseApiSearch.NeteaseTrack track : tracks) {
+                    String coverUrl = (track.coverUrl != null && !track.coverUrl.isEmpty())
+                            ? track.coverUrl
+                            : null;
+                    // 使用 netease:// 占位URL，播放时再解析真实URL
+                    // 传递 neteaseSongId 和 duration 以支持歌词和精确时长
+                    this.videoList.add(new YoutubeVideoData(
+                            "netease://" + track.id,
+                            track.getDisplayTitle(),
+                            coverUrl,
+                            track.id,
+                            track.duration
+                    ));
+                }
+                System.out.println("Loaded " + this.videoList.size() + " tracks from Netease.");
+            } catch (Exception e) {
+                System.out.println("Error loading Netease music: " + e.getMessage());
+                e.printStackTrace();
             }
-        } else {
-            thumbnails = ThumbnailUtil.getFromChannel(this.videoId);
+            return;
         }
 
-        for (YoutubeJPGThumbnail thumbnail : thumbnails) {
-            this.videoList.add(new YoutubeVideoData(thumbnail.videoID, thumbnail.title, thumbnail.fullUrl));
-        }
+        // 其他类型（PLAYLIST/CHANNEL）已不再支持 YouTube
+        System.out.println("Unsupported content type: " + this.contentType);
     }
 
     @Override

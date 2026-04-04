@@ -1,11 +1,14 @@
 package com.mentalfrostbyte.jello.util.client.render;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.nanovg.NVGColor;
+import org.lwjgl.opengl.GL11;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
 import java.io.File;
 import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.nio.file.Files;
 
 import static org.lwjgl.nanovg.NanoVG.*;
@@ -21,6 +24,11 @@ public class NanoVGFontRenderer {
     private static boolean initialized = false;
     private static final String FONT_NAME = "lyrics_font";
     private static ByteBuffer fontBuffer = null; // Keep reference to prevent GC
+
+    // GL state preservation across NanoVG frames
+    private static boolean savedScissorEnabled = false;
+    private static final int[] savedScissorBox = new int[4];
+    private static boolean savedBlendEnabled = false;
 
     /**
      * Initialize NanoVG context and load Chinese font.
@@ -91,20 +99,49 @@ public class NanoVGFontRenderer {
 
     /**
      * Begin a NanoVG frame. Must be called before any drawing operations.
+     * Saves critical GL state that NanoVG may modify.
      */
     public static void beginFrame(int width, int height) {
         if (!initialized)
             return;
+        // Save GL state before NanoVG modifies it
+        savedScissorEnabled = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        if (savedScissorEnabled) {
+            IntBuffer buf = BufferUtils.createIntBuffer(16);
+            GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, buf);
+            savedScissorBox[0] = buf.get(0);
+            savedScissorBox[1] = buf.get(1);
+            savedScissorBox[2] = buf.get(2);
+            savedScissorBox[3] = buf.get(3);
+        }
+        savedBlendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+
         nvgBeginFrame(nvg, width, height, 1.0f);
     }
 
     /**
      * End a NanoVG frame. Must be called after all drawing operations.
+     * Restores GL state that NanoVG may have modified.
      */
     public static void endFrame() {
         if (!initialized)
             return;
         nvgEndFrame(nvg);
+
+        // Restore GL state after NanoVG rendering
+        if (savedScissorEnabled) {
+            GL11.glEnable(GL11.GL_SCISSOR_TEST);
+            GL11.glScissor(savedScissorBox[0], savedScissorBox[1], savedScissorBox[2], savedScissorBox[3]);
+        } else {
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        }
+        if (savedBlendEnabled) {
+            GL11.glEnable(GL11.GL_BLEND);
+        } else {
+            GL11.glDisable(GL11.GL_BLEND);
+        }
+        // Reset GL color state to prevent color bleeding
+        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     /**
@@ -165,6 +202,26 @@ public class NanoVGFontRenderer {
      */
     public static boolean isInitialized() {
         return initialized;
+    }
+
+    /**
+     * Set NanoVG scissor clipping region. Must be called between beginFrame and endFrame.
+     * @param x clip region x
+     * @param y clip region y
+     * @param w clip region width
+     * @param h clip region height
+     */
+    public static void setScissor(float x, float y, float w, float h) {
+        if (!initialized) return;
+        nvgScissor(nvg, x, y, w, h);
+    }
+
+    /**
+     * Reset NanoVG scissor clipping. Must be called between beginFrame and endFrame.
+     */
+    public static void resetScissor() {
+        if (!initialized) return;
+        nvgResetScissor(nvg);
     }
 
     /**

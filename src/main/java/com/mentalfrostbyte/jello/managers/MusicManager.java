@@ -13,10 +13,11 @@ import com.mentalfrostbyte.jello.managers.util.notifs.Notification;
 import com.mentalfrostbyte.jello.util.client.ClientMode;
 import com.mentalfrostbyte.jello.util.client.music.JavaFFT;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeContentType;
-import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeUtil;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
 import com.mentalfrostbyte.jello.util.client.music.LrcParser;
+import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiLogin;
+import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiSearch;
 import com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
@@ -27,12 +28,6 @@ import com.mentalfrostbyte.jello.util.system.network.ImageUtil;
 import com.mentalfrostbyte.jello.util.system.sound.AudioRepeatMode;
 import com.mentalfrostbyte.jello.util.system.sound.BasicAudioProcessor;
 import com.mentalfrostbyte.jello.util.system.sound.MusicStream;
-import com.sapher.youtubedl.YoutubeDL;
-import com.sapher.youtubedl.YoutubeDLException;
-import com.sapher.youtubedl.YoutubeDLRequest;
-import com.sapher.youtubedl.YoutubeDLResponse;
-import com.sun.jna.platform.win32.Advapi32Util;
-import com.sun.jna.platform.win32.WinReg;
 import net.sourceforge.jaad.aac.Decoder;
 import net.sourceforge.jaad.aac.SampleBuffer;
 import net.sourceforge.jaad.mp4.MP4Container;
@@ -52,6 +47,8 @@ import team.sdhq.eventBus.annotations.EventTarget;
 import javax.imageio.ImageIO;
 import javax.sound.sampled.*;
 import javax.sound.sampled.FloatControl.Type;
+import java.awt.Color;
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.MalformedURLException;
@@ -89,6 +86,14 @@ public class MusicManager extends Manager implements MinecraftUtil {
     private long currentPositionMs = 0;
     private volatile long mp3SeekTargetSec = -1;
 
+    // --- Texture cache to avoid re-creating every tick & prevent native crash ---
+    /** The song title for which the cached textures were created */
+    private String cachedTextureSongTitle = null;
+    /** Pending BufferedImage from worker thread, to be uploaded on render thread */
+    private volatile BufferedImage pendingThumbnailImage = null;
+    private volatile BufferedImage pendingScaledThumbnail = null;
+    private volatile String pendingSongTitle = null;
+
     @Override
     public void init() {
         super.init();
@@ -99,11 +104,10 @@ public class MusicManager extends Manager implements MinecraftUtil {
             Client.logger.error(e);
         }
 
-        if (!this.doesYTDLPExist()) {
-            this.setupDownloadThread();
-        }
-
         this.finished = false;
+
+        // 尝试恢复网易云登录状态
+        NeteaseApiLogin.loadPersistentCookie();
 
         // Initialize NanoVG font renderer for CJK lyrics
         NanoVGFontRenderer.init();
@@ -209,6 +213,10 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     if (this.notificationImage != null && this.songThumbnail != null) {
                         RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(),
                                 (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
+                        // Restore GL state after full-screen cover texture
+                        GL11.glDisable(GL11.GL_TEXTURE_2D);
+                        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+                        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
                     }
 
                     RenderUtil.restorePreviousStencilBuffer();
@@ -230,6 +238,12 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     RenderUtil.drawRoundedRect(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F,
                             14.0F, 0.3F);
                     GL11.glPopMatrix();
+
+                    // Restore GL state after cover art rendering to prevent leaking into subsequent draws
+                    GL11.glDisable(GL11.GL_TEXTURE_2D);
+                    GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+                    GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
                     String[] titleSplit = this.songTitle.split(" - ");
                     if (titleSplit.length <= 1) {
                         RenderUtil.drawString(
@@ -316,32 +330,108 @@ public class MusicManager extends Manager implements MinecraftUtil {
             this.amplitudes.clear();
         }
 
+        // --- Upload pending textures on the render thread (safe for OpenGL) ---
         try {
-            if (this.processing && this.thumbnailImage != null && this.scaledThumbnail != null
+            if (this.pendingThumbnailImage != null && this.pendingScaledThumbnail != null
                     && this.currentVideo == null && !mc.isGamePaused()) {
-                if (this.songThumbnail != null) {
-                    this.songThumbnail.release();
-                }
+                // Grab pending data atomically
+                BufferedImage thumbImg = this.pendingThumbnailImage;
+                BufferedImage scaledImg = this.pendingScaledThumbnail;
+                String title = this.pendingSongTitle;
+                this.pendingThumbnailImage = null;
+                this.pendingScaledThumbnail = null;
+                this.pendingSongTitle = null;
 
-                if (this.notificationImage != null) {
-                    this.notificationImage.release();
-                }
+                // Only recreate if song actually changed
+                if (title != null && !title.equals(this.cachedTextureSongTitle)) {
+                    // Release old textures first
+                    if (this.songThumbnail != null) {
+                        try { this.songThumbnail.release(); } catch (Exception ignored) {}
+                        this.songThumbnail = null;
+                    }
+                    if (this.notificationImage != null) {
+                        try { this.notificationImage.release(); } catch (Exception ignored) {}
+                        this.notificationImage = null;
+                    }
 
-                this.songThumbnail = BufferedImageUtil.getTexture("picture", this.thumbnailImage);
-                this.notificationImage = BufferedImageUtil.getTexture("picture", this.scaledThumbnail);
-                Client.getInstance().notificationManager
-                        .send(new Notification("Now Playing", this.songTitle, 7000, this.notificationImage));
+                    // Deep-copy to TYPE_INT_ARGB with power-of-two dims for safe GL upload
+                    BufferedImage safeThumb = ensureSafeTexture(thumbImg);
+                    BufferedImage safeScaled = ensureSafeTexture(scaledImg);
+
+                    try {
+                        this.songThumbnail = BufferedImageUtil.getTexture("picture", safeThumb);
+                    } catch (Exception e) {
+                        System.err.println("[MusicManager] Failed to create songThumbnail texture: " + e.getMessage());
+                        e.printStackTrace();
+                        this.songThumbnail = null;
+                    }
+
+                    try {
+                        this.notificationImage = BufferedImageUtil.getTexture("picture", safeScaled);
+                    } catch (Exception e) {
+                        System.err.println("[MusicManager] Failed to create notificationImage texture: " + e.getMessage());
+                        e.printStackTrace();
+                        this.notificationImage = null;
+                    }
+
+                    this.songTitle = title;
+                    this.cachedTextureSongTitle = title;
+
+                    if (this.notificationImage != null) {
+                        Client.getInstance().notificationManager
+                                .send(new Notification("Now Playing", this.songTitle, 7000, this.notificationImage));
+                    } else {
+                        Client.getInstance().notificationManager
+                                .send(new Notification("Now Playing", this.songTitle));
+                    }
+                }
                 this.processing = false;
             }
         } catch (Exception exc) {
-            // Catch all exceptions to prevent crash during song transitions
+            // Catch all exceptions (including native wrapper errors) to prevent render thread crash
+            System.err.println("[MusicManager] Texture upload failed: " + exc.getMessage());
             exc.printStackTrace();
+            // Release any textures that were successfully created before the error
+            if (this.songThumbnail != null) {
+                try { this.songThumbnail.release(); } catch (Exception ignored) {}
+            }
+            if (this.notificationImage != null) {
+                try { this.notificationImage.release(); } catch (Exception ignored) {}
+            }
+            this.songThumbnail = null;
+            this.notificationImage = null;
+            this.cachedTextureSongTitle = null; // allow retry on next tick
             this.processing = false;
         }
 
         if (!this.processing) {
             this.startProcessingVideoThumbnail();
         }
+    }
+
+    /**
+     * Create a deep copy of the image as TYPE_INT_ARGB with power-of-two dimensions.
+     * This guarantees:
+     * 1. No shared raster from getSubimage() views (prevents GC-related native crashes)
+     * 2. Predictable TYPE_INT_ARGB pixel layout for OpenGL
+     * 3. Power-of-two dimensions required by OpenGL 1.x / some drivers
+     */
+    private static BufferedImage ensureSafeTexture(BufferedImage src) {
+        if (src == null) return null;
+        // Deep-copy to TYPE_INT_ARGB to avoid shared raster issues from getSubimage().
+        // Do NOT pad to power-of-two here — Slick's BufferedImageUtil handles that
+        // internally and stores the original image dimensions for correct UV mapping.
+        BufferedImage safe = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = safe.createGraphics();
+        g.drawImage(src, 0, 0, null);
+        g.dispose();
+        return safe;
+    }
+
+    private static int nextPowerOfTwo(int n) {
+        if (n <= 1) return 1;
+        if ((n & (n - 1)) == 0) return n; // already a power of two
+        return Integer.highestOneBit(n - 1) << 1;
     }
 
     private void startProcessingVideoThumbnail() {
@@ -373,14 +463,33 @@ public class MusicManager extends Manager implements MinecraftUtil {
                         for (int index = this.currentVideoIndex; index < this.videoManager.videoList.size(); index++) {
                             URL songUrl;
                             YoutubeVideoData videoData = this.videoManager.videoList.get(index);
-                            if (videoData.videoId.startsWith("file:")) {
+
+                            // 延迟解析 netease:// 占位URL为真实播放URL
+                            String videoUrl = videoData.videoId;
+                            if (videoUrl != null && videoUrl.startsWith("netease://")) {
                                 try {
-                                    songUrl = new URL(videoData.videoId);
-                                } catch (MalformedURLException e) {
-                                    songUrl = YoutubeUtil.getVideoStreamURL(videoData.videoId);
+                                    long neteaseId = Long.parseLong(videoUrl.substring("netease://".length()));
+                                    System.out.println("[MusicManager] Resolving Netease song URL for ID: " + neteaseId);
+                                    String realUrl = NeteaseApiSearch.getSongUrl(neteaseId);
+                                    if (realUrl == null || realUrl.isEmpty()) {
+                                        System.err.println("[MusicManager] Failed to get song URL for Netease ID: " + neteaseId);
+                                        continue;
+                                    }
+                                    videoUrl = realUrl;
+                                    // 缓存已解析的URL避免重复请求
+                                    videoData.videoId = realUrl;
+                                } catch (NumberFormatException e) {
+                                    System.err.println("[MusicManager] Invalid Netease song ID: " + videoUrl);
+                                    continue;
                                 }
-                            } else {
-                                songUrl = YoutubeUtil.getVideoStreamURL(videoData.videoId);
+                            }
+
+                            // 支持 file:, http:, https: URL
+                            try {
+                                songUrl = new URL(videoUrl);
+                            } catch (MalformedURLException e) {
+                                System.err.println("[MusicManager] Invalid URL: " + videoUrl);
+                                continue;
                             }
 
                             this.currentVideoIndex2 = index;
@@ -407,8 +516,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
                             try {
                                 URL url = this.resolveAudioStream(songUrl);
                                 if (url != null) {
-                                    // Check if this is a local file (MP3) - use JLayer with frame-by-frame decoding
-                                    if (url.getProtocol().equals("file")) {
+                                    // Use JLayer MP3 decoding for file: and http(s): streams
+                                    boolean isMp3Stream = url.getProtocol().equals("file")
+                                            || url.getProtocol().equals("http")
+                                            || url.getProtocol().equals("https");
+                                    if (isMp3Stream) {
                                         try {
                                             InputStream fileStream = url.openStream();
                                             javazoom.jl.decoder.Bitstream bitstream = new javazoom.jl.decoder.Bitstream(
@@ -420,6 +532,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                             Client.getInstance().notificationManager
                                                     .send(new Notification("Now Playing", videoData.title));
 
+                                            // Load lyrics for local files
                                             if (url.getProtocol().equals("file")) {
                                                 try {
                                                     File audioFile = new File(url.toURI());
@@ -435,13 +548,41 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                     e.printStackTrace();
                                                     this.currentLyrics = null;
                                                 }
+                                            } else {
+                                                // For Netease streams: load lyrics via API using song ID
+                                                if (videoData.isNeteaseTrack()) {
+                                                    try {
+                                                        String lrcText = NeteaseApiSearch.getLyrics(videoData.neteaseSongId);
+                                                        if (lrcText != null && !lrcText.isEmpty()) {
+                                                            this.currentLyrics = LrcParser.parseString(lrcText);
+                                                            System.out.println("[MusicManager] Loaded Netease lyrics for song ID: " + videoData.neteaseSongId
+                                                                    + " (" + (this.currentLyrics != null ? this.currentLyrics.size() : 0) + " lines)");
+                                                        } else {
+                                                            this.currentLyrics = null;
+                                                        }
+                                                    } catch (Exception e) {
+                                                        System.err.println("[MusicManager] Failed to load Netease lyrics: " + e.getMessage());
+                                                        this.currentLyrics = null;
+                                                    }
+                                                } else {
+                                                    this.currentLyrics = null;
+                                                }
                                             }
 
-                                            // Estimate duration (rough estimate based on file size)
-                                            java.io.File audioFile = new java.io.File(new java.net.URI(url.toString()));
-                                            long fileSize = audioFile.length();
-                                            // Estimate ~128kbps bitrate -> duration in seconds = fileSize * 8 / 128000
-                                            this.duration = (fileSize * 8) / 128000;
+                                            // Estimate duration
+                                            if (url.getProtocol().equals("file")) {
+                                                java.io.File audioFile = new java.io.File(new java.net.URI(url.toString()));
+                                                long fileSize = audioFile.length();
+                                                // Estimate ~128kbps bitrate -> duration in seconds = fileSize * 8 / 128000
+                                                this.duration = (fileSize * 8) / 128000;
+                                            } else {
+                                                // For HTTP streams: use Netease duration if available
+                                                if (videoData.isNeteaseTrack() && videoData.neteaseDurationMs > 0) {
+                                                    this.duration = videoData.neteaseDurationMs / 1000;
+                                                } else {
+                                                    this.duration = 300; // 5 min default
+                                                }
+                                            }
 
                                             // Read first frame to get actual sample rate
                                             javazoom.jl.decoder.Header firstHeader = bitstream.readFrame();
@@ -704,10 +845,8 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                     Thread.sleep(1000L);
                                 }
                             } catch (IOException exc) {
-                                if (exc.getMessage() != null && exc.getMessage().contains("403")) {
-                                    System.out.println("installing");
-                                    this.download();
-                                }
+                                System.err.println("[MusicManager] IO error: " + exc.getMessage());
+                                exc.printStackTrace();
                             } catch (LineUnavailableException | InterruptedException exc) {
                                 throw new RuntimeException(exc);
                             }
@@ -753,29 +892,34 @@ public class MusicManager extends Manager implements MinecraftUtil {
                 buffImage = new BufferedImage(180, 180, BufferedImage.TYPE_INT_ARGB);
             }
 
-            this.thumbnailImage = ImageUtil.applyBlur(buffImage, 15);
+            BufferedImage blurred = ImageUtil.applyBlur(buffImage, 15);
             // Safe subimage extraction - clamp to valid bounds
-            int blurH = this.thumbnailImage.getHeight();
-            int blurW = this.thumbnailImage.getWidth();
+            int blurH = blurred.getHeight();
+            int blurW = blurred.getWidth();
             int subY = Math.min((int) (blurH * 0.75F), blurH - 1);
             int subH = Math.max(1, Math.min((int) (blurH * 0.2F), blurH - subY));
-            this.thumbnailImage = this.thumbnailImage.getSubimage(0, subY, blurW, subH);
+            BufferedImage thumbSub = blurred.getSubimage(0, subY, blurW, subH);
 
-            this.songTitle = videoData.title;
+            String title = videoData.title;
             int imgW = buffImage.getWidth();
             int imgH = buffImage.getHeight();
+            BufferedImage scaledSub;
             if (imgH != imgW) {
-                if (this.songTitle.contains("[NCS Release]") && imgW >= 173 && imgH >= 173) {
-                    this.scaledThumbnail = buffImage.getSubimage(1, 3, 170, 170);
+                if (title.contains("[NCS Release]") && imgW >= 173 && imgH >= 173) {
+                    scaledSub = buffImage.getSubimage(1, 3, 170, 170);
                 } else {
                     int cropW = Math.min(imgW, 180);
                     int cropH = Math.min(imgH, 180);
-                    this.scaledThumbnail = buffImage.getSubimage(0, 0, cropW, cropH);
+                    scaledSub = buffImage.getSubimage(0, 0, cropW, cropH);
                 }
             } else {
-                this.scaledThumbnail = buffImage;
+                scaledSub = buffImage;
             }
 
+            // Store results for the render thread to pick up (no GL calls here!)
+            this.pendingThumbnailImage = thumbSub;
+            this.pendingScaledThumbnail = scaledSub;
+            this.pendingSongTitle = title;
             this.currentVideo = null;
         } catch (Exception var5) {
             var5.printStackTrace();
@@ -863,36 +1007,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
         if (songURL.getProtocol().equals("file")) {
             return songURL;
         }
-        String songURLString = songURL.toString();
-        String userHomeDir = System.getProperty("user.home");
-        YoutubeDLRequest request = new YoutubeDLRequest(songURLString, userHomeDir);
-        request.setOption("get-url");
-        request.setOption("no-check-certificate", " ");
-        request.setOption("rm-cache-dir", " ");
-        request.setOption("retries", 10);
-        request.setOption("format", 18);
-
-        try {
-            YoutubeDL.setExecutablePath(this.prepareYtDlpExecutable());
-            YoutubeDLResponse response = YoutubeDL.execute(request);
-            String responseString = response.getOut();
-            return new URL(responseString);
-        } catch (YoutubeDLException exception) {
-            if (exception.getMessage() != null
-                    && exception.getMessage().contains("ERROR: This video contains content from")
-                    && exception.getMessage().contains("who has blocked it in your country on copyright grounds")) {
-                Client.getInstance().notificationManager
-                        .send(new Notification("Now Playing", "Not available in your region."));
-            } else {
-                exception.printStackTrace();
-                Client.getInstance().notificationManager
-                        .send(new Notification("Music", "Downloading yt-dlp, please try again..."));
-                this.download();
-            }
-        } catch (MalformedURLException exception) {
-            exception.printStackTrace();
+        // 对于网易云音乐等 HTTP/HTTPS URL 直接返回
+        if (songURL.getProtocol().equals("http") || songURL.getProtocol().equals("https")) {
+            return songURL;
         }
-
+        System.out.println("[MusicManager] Unsupported URL protocol: " + songURL.getProtocol());
         return null;
     }
 
@@ -970,172 +1089,33 @@ public class MusicManager extends Manager implements MinecraftUtil {
         }
     }
 
+    /** @deprecated YouTube support removed; kept as stub for compatibility. */
     public boolean doesYTDLPExist() {
-        File targetFile = new File(Client.getInstance().file + "/music/yt-dlp");
-        if (Util.getOSType() == Util.OS.WINDOWS) {
-            targetFile = new File(Client.getInstance().file + "/music/yt-dlp.exe");
-        }
-
-        return targetFile.exists();
+        return false;
     }
 
+    /** @deprecated YouTube support removed. */
     public void setupDownloadThread() {
-        new Thread(this::download).start();
+        // No-op: yt-dlp downloads removed
     }
 
+    /** @deprecated YouTube support removed. */
     public void download() {
-        if (!this.finished) {
-            File musicDir = new File(Client.getInstance().file + "/music/");
-            musicDir.mkdirs();
-            if (Util.getOSType() == Util.OS.WINDOWS) {
-                try {
-                    File targetFile = new File(Client.getInstance().file + "/music/yt-dlp.exe");
-                    CloseableHttpClient client = HttpClients.createDefault();
-                    CloseableHttpResponse response = client.execute(
-                            new HttpGet("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"));
-                    Throwable throwable = null;
-
-                    try {
-                        HttpEntity entity = response.getEntity();
-                        if (entity != null) {
-                            try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
-                                entity.writeTo(outputStream);
-                            }
-                        }
-                    } catch (Throwable t) {
-                        throwable = t;
-                        throw t;
-                    } finally {
-                        if (response != null) {
-                            if (throwable != null) {
-                                try {
-                                    response.close();
-                                } catch (Throwable t) {
-                                    throwable.addSuppressed(t);
-                                }
-                            } else {
-                                response.close();
-                            }
-                        }
-                    }
-                } catch (IOException exc) {
-                    exc.printStackTrace();
-                }
-            } else {
-                try {
-                    File targetFile = new File(Client.getInstance().file + "/music/yt-dlp");
-                    CloseableHttpClient client = HttpClients.createDefault();
-                    CloseableHttpResponse response = client
-                            .execute(new HttpGet("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"));
-                    Throwable throwable = null;
-
-                    try {
-                        HttpEntity entity = response.getEntity();
-                        if (entity != null) {
-                            try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
-                                entity.writeTo(outputStream);
-                            }
-                        }
-                    } catch (Throwable t) {
-                        throwable = t;
-                        throw t;
-                    } finally {
-                        if (response != null) {
-                            if (throwable != null) {
-                                try {
-                                    response.close();
-                                } catch (Throwable t) {
-                                    throwable.addSuppressed(t);
-                                }
-                            } else {
-                                response.close();
-                            }
-                        }
-                    }
-                } catch (IOException exc) {
-                    exc.printStackTrace();
-                }
-            }
-
-            System.out.println("done");
-            this.finished = true;
-        }
+        // No-op: yt-dlp downloads removed
     }
 
+    /** @deprecated YouTube support removed. */
     public String prepareYtDlpExecutable() {
-        String fileName = Client.getInstance().file.getAbsolutePath() + "/music/yt-dlp";
-        if (Util.getOSType() != Util.OS.WINDOWS) {
-            File targetFile = new File(fileName);
-            targetFile.setExecutable(true);
-        } else {
-            fileName = fileName + ".exe";
-        }
-
-        return fileName;
+        return "";
     }
 
+    /** @deprecated YouTube support removed. */
     public boolean hasPython() {
-        if (Util.getOSType() == Util.OS.WINDOWS) {
-            return true; // Windows yt-dlp doesn't require Python
-        }
-
-        String[][] commands = { { "python3", "-V" }, { "python", "-V" } };
-
-        for (String[] cmd : commands) {
-            try {
-                Process process = new ProcessBuilder(cmd).start();
-
-                // Read both stdout and stderr
-                BufferedReader inputReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-
-                String version;
-                while ((version = inputReader.readLine()) != null || (version = errorReader.readLine()) != null) {
-                    if (version.contains("Python")) {
-                        return true;
-                    }
-                }
-            } catch (IOException exc) {
-                Client.logger.error("No Python version found!", exc);
-            }
-        }
-
         return false;
     }
 
+    /** @deprecated YouTube support removed. */
     public boolean hasVCRedist() {
-        if (Util.getOSType() != Util.OS.WINDOWS) {
-            return true;
-        }
-
-        String[] redistKeys = {
-                "SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\10.0\\VC\\VCRedist\\x86",
-                "SOFTWARE\\Microsoft\\VisualStudio\\10.0\\VC\\VCRedist\\x86",
-                "SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x86",
-                "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x86",
-                "SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64",
-                "SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64",
-                "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{D992A37A-AF08-45C4-9E49-D50EA5F46A16}_is1",
-                "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{D992A37A-AF08-45C4-9E49-D50EA5F46A16}_is1"
-        };
-
-        for (String key : redistKeys) {
-            try {
-                if (Advapi32Util.registryKeyExists(WinReg.HKEY_LOCAL_MACHINE, key)) {
-                    if (Advapi32Util.registryValueExists(WinReg.HKEY_LOCAL_MACHINE, key, "Installed")) {
-                        int installed = Advapi32Util.registryGetIntValue(WinReg.HKEY_LOCAL_MACHINE, key, "Installed");
-                        if (installed == 1)
-                            return true;
-                    } else {
-                        // Some VC Redists don't use "Installed" but can be detected by presence
-                        return true;
-                    }
-                }
-            } catch (Exception exc) {
-                Client.logger.warn("Failed to check key: " + key, exc);
-            }
-        }
-
-        return false;
+        return true;
     }
 }

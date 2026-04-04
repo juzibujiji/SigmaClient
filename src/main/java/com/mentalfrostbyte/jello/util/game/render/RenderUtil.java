@@ -501,10 +501,13 @@ public class RenderUtil implements MinecraftUtil {
             GL11.glTexCoord2f(var21 + var19, var22);
             GL11.glVertex2f(x + width, y);
             GL11.glEnd();
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0); // unbind texture to prevent state leak
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             GL11.glDisable(GL11.GL_BLEND);
+            GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // reset color to prevent white pollution
             RenderSystem.enableTexture();
             RenderSystem.disableBlend();
+            RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f); // reset GlStateManager color
         }
     }
 

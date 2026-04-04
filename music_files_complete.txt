@@ -1,0 +1,125 @@
+COMPREHENSIVE MUSIC PLAYER MODULE FILE LISTING
+Generated: 2026-04-03
+
+=== CORE MUSIC PLAYER JAVA FILES ===
+
+MUSIC PLAYER GUI (src/main/java/com/mentalfrostbyte/jello/gui/impl/jello/ingame/clickgui/musicplayer/):
+- MusicPlayer.java
+- MusicInitializer.java
+- elements/ProgressBar.java
+- elements/SearchBox.java
+- elements/VolumeSlider.java
+
+MUSIC MANAGEMENT & UTILITIES:
+- src/main/java/com/mentalfrostbyte/jello/managers/MusicManager.java
+- src/main/java/com/mentalfrostbyte/jello/util/client/music/LrcParser.java (Lyric parsing)
+- src/main/java/com/mentalfrostbyte/jello/util/client/music/JavaFFT.java (FFT analysis)
+- src/main/java/com/mentalfrostbyte/jello/util/client/music/Transform.java (Transformations)
+
+AUDIO STREAMING SYSTEM:
+- src/main/java/com/mentalfrostbyte/jello/util/system/sound/AudioProcessor.java
+- src/main/java/com/mentalfrostbyte/jello/util/system/sound/AudioRepeatMode.java
+- src/main/java/com/mentalfrostbyte/jello/util/system/sound/AudioStreamer.java
+- src/main/java/com/mentalfrostbyte/jello/util/system/sound/BasicAudioProcessor.java
+- src/main/java/com/mentalfrostbyte/jello/util/system/sound/MusicByteStream.java
+- src/main/java/com/mentalfrostbyte/jello/util/system/sound/MusicStream.java
+
+YOUTUBE INTEGRATION:
+- src/main/java/com/mentalfrostbyte/jello/util/client/network/youtube/YoutubeUtil.java
+- src/main/java/com/mentalfrostbyte/jello/util/client/network/youtube/YoutubeVideoData.java
+- src/main/java/com/mentalfrostbyte/jello/util/client/network/youtube/YoutubeJPGThumbnail.java
+- src/main/java/com/mentalfrostbyte/jello/util/client/network/youtube/YoutubeContentType.java
+
+MUSIC VISUALIZATION:
+- src/main/java/com/mentalfrostbyte/jello/module/impl/gui/jello/MusicParticles.java
+
+NOTEBLOCK PLAYER:
+- src/main/java/com/mentalfrostbyte/jello/module/impl/misc/NoteblockPlayer.java
+
+=== MINECRAFT AUDIO SYSTEM ===
+- net/minecraft/client/audio/BackgroundMusicSelector.java
+- net/minecraft/client/audio/BackgroundMusicTracks.java
+- net/minecraft/client/audio/MusicTicker.java
+- net/minecraft/item/MusicDiscItem.java
+
+=== AUDIO CODEC SUPPORT (JAAD - OGG/MP4/AAC) ===
+- net/minecraft/client/audio/AudioStreamBuffer.java
+- net/minecraft/client/audio/AudioStreamManager.java
+- net/minecraft/client/audio/IAudioStream.java
+- net/minecraft/client/audio/OggAudioStream.java
+- net/minecraft/client/audio/OggAudioStreamWrapper.java
+- net/sourceforge/jaad/mp4/api/AudioTrack.java
+- net/sourceforge/jaad/mp4/boxes/impl/sampleentries/AudioSampleEntry.java
+- net/sourceforge/jaad/mp4/boxes/impl/samplegroupentries/AudioSampleGroupEntry.java
+- net/sourceforge/jaad/spi/javasound/AACAudioFileReader.java
+- net/sourceforge/jaad/spi/javasound/AACAudioInputStream.java
+- net/sourceforge/jaad/spi/javasound/AsynchronousAudioInputStream.java
+- net/sourceforge/jaad/spi/javasound/MP4AudioInputStream.java
+
+=== MUSIC RESOURCES (UI Assets) ===
+src/main/resources/assets/minecraft/com/mentalfrostbyte/gui/resources/music/:
+- artwork.png
+- backwards.png
+- bg.png
+- forwards.png
+- particle.png
+- pause.png
+- play.png
+- repeat.png
+- rememberthis.nbs
+
+=== AUDIO EFFECT RESOURCES (SFX) ===
+src/main/resources/assets/minecraft/com/mentalfrostbyte/gui/resources/audio/:
+- activate.mp3
+- click.mp3
+- clicksound.mp3
+- connect.mp3
+- deactivate.mp3
+- error.mp3
+- pop.mp3
+- switch.mp3
+
+=== MINECRAFT MUSIC DISC ASSETS ===
+Models (13 discs):
+src/main/resources/assets/minecraft/models/item/music_disc_*.json
+- 11, 13, blocks, cat, chirp, far, mall, mellohi, pigstep, stal, strad, wait, ward
+
+Textures (13 discs):
+src/main/resources/assets/minecraft/textures/item/music_disc_*.png
+
+Tags/Data:
+src/main/resources/data/minecraft/tags/items/music_discs.json
+src/main/resources/data/minecraft/tags/items/creeper_drop_music_discs.json
+
+=== YOUTUBE RESOURCES ===
+src/main/resources/assets/minecraft/com/mentalfrostbyte/gui/resources/loading/youtube.png
+
+=== BUNDLED MUSIC ===
+src/main/resources/bundled_music/:
+- xilian.mp3
+- xilian.lrc
+- xilian.png
+- manifest.txt
+
+=== LOCAL MUSIC CACHE (Sigma5) ===
+sigma5/music/:
+- 1.png
+- T002R300x300M000000eyy8U24wicN_1.webp
+- yt-dlp.exe (YouTube downloader utility)
+- 昔涟-张韶涵_HOYO-MiX[iq].mp3
+- 昔涟-张韶涵_HOYO-MiX[iq].lrc
+- 昔涟-张韶涵_HOYO-MiX[iq].png
+
+=== BUILD CONFIGURATION ===
+pom.xml - Maven dependencies:
+- com.github.sapher:youtubedl-java (v1.1) - YouTube download integration
+- org.apache.commons:commons-lang3 (v3.9)
+- org.slf4j:slf4j-api (v1.7.32)
+- JAAD codec embedded in source code
+
+=== INTEGRATION POINTS ===
+- src/main/java/com/mentalfrostbyte/Client.java
+- src/main/java/com/mentalfrostbyte/jello/gui/impl/jello/ingame/clickgui/ClickGuiScreen.java
+- src/main/java/com/mentalfrostbyte/jello/managers/ModuleManager.java
+- src/main/java/com/mentalfrostbyte/jello/gui/base/elements/impl/button/types/ThumbnailButton.java
+

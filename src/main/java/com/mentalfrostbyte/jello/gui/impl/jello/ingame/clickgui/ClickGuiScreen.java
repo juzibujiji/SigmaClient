@@ -98,48 +98,8 @@ public class ClickGuiScreen extends Screen {
     }
 
     public boolean hasJelloMusicRequirements() {
-        if (Client.getInstance().musicManager.hasPython() && Client.getInstance().musicManager.hasVCRedist()) {
-            return true;
-        } else if (this.dependenciesAlert == null) {
-            this.runThisOnDimensionUpdate(() -> {
-                List<AlertComponent> alerts = new ArrayList<>();
-                alerts.add(new AlertComponent(ComponentType.HEADER, "Music", 40));
-                alerts.add(new AlertComponent(ComponentType.FIRST_LINE, "Jello Music requires:", 20));
-
-                if (!Client.getInstance().musicManager.hasPython()) {
-                    alerts.add(new AlertComponent(ComponentType.FIRST_LINE, "- Python 3.12.5", 30));
-                }
-
-                if (!Client.getInstance().musicManager.hasVCRedist()) {
-                    alerts.add(new AlertComponent(ComponentType.FIRST_LINE, "- Visual C++ 2010 x86", 30));
-                }
-
-                alerts.add(new AlertComponent(ComponentType.BUTTON, "Download", 55));
-                this.showAlert(this.dependenciesAlert = new Alert(this, "music", true, "Dependencies.", alerts.toArray(new AlertComponent[0])));
-
-                this.dependenciesAlert.onPress(thread -> {
-                    if (!Client.getInstance().musicManager.hasPython()) {
-                        Util.getOSType().openLink("https://www.python.org/ftp/python/3.12.5/");
-                    }
-
-                    if (!Client.getInstance().musicManager.hasVCRedist()) {
-                        Util.getOSType().openLink("https://www.microsoft.com/en-us/download/details.aspx?id=26999");
-                    }
-                });
-
-                this.dependenciesAlert.method13604(thread -> new Thread(() -> {
-                    this.runThisOnDimensionUpdate(() -> {
-                        this.removeChildren(this.dependenciesAlert);
-                        this.dependenciesAlert = null;
-                    });
-                }).start());
-
-                this.dependenciesAlert.method13603(true);
-            });
-            return true;
-        } else {
-            return true;
-        }
+        // YouTube/yt-dlp removed - no external dependencies needed anymore
+        return true;
     }
 
     public void method13315() {

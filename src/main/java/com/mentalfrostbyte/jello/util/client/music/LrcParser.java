@@ -41,6 +41,19 @@ public class LrcParser {
         return lyrics;
     }
 
+    /**
+     * 从 LRC 格式字符串解析歌词（适用于网易云 API 返回的歌词文本）。
+     *
+     * @param lrcText LRC 格式文本
+     * @return 歌词行列表，按时间戳升序
+     */
+    public static List<LyricLine> parseString(String lrcText) {
+        if (lrcText == null || lrcText.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return parse(new java.io.ByteArrayInputStream(lrcText.getBytes(StandardCharsets.UTF_8)));
+    }
+
     public static List<LyricLine> parse(InputStream inputStream) {
         List<LyricLine> lyrics = new ArrayList<>();
         if (inputStream == null)

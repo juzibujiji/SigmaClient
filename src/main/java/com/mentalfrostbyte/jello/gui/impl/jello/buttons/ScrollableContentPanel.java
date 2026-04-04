@@ -7,6 +7,8 @@ import com.mentalfrostbyte.jello.gui.combined.ContentSize;
 import com.mentalfrostbyte.jello.gui.base.interfaces.IWidthSetter;
 import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
+import com.mojang.blaze3d.platform.GlStateManager;
+import org.lwjgl.opengl.GL11;
 import org.newdawn.slick.TrueTypeFont;
 
 public class ScrollableContentPanel extends AnimatedIconPanel {
@@ -88,10 +90,57 @@ public class ScrollableContentPanel extends AnimatedIconPanel {
             RenderUtil.method11415(this);
          }
 
-         super.draw(partialTicks);
+         // 虚拟滚动：只渲染可见区域内的子元素，而非全部
+         this.drawVirtualScrolled(partialTicks);
+
          if (this.field21206) {
             RenderUtil.restoreScissor();
          }
+      }
+   }
+
+   /**
+    * 虚拟滚动渲染：替代 super.draw() 中对所有子元素的遍历，
+    * 只渲染当前滚动窗口内可见的条目。
+    * 无论列表有多少首歌，每帧只渲染屏幕上能看到的那几条。
+    */
+   private void drawVirtualScrolled(float partialTicks) {
+      GlStateManager.enableAlphaTest();
+      GL11.glAlphaFunc(519, 0.0F);
+      GL11.glTranslatef((float) this.getXA(), (float) this.getYA(), 0.0F);
+
+      // 绘制滚动条（始终渲染）
+      if (this.scrollBar.isSelfVisible()) {
+         GL11.glPushMatrix();
+         this.scrollBar.draw(partialTicks);
+         GL11.glPopMatrix();
+      }
+
+      // 绘制 buttonList 中的子元素（带可见性裁剪）
+      if (this.buttonList.isSelfVisible()) {
+         GL11.glPushMatrix();
+         GlStateManager.enableAlphaTest();
+         GL11.glAlphaFunc(519, 0.0F);
+         GL11.glTranslatef((float) this.buttonList.getXA(), (float) this.buttonList.getYA(), 0.0F);
+
+         int scrollOffset = this.method13513();
+         int viewportHeight = this.getHeightA();
+
+         for (CustomGuiScreen child : this.buttonList.getChildren()) {
+            if (child.isSelfVisible()) {
+               int childY = child.getYA();
+               int childHeight = child.getHeightA();
+               // 只渲染在可见区域内的子元素（带一个元素高度的缓冲区）
+               if (childY + childHeight >= scrollOffset - childHeight
+                       && childY <= scrollOffset + viewportHeight + childHeight) {
+                  GL11.glPushMatrix();
+                  child.draw(partialTicks);
+                  GL11.glPopMatrix();
+               }
+            }
+         }
+
+         GL11.glPopMatrix();
       }
    }
 

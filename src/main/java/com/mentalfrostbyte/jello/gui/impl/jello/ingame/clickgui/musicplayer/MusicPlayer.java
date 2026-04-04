@@ -17,14 +17,19 @@ import com.mentalfrostbyte.jello.gui.impl.jello.buttons.ScrollableContentPanel;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.clickgui.ClickGuiScreen;
 import com.mentalfrostbyte.jello.managers.MusicManager;
 import com.mentalfrostbyte.jello.managers.util.Thumbnails;
+import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiLogin;
+import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseRequestApi;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeContentType;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
+import com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeUtil;
 import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
 import com.mentalfrostbyte.jello.util.system.network.ImageUtil;
+import com.mojang.blaze3d.systems.RenderSystem;
+import org.lwjgl.opengl.GL11;
 import org.newdawn.slick.opengl.Texture;
 import org.newdawn.slick.util.BufferedImageUtil;
 
@@ -32,6 +37,7 @@ import java.io.IOException;
 import java.util.*;
 
 public class MusicPlayer extends AnimatedIconPanel {
+    private static final String NETEASE_PLAYLIST_PREFIX = "netease_playlist:";
     private final int width = 250;
     private final int height = 40;
     private final int field20847 = 64;
@@ -52,6 +58,7 @@ public class MusicPlayer extends AnimatedIconPanel {
     private final CustomGuiScreen field20865;
     public SearchBox searchBox;
     public ProgressBar field20867;
+    private Button neteaseLoginBtn;
     public static List<Thumbnails> videos = new ArrayList<>();
     public static long time = 0L;
     public float field20871 = 0.0F;
@@ -59,27 +66,25 @@ public class MusicPlayer extends AnimatedIconPanel {
     private final Animation field20873 = new Animation(80, 150, Animation.Direction.BACKWARDS);
     public boolean field20874 = false;
 
+    // Netease QR login overlay
+    public volatile boolean showNeteaseQr = false;
+    public volatile java.awt.image.BufferedImage neteaseQrImage = null;
+    public volatile String neteaseQrUniKey = null;
+    public volatile Texture neteaseQrTexture = null;
+
     public ClickGuiScreen parent;
 
     public MusicPlayer(ClickGuiScreen parent, String var2) {
         super(parent, var2, 875, 55, 800, 600, false);
         this.parent = parent;
 
-        if (videos.size() != 10) {
+        // Only initialize the default video sources once; preserve loaded Thumbnails on re-open
+        if (videos.size() < 4) {
             videos.clear();
-            videos.add(
-                    new Thumbnails("Trap Nation", "PLC1og_v3eb4hrv4wsqG1G5dsNZh9bIscJ", YoutubeContentType.PLAYLIST));
-            videos.add(
-                    new Thumbnails("Chill Nation", "PL3EfCK9aCbkptFjtgWYJ8wiXgJQw5k3M3", YoutubeContentType.PLAYLIST));
-            videos.add(new Thumbnails("VEVO", "PL9tY0BWXOZFu8MzzbNVtUvHs0cQ_gZ03m", YoutubeContentType.PLAYLIST));
-            videos.add(new Thumbnails("Rap Nation", "PLayVKgoNNljOZifkJNtvwfmrmh2OglYzx", YoutubeContentType.PLAYLIST));
-            videos.add(new Thumbnails("MrSuicideSheep", "PLyqoPTKp-zlrI_PEqytQ7J9FgPhptcC64",
-                    YoutubeContentType.PLAYLIST));
-            videos.add(new Thumbnails("Trap City", "PLU_bQfSFrM2PemIeyVUSjZjJhm6G7auOY", YoutubeContentType.PLAYLIST));
-            videos.add(new Thumbnails("CloudKid", "PLejelFTZDTZM1yOroUyveJkjE7IY9Zj73", YoutubeContentType.PLAYLIST));
-            videos.add(new Thumbnails("NCS", "PLRBp0Fe2Gpgm_u2w2a2isHw29SugZ34cD", YoutubeContentType.PLAYLIST));
             videos.add(new Thumbnails("Bundled Music", "bundled_music", YoutubeContentType.BUNDLED));
             videos.add(new Thumbnails("Local Music", "local_music", YoutubeContentType.LOCAL));
+            videos.add(new Thumbnails("\u7f51\u6613\u4e91\u70ed\u6b4c", "netease_hot", YoutubeContentType.NETEASE));
+            videos.add(new Thumbnails("\u7f51\u6613\u4e91\u65b0\u6b4c", "netease_new", YoutubeContentType.NETEASE));
         }
 
         time = System.nanoTime();
@@ -94,6 +99,9 @@ public class MusicPlayer extends AnimatedIconPanel {
                         this, "musiccontrols", this.width, this.getHeightA() - this.field20848,
                         this.getWidthA() - this.width, this.field20848));
 
+        ColorHelper color = new ColorHelper(1250067, -15329770).setTextColor(ClientColors.LIGHT_GREYISH_BLUE.getColor())
+            .method19414(FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2);
+
         // Add Open Folder Button
         Button openFolderBtn = new Button(this, "openFolder", this.width - 110, 10, 100, 30,
                 new ColorHelper(ClientColors.DEEP_TEAL.getColor(), ClientColors.DEEP_TEAL.getColor(),
@@ -107,6 +115,88 @@ public class MusicPlayer extends AnimatedIconPanel {
             }
         });
         this.addToList(openFolderBtn);
+
+        // Add Netease Cloud Music Login Button
+        this.neteaseLoginBtn = new Button(this, "neteaseLogin", this.width - 110, 42, 100, 30,
+                new ColorHelper(ClientColors.DEEP_TEAL.getColor(), ClientColors.DEEP_TEAL.getColor(),
+                        ClientColors.DEEP_TEAL.getColor(), ClientColors.LIGHT_GREYISH_BLUE.getColor()),
+            NeteaseApiLogin.isLoggedIn()
+                        ? "\u5df2\u767b\u5f55" : "NE Login",
+                ResourceRegistry.JelloLightFont14);
+        this.neteaseLoginBtn.onClick((a, b) -> {
+            if (NeteaseApiLogin.isLoggedIn()) {
+            this.loadUserNeteasePlaylists(color, this);
+                Client.getInstance().notificationManager.send(
+                        new com.mentalfrostbyte.jello.managers.util.notifs.Notification(
+                                "\u7f51\u6613\u4e91",
+                    "\u5df2\u767b\u5f55: " + NeteaseApiLogin.getNickname()));
+                return;
+            }
+            new Thread(() -> {
+                try {
+                String uniKey = NeteaseApiLogin.getUniKey();
+                    if (uniKey == null) {
+                        Client.getInstance().notificationManager.send(
+                                new com.mentalfrostbyte.jello.managers.util.notifs.Notification(
+                                        "\u7f51\u6613\u4e91", "\u83b7\u53d6\u4e8c\u7ef4\u7801\u5931\u8d25"));
+                        return;
+                    }
+                java.awt.image.BufferedImage qrImage = NeteaseApiLogin.generateQRCode(uniKey);
+                    if (qrImage == null) {
+                        Client.getInstance().notificationManager.send(
+                                new com.mentalfrostbyte.jello.managers.util.notifs.Notification(
+                                        "\u7f51\u6613\u4e91", "\u751f\u6210\u4e8c\u7ef4\u7801\u5931\u8d25"));
+                        return;
+                    }
+                this.showNeteaseQrOverlay(qrImage, uniKey);
+                    Client.getInstance().notificationManager.send(
+                            new com.mentalfrostbyte.jello.managers.util.notifs.Notification(
+                                    "\u7f51\u6613\u4e91", "\u8bf7\u7528\u7f51\u6613\u4e91\u97f3\u4e50 App \u626b\u7801\u767b\u5f55"));
+                    // Poll for login status
+                    System.out.println("[MusicPlayer] Starting QR login poll...");
+                    while (this.showNeteaseQr) {
+                        Thread.sleep(2000);
+                        int status = NeteaseApiLogin.checkQrLogin(uniKey);
+                        System.out.println("[MusicPlayer] QR poll status: " + status);
+                        if (status == 803) {
+                            this.closeNeteaseQrOverlay(false);
+                            System.out.println("[MusicPlayer] Login success, fetching user info...");
+                            NeteaseApiLogin.getLoginStatus(null);
+                            // Save persistent cookie NOW (after getLoginStatus set nickname/userId)
+                            NeteaseApiLogin.savePersistentCookie();
+                            this.neteaseLoginBtn.setText("\u5df2\u767b\u5f55");
+                            System.out.println("[MusicPlayer] Loading user playlists...");
+                            this.loadUserNeteasePlaylists(color, this);
+                            Client.getInstance().notificationManager.send(
+                                    new com.mentalfrostbyte.jello.managers.util.notifs.Notification(
+                                            "\u7f51\u6613\u4e91",
+                                            "\u767b\u5f55\u6210\u529f: " + NeteaseApiLogin.getNickname()));
+                            break;
+                        } else if (status == 800) {
+                            this.closeNeteaseQrOverlay(false);
+                            Client.getInstance().notificationManager.send(
+                                    new com.mentalfrostbyte.jello.managers.util.notifs.Notification(
+                                            "\u7f51\u6613\u4e91", "\u4e8c\u7ef4\u7801\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u8bd5"));
+                            break;
+                        } else if (status == 802) {
+                            Client.getInstance().notificationManager.send(
+                                    new com.mentalfrostbyte.jello.managers.util.notifs.Notification(
+                                            "\u7f51\u6613\u4e91", "\u5df2\u626b\u7801\uff0c\u8bf7\u5728\u624b\u673a\u4e0a\u786e\u8ba4"));
+                        } else if (status == -1) {
+                            System.err.println("[MusicPlayer] QR poll returned -1 (network error), retrying...");
+                        } else {
+                            System.out.println("[MusicPlayer] Unknown QR status: " + status);
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    this.closeNeteaseQrOverlay(false);
+                }
+            }).start();
+        });
+        this.neteaseLoginBtn.setSelfVisible(false);
+        this.addToList(this.neteaseLoginBtn);
+
         this.addToList(this.field20865 = new CustomGuiScreen(this, "reShowView", 0, 0, 1, this.getHeightA()));
         SpectrumButton var5;
         this.addToList(var5 = new SpectrumButton(this, "spectrumButton", 15, this.heightA - 140, 40, 40,
@@ -120,8 +210,6 @@ public class MusicPlayer extends AnimatedIconPanel {
         var5.setListening(false);
         this.musicControls.setListening(false);
         this.field20865.setListening(false);
-        ColorHelper color = new ColorHelper(1250067, -15329770).setTextColor(ClientColors.LIGHT_GREYISH_BLUE.getColor())
-                .method19414(FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2);
         List<Thread> threads = new ArrayList<>();
         MusicPlayer player = this;
 
@@ -130,13 +218,17 @@ public class MusicPlayer extends AnimatedIconPanel {
                 if (!videoMap.containsKey(video.videoId) && !video.isUpdated) {
                     video.isUpdated = true;
                     video.refreshVideoList();
-
                     videoMap.put(video.videoId, video);
                 }
 
                 this.runThisOnDimensionUpdate(new MusicInitializer(this, video, color, player));
             }));
             threads.get(threads.size() - 1).start();
+        }
+
+        // If already logged in (e.g., cookie restored), load user playlists asynchronously
+        if (NeteaseApiLogin.isLoggedIn()) {
+            this.loadUserNeteasePlaylists(color, player);
         }
 
         int var15 = (this.getWidthA() - this.width - 38) / 2;
@@ -189,8 +281,37 @@ public class MusicPlayer extends AnimatedIconPanel {
                 this.searchBox = new SearchBox(
                         this, "search", this.width, 0, this.getWidthA() - this.width,
                         this.getHeightA() - this.field20848, "Search..."));
-        this.searchBox.setSelfVisible(true);
-        this.searchBox.setListening(false);
+        this.searchBox.setPageActive(true);
+
+        // 添加 "搜索" 选项卡按钮，使搜索框始终可访问
+        Button searchTab = new Button(
+                this.musicTabs,
+                "search_tab",
+                0,
+                0,  // Y位置将在tab列表头部
+                this.width,
+                this.height,
+                color,
+                "Search",
+                ResourceRegistry.JelloLightFont14
+        );
+        this.musicTabs.addToList(searchTab);
+        searchTab.onClick((var1x, var2x) -> this.showSearchBox());
+    }
+
+    /**
+     * 显示搜索框，隐藏当前选中的内容面板
+     */
+    private void showSearchBox() {
+        if (this.field20852 != null) {
+            this.field20852.setSelfVisible(false);
+        }
+        this.searchBox.setPageActive(true);
+        this.field20849 = "Search";
+        this.field20852 = null;
+        if (this.neteaseLoginBtn != null) {
+            this.neteaseLoginBtn.setSelfVisible(false);
+        }
     }
 
     private void method13189(ScrollableContentPanel var1) {
@@ -201,8 +322,15 @@ public class MusicPlayer extends AnimatedIconPanel {
         var1.setSelfVisible(true);
         this.field20849 = var1.getText();
         this.field20852 = var1;
-        this.searchBox.setSelfVisible(false);
+        this.searchBox.setPageActive(false);
         this.field20852.field21207 = 65;
+
+        // Show NE Login button only for Netease-related tabs
+        if (this.neteaseLoginBtn != null) {
+            String tabId = var1.getText();
+            boolean isNetease = tabId != null && (tabId.contains("\u7f51\u6613") || tabId.contains("netease"));
+            this.neteaseLoginBtn.setSelfVisible(isNetease);
+        }
     }
 
     private void playSong(Thumbnails manager, YoutubeVideoData video) {
@@ -349,24 +477,101 @@ public class MusicPlayer extends AnimatedIconPanel {
         if (this.field20852 != null) {
             this.method13196(partialTicks);
         }
+
+        // Render Netease QR code overlay
+        // After super.draw(), GL matrix has drawChildren's glTranslatef(getXA(), getYA())
+        // so GL rendering uses panel-local coords (0-based).
+        // NanoVG ignores the GL matrix and needs absolute screen coords.
+        if (this.showNeteaseQr && this.neteaseQrImage != null) {
+            // Panel-local coords for GL
+            float localX = (this.getWidthA() - 200) / 2.0f;
+            float localY = (this.getHeightA() - 260) / 2.0f;
+            // Absolute coords for NanoVG
+            float absX = this.getXA() + localX;
+            float absY = this.getYA() + localY;
+
+            // GL: dark semi-transparent background
+            RenderUtil.drawRoundedRect(localX - 20, localY - 20,
+                    localX + 220, localY + 280,
+                    RenderUtil2.applyAlpha(0xFF1a1a2e, partialTicks * 0.95F));
+
+            // GL: upload QR texture if needed
+            if (this.neteaseQrTexture == null && this.neteaseQrImage != null) {
+                try {
+                    java.awt.image.BufferedImage argbImage = new java.awt.image.BufferedImage(
+                            this.neteaseQrImage.getWidth(), this.neteaseQrImage.getHeight(),
+                            java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                    java.awt.Graphics2D g2d = argbImage.createGraphics();
+                    g2d.drawImage(this.neteaseQrImage, 0, 0, null);
+                    g2d.dispose();
+                    this.neteaseQrTexture = BufferedImageUtil.getTexture("neteaseQr", argbImage);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            // GL: draw QR image
+            if (this.neteaseQrTexture != null) {
+                RenderUtil.drawImage(localX, localY, 200, 200,
+                        this.neteaseQrTexture,
+                        RenderUtil2.applyAlpha(-1, partialTicks));
+            }
+
+            // NanoVG: draw text hints using absolute screen coords
+            if (NanoVGFontRenderer.isInitialized()) {
+                int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+                int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+                NanoVGFontRenderer.beginFrame(sw, sh);
+                String qrHint = "\u8bf7\u7528\u7f51\u6613\u4e91\u97f3\u4e50 App \u626b\u7801";
+                float tw = NanoVGFontRenderer.getTextWidth(qrHint, 16f);
+                NanoVGFontRenderer.drawText(qrHint,
+                        absX + (200 - tw) / 2, absY + 210, 16f,
+                        RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks));
+                String closeHint = "\u70b9\u51fb\u4efb\u610f\u4f4d\u7f6e\u5173\u95ed";
+                float tw2 = NanoVGFontRenderer.getTextWidth(closeHint, 14f);
+                NanoVGFontRenderer.drawText(closeHint,
+                        absX + (200 - tw2) / 2, absY + 235, 14f,
+                        RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks * 0.7f));
+                NanoVGFontRenderer.endFrame();
+            }
+        }
     }
 
     private void method13192(float var1) {
         int duration1 = (int) this.musicManager.getDuration();
         int duration = this.musicManager.getDurationInt();
-        RenderUtil.drawString(
-                ResourceRegistry.JelloLightFont14,
-                (float) (this.getXA() + this.width + 14),
-                (float) (this.getYA() + this.getHeightA() - 10) - 22.0F * var1,
-                YoutubeUtil.parseSongTime(duration1),
-                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
-        RenderUtil.drawString(
-                ResourceRegistry.JelloLightFont14,
-                (float) (this.getXA() + this.getWidthA() - 14
-                        - ResourceRegistry.JelloLightFont14.getWidth(YoutubeUtil.parseSongTime(duration))),
-                (float) (this.getYA() + this.getHeightA() - 10) - 22.0F * var1,
-                YoutubeUtil.parseSongTime(duration),
-                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
+        String timeElapsed = YoutubeUtil.parseSongTime(duration1);
+        String timeTotal = YoutubeUtil.parseSongTime(duration);
+
+        if (NanoVGFontRenderer.isInitialized()) {
+            int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+            int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+            float fontSize = 14.0f;
+            int color = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1);
+            float yPos = (float) (this.getYA() + this.getHeightA() - 10) - 22.0F * var1;
+
+            NanoVGFontRenderer.beginFrame(sw, sh);
+            NanoVGFontRenderer.drawText(timeElapsed,
+                    (float) (this.getXA() + this.width + 14), yPos, fontSize, color);
+            float totalWidth = NanoVGFontRenderer.getTextWidth(timeTotal, fontSize);
+            NanoVGFontRenderer.drawText(timeTotal,
+                    (float) (this.getXA() + this.getWidthA() - 14) - totalWidth, yPos, fontSize, color);
+            NanoVGFontRenderer.endFrame();
+        } else {
+            RenderUtil.drawString(
+                    ResourceRegistry.JelloLightFont14,
+                    (float) (this.getXA() + this.width + 14),
+                    (float) (this.getYA() + this.getHeightA() - 10) - 22.0F * var1,
+                    timeElapsed,
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
+            RenderUtil.drawString(
+                    ResourceRegistry.JelloLightFont14,
+                    (float) (this.getXA() + this.getWidthA() - 14
+                            - ResourceRegistry.JelloLightFont14.getWidth(timeTotal)),
+                    (float) (this.getYA() + this.getHeightA() - 10) - 22.0F * var1,
+                    timeTotal,
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
+        }
     }
 
     private void method13193(float var1) {
@@ -385,13 +590,13 @@ public class MusicPlayer extends AnimatedIconPanel {
                     (float) (this.getYA() + this.getHeightA() - this.field20848),
                     (float) (this.getXA() + this.getWidthA()),
                     (float) (this.getYA() + this.getHeightA() - 5),
-                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.43F * var1));
+                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.85F * var1));
             RenderUtil.drawRoundedRect(
                     (float) this.getXA(),
                     (float) (this.getYA() + this.getHeightA() - 5),
                     (float) (this.getXA() + this.width),
                     (float) (this.getYA() + this.getHeightA()),
-                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.43F * var1));
+                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.85F * var1));
             RenderUtil.drawImage(
                     (float) (this.getXA() + (this.width - 114) / 2),
                     (float) (this.getYA() + this.getHeightA() - 170),
@@ -415,13 +620,13 @@ public class MusicPlayer extends AnimatedIconPanel {
                     (float) (this.getYA() + this.getHeightA() - this.field20848),
                     (float) (this.getXA() + this.getWidthA()),
                     (float) (this.getYA() + this.getHeightA() - 5),
-                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.43F * var1));
+                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.85F * var1));
             RenderUtil.drawRoundedRect(
                     (float) this.getXA(),
                     (float) (this.getYA() + this.getHeightA() - 5),
                     (float) (this.getXA() + this.width),
                     (float) (this.getYA() + this.getHeightA()),
-                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.43F * var1));
+                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.85F * var1));
             RenderUtil.drawImage(
                     (float) (this.getXA() + (this.width - 114) / 2),
                     (float) (this.getYA() + this.getHeightA() - 170),
@@ -433,6 +638,15 @@ public class MusicPlayer extends AnimatedIconPanel {
                     (float) (this.getXA() + (this.width - 114) / 2), (float) (this.getYA() + this.getHeightA() - 170),
                     114.0F, 114.0F, 14.0F, var1);
         }
+
+        // Restore GL state after cover art texture rendering to prevent state leak
+        // that would cause sidebar buttons to render as white rectangles
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        RenderSystem.disableTexture();
+        RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
+        RenderSystem.enableTexture();
     }
 
     private void method13194(float var1) {
@@ -440,21 +654,21 @@ public class MusicPlayer extends AnimatedIconPanel {
             String[] var4 = this.musicManager.getSongTitle().split(" - ");
             int var5 = 30;
             if (var4.length <= 1) {
-                this.drawString(var1, !var4[0].isEmpty() ? var4[0] : "Jello Music", this.width - var5 * 2, 12, 0);
+                this.drawNanoString(var1, !var4[0].isEmpty() ? var4[0] : "Jello Music", this.width - var5 * 2, 12, 0);
             } else {
-                this.drawString(var1, var4[1], this.width - var5 * 2, 0, 0);
+                this.drawNanoString(var1, var4[1], this.width - var5 * 2, 0, 0);
 
                 String lyric = this.musicManager.getCurrentLyric();
                 if (lyric != null && !lyric.isEmpty()) {
                     this.drawLyricString(var1, lyric, this.width - var5 * 2, 20, -1000);
                 } else {
-                    this.drawString(var1, var4[0], this.width - var5 * 2, 20, -1000);
+                    this.drawNanoString(var1, var4[0], this.width - var5 * 2, 20, -1000);
                 }
             }
         }
     }
 
-    private void drawString(float var1, String text, int var3, int var4, int var5) {
+    private void drawNanoString(float var1, String text, int var3, int var4, int var5) {
         Date var8 = new Date();
         float var9 = (float) ((var8.getTime() + (long) var5) % 8500L) / 8500.0F;
         if (!(var9 < 0.4F)) {
@@ -465,34 +679,63 @@ public class MusicPlayer extends AnimatedIconPanel {
         }
 
         var9 = QuadraticEasing.easeInOutQuad(var9, 0.0F, 1.0F, 1.0F);
-        int var10 = ResourceRegistry.JelloLightFont14.getWidth(text);
-        int var11 = Math.min(var3, var10);
-        int var12 = ResourceRegistry.JelloLightFont14.getHeight();
-        int var13 = this.getXA() + (this.width - var11) / 2;
-        int var14 = this.getYA() + this.getHeightA() - 50 + var4;
-        int var15 = Math.max(0, var10 - var11) * 2;
-        if (var10 <= var3) {
-            var9 = 0.0F;
-        }
 
-        RenderUtil.startScissor(var13, var14, var13 + var11, var14 + var12, true);
-        RenderUtil.drawString(
-                ResourceRegistry.JelloLightFont14,
-                (float) var13 - (float) var10 * var9 - 50.0F * var9,
-                (float) var14,
-                text,
-                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(),
-                        var1 * var1 * Math.min(1.0F, Math.max(0.0F, 1.0F - var9 * 0.75F))));
-        if (var9 > 0.0F) {
+        if (NanoVGFontRenderer.isInitialized()) {
+            float fontSize = 14.0f;
+            int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+            int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+            float textWidth = NanoVGFontRenderer.getTextWidth(text, fontSize);
+            int var11 = Math.min(var3, (int) textWidth);
+            int var12 = (int) fontSize;
+            int var13 = this.getXA() + (this.width - var11) / 2;
+            int var14 = this.getYA() + this.getHeightA() - 50 + var4;
+            int var10 = (int) textWidth;
+
+            if (var10 <= var3) {
+                var9 = 0.0F;
+            }
+
+            RenderUtil.startScissor(var13, var14, var13 + var11, var14 + var12, true);
+            int color = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(),
+                    var1 * var1 * Math.min(1.0F, Math.max(0.0F, 1.0F - var9 * 0.75F)));
+            NanoVGFontRenderer.beginFrame(sw, sh);
+            NanoVGFontRenderer.drawText(text, (float) var13 - (float) var10 * var9 - 50.0F * var9,
+                    (float) var14, fontSize, color);
+            if (var9 > 0.0F) {
+                NanoVGFontRenderer.drawText(text, (float) var13 - (float) var10 * var9 + (float) var10,
+                        (float) var14, fontSize,
+                        RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
+            }
+            NanoVGFontRenderer.endFrame();
+            RenderUtil.restoreScissor();
+        } else {
+            // Fallback to original font
+            int var10 = ResourceRegistry.JelloLightFont14.getWidth(text);
+            int var11 = Math.min(var3, var10);
+            int var12 = ResourceRegistry.JelloLightFont14.getHeight();
+            int var13 = this.getXA() + (this.width - var11) / 2;
+            int var14 = this.getYA() + this.getHeightA() - 50 + var4;
+            if (var10 <= var3) {
+                var9 = 0.0F;
+            }
+            RenderUtil.startScissor(var13, var14, var13 + var11, var14 + var12, true);
             RenderUtil.drawString(
                     ResourceRegistry.JelloLightFont14,
-                    (float) var13 - (float) var10 * var9 + (float) var10,
+                    (float) var13 - (float) var10 * var9 - 50.0F * var9,
                     (float) var14,
                     text,
-                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(),
+                            var1 * var1 * Math.min(1.0F, Math.max(0.0F, 1.0F - var9 * 0.75F))));
+            if (var9 > 0.0F) {
+                RenderUtil.drawString(
+                        ResourceRegistry.JelloLightFont14,
+                        (float) var13 - (float) var10 * var9 + (float) var10,
+                        (float) var14,
+                        text,
+                        RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
+            }
+            RenderUtil.restoreScissor();
         }
-
-        RenderUtil.restoreScissor();
     }
 
     private void drawLyricString(float var1, String text, int var3, int var4, int var5) {
@@ -573,7 +816,7 @@ public class MusicPlayer extends AnimatedIconPanel {
 
         float var4 = this.field20863 < 50 ? (float) this.field20863 / 50.0F : 1.0F;
         if (this.texture != null) {
-            RenderUtil.drawTexture(
+            RenderUtil.drawImage(
                     (float) this.width,
                     0.0F,
                     (float) (this.getWidthA() - this.width),
@@ -582,26 +825,42 @@ public class MusicPlayer extends AnimatedIconPanel {
                     RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4 * var1));
         }
 
+        // 使用深色半透明overlay代替白色overlay，避免产生白色条带
         RenderUtil.drawRoundedRect(
                 (float) this.width,
                 0.0F,
                 (float) this.getWidthA(),
                 (float) this.field20847,
-                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4 * var1 * 0.2F));
-        RenderUtil.drawString(
-                ResourceRegistry.JelloLightFont25,
-                (float) ((this.getWidthA() - ResourceRegistry.JelloLightFont25.getWidth(this.field20849) + this.width)
-                        / 2),
-                16.0F + (1.0F - var4) * 14.0F,
-                this.field20849,
-                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4));
-        RenderUtil.drawString(
-                ResourceRegistry.JelloMediumFont25,
-                (float) ((this.getWidthA() - ResourceRegistry.JelloMediumFont25.getWidth(this.field20849) + this.width)
-                        / 2),
-                16.0F + (1.0F - var4) * 14.0F,
-                this.field20849,
-                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 1.0F - var4));
+                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), var4 * var1 * 0.6F));
+
+        // Use NanoVG for header title (CJK safe)
+        if (NanoVGFontRenderer.isInitialized()) {
+            int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+            int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+            float fontSize = 25.0f;
+            float titleWidth = NanoVGFontRenderer.getTextWidth(this.field20849, fontSize);
+            float titleX = (float) ((this.getWidthA() - (int) titleWidth + this.width) / 2);
+            float titleY = 16.0F + (1.0F - var4) * 14.0F;
+            NanoVGFontRenderer.beginFrame(sw, sh);
+            NanoVGFontRenderer.drawText(this.field20849, titleX, titleY, fontSize,
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4));
+            NanoVGFontRenderer.endFrame();
+        } else {
+            RenderUtil.drawString(
+                    ResourceRegistry.JelloLightFont25,
+                    (float) ((this.getWidthA() - ResourceRegistry.JelloLightFont25.getWidth(this.field20849) + this.width)
+                            / 2),
+                    16.0F + (1.0F - var4) * 14.0F,
+                    this.field20849,
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4));
+            RenderUtil.drawString(
+                    ResourceRegistry.JelloMediumFont25,
+                    (float) ((this.getWidthA() - ResourceRegistry.JelloMediumFont25.getWidth(this.field20849) + this.width)
+                            / 2),
+                    16.0F + (1.0F - var4) * 14.0F,
+                    this.field20849,
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 1.0F - var4));
+        }
         RenderUtil.drawImage(
                 (float) this.width,
                 (float) this.field20847,
@@ -610,6 +869,94 @@ public class MusicPlayer extends AnimatedIconPanel {
                 Resources.shadowBottomPNG,
                 RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4 * var1 * 0.5F));
         this.field20863 = this.field20852.method13513();
+    }
+
+    @Override
+    public boolean onClick(int mouseX, int mouseY, int mouseButton) {
+        // Dismiss Netease QR overlay on click
+        if (this.showNeteaseQr) {
+            this.closeNeteaseQrOverlay(true);
+            return true;
+        }
+        return super.onClick(mouseX, mouseY, mouseButton);
+    }
+
+    private static boolean hasVideo(String videoId) {
+        for (Thumbnails existing : videos) {
+            if (existing.videoId.equals(videoId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void showNeteaseQrOverlay(java.awt.image.BufferedImage qrImage, String uniKey) {
+        this.neteaseQrImage = qrImage;
+        this.neteaseQrUniKey = uniKey;
+        this.neteaseQrTexture = null;
+        this.showNeteaseQr = true;
+    }
+
+    private void closeNeteaseQrOverlay(boolean releaseTexture) {
+        this.showNeteaseQr = false;
+        this.neteaseQrImage = null;
+        this.neteaseQrUniKey = null;
+        if (releaseTexture && this.neteaseQrTexture != null) {
+            this.neteaseQrTexture.release();
+        }
+        this.neteaseQrTexture = null;
+    }
+
+    private void loadUserNeteasePlaylists(ColorHelper color, MusicPlayer player) {
+        new Thread(() -> {
+            try {
+                System.out.println("[MusicPlayer] loadUserNeteasePlaylists: isLoggedIn=" + NeteaseApiLogin.isLoggedIn()
+                        + ", userId=" + NeteaseApiLogin.getUserId());
+                if (!NeteaseApiLogin.isLoggedIn()) {
+                    System.out.println("[MusicPlayer] Not logged in, skipping playlist load");
+                    return;
+                }
+
+                if (NeteaseApiLogin.getUserId() == 0) {
+                    System.out.println("[MusicPlayer] userId is 0, fetching login status...");
+                    NeteaseApiLogin.getLoginStatus(null);
+                    System.out.println("[MusicPlayer] After getLoginStatus: userId=" + NeteaseApiLogin.getUserId());
+                    if (NeteaseApiLogin.getUserId() == 0) {
+                        System.err.println("[MusicPlayer] Still no userId after getLoginStatus, aborting");
+                        return;
+                    }
+                }
+
+                List<NeteaseRequestApi.ToplistInfo> playlists = NeteaseRequestApi.getUserPlaylists(0);
+                System.out.println("[MusicPlayer] Got " + playlists.size() + " user playlists");
+                List<Thumbnails> added = new ArrayList<>();
+                for (NeteaseRequestApi.ToplistInfo playlist : playlists) {
+                    String videoId = NETEASE_PLAYLIST_PREFIX + playlist.id;
+                    if (!hasVideo(videoId)) {
+                        Thumbnails thumbnail = new Thumbnails(playlist.name, videoId, YoutubeContentType.NETEASE);
+                        videos.add(thumbnail);
+                        added.add(thumbnail);
+                        System.out.println("[MusicPlayer] Added playlist: " + playlist.name + " (id=" + playlist.id + ")");
+                    }
+                }
+
+                System.out.println("[MusicPlayer] Loading songs for " + added.size() + " new playlists...");
+                for (Thumbnails thumbnail : added) {
+                    if (!videoMap.containsKey(thumbnail.videoId) && !thumbnail.isUpdated) {
+                        thumbnail.isUpdated = true;
+                        thumbnail.refreshVideoList();
+                        videoMap.put(thumbnail.videoId, thumbnail);
+                    }
+                    System.out.println("[MusicPlayer] Scheduling MusicInitializer for: " + thumbnail.name
+                            + " (" + thumbnail.videoList.size() + " songs)");
+                    this.runThisOnDimensionUpdate(new MusicInitializer(this, thumbnail, color, player));
+                }
+                System.out.println("[MusicPlayer] loadUserNeteasePlaylists complete");
+            } catch (Exception e) {
+                System.err.println("[MusicPlayer] loadUserNeteasePlaylists FAILED");
+                e.printStackTrace();
+            }
+        }, "NeteaseUserPlaylistsLoader").start();
     }
 
     public static ScrollableContentPanel getTabs(MusicPlayer player) {

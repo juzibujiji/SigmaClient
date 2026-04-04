@@ -7,12 +7,14 @@ import com.mentalfrostbyte.jello.gui.combined.AnimatedIconPanel;
 import com.mentalfrostbyte.jello.gui.impl.jello.buttons.ScrollableContentPanel;
 import com.mentalfrostbyte.jello.gui.impl.jello.buttons.TextField;
 import com.mentalfrostbyte.jello.managers.MusicManager;
-import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeJPGThumbnail;
+import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiSearch;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
-import com.mentalfrostbyte.jello.util.client.network.youtube.ThumbnailUtil;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class SearchBox extends AnimatedIconPanel {
     public ScrollableContentPanel field20840;
@@ -27,6 +29,42 @@ public class SearchBox extends AnimatedIconPanel {
         this.searchBox.setReAddChildren(true);
     }
 
+    public void setPageActive(boolean active) {
+        this.setSelfVisible(active);
+        this.setListening(active);
+        this.searchBox.setSelfVisible(active);
+        this.searchBox.setListening(active);
+        this.field20840.setSelfVisible(active);
+        this.field20840.setListening(active);
+        if (!active) {
+            this.searchBox.setFocused(false);
+        }
+    }
+
+    private static String normalizeCoverUrl(String coverUrl) {
+        if (coverUrl == null) {
+            return "";
+        }
+
+        String normalized = coverUrl.trim();
+        if (normalized.isEmpty()) {
+            return "";
+        }
+
+        if (normalized.startsWith("//")) {
+            normalized = "https:" + normalized;
+        }
+
+        if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+            if (!normalized.contains("param=")) {
+                normalized += (normalized.contains("?") ? "&" : "?") + "param=300y300";
+            }
+            return normalized;
+        }
+
+        return "";
+    }
+
     @Override
     public void draw(float partialTicks) {
         super.draw(partialTicks);
@@ -39,10 +77,45 @@ public class SearchBox extends AnimatedIconPanel {
             new Thread(
                     () -> {
                         this.field20842 = new ArrayList<>();
-                        YoutubeJPGThumbnail[] var3 = ThumbnailUtil.search(this.searchBox.getText());
 
-                        for (YoutubeJPGThumbnail var7 : var3) {
-                            this.field20842.add(new YoutubeVideoData(var7.videoID, var7.title, var7.fullUrl));
+                        // 使用网易云音乐搜索替代 YouTube
+                        List<NeteaseApiSearch.NeteaseTrack> tracks =
+                                NeteaseApiSearch.search(this.searchBox.getText());
+
+                        List<Long> missingCoverIds = new ArrayList<>();
+                        for (NeteaseApiSearch.NeteaseTrack track : tracks) {
+                            if (normalizeCoverUrl(track.coverUrl).isEmpty() && track.id > 0) {
+                                missingCoverIds.add(track.id);
+                            }
+                        }
+
+                        Map<Long, String> detailCoverMap = new HashMap<>();
+                        if (!missingCoverIds.isEmpty()) {
+                            long[] ids = new long[missingCoverIds.size()];
+                            for (int i = 0; i < missingCoverIds.size(); i++) {
+                                ids[i] = missingCoverIds.get(i);
+                            }
+                            List<NeteaseApiSearch.NeteaseTrack> details = NeteaseApiSearch.getSongDetail(ids);
+                            for (NeteaseApiSearch.NeteaseTrack detail : details) {
+                                detailCoverMap.put(detail.id, normalizeCoverUrl(detail.coverUrl));
+                            }
+                        }
+
+                        for (NeteaseApiSearch.NeteaseTrack track : tracks) {
+                            String normalizedCover = normalizeCoverUrl(track.coverUrl);
+                            if (normalizedCover.isEmpty()) {
+                                normalizedCover = detailCoverMap.getOrDefault(track.id, "");
+                            }
+
+                            // 使用 netease:// 占位URL，播放时再延迟解析真实URL
+                            // 避免搜索时对每首歌逐个调用 getSongUrl 造成阻塞
+                            this.field20842.add(new YoutubeVideoData(
+                                    "netease://" + track.id,
+                                    track.getDisplayTitle(),
+                                    normalizedCover,
+                                    track.id,
+                                    track.duration
+                            ));
                         }
 
                         this.runThisOnDimensionUpdate(

@@ -172,17 +172,18 @@ public class CustomGuiScreen implements IGuiEventListener {
         this.heightO = newHeight;
         this.field20908 = this.isVisible() && this.method13229(newHeight, newWidth);
 
-        try {
-            for (Runnable runnable : this.runOnDimensionUpdate) {
-                if (runnable != null) {
-                    runnable.run();
-                }
-            }
-        } catch (ConcurrentModificationException e) {
-            Client.getInstance().logger.info("kys concurrent modification exception go away");
+        // Atomically grab and clear pending runnables to avoid ConcurrentModificationException
+        // when background threads add runnables while we iterate
+        List<Runnable> pendingRunnables;
+        synchronized (this) {
+            pendingRunnables = new ArrayList<>(this.runOnDimensionUpdate);
+            this.runOnDimensionUpdate.clear();
         }
-
-        this.runOnDimensionUpdate.clear();
+        for (Runnable runnable : pendingRunnables) {
+            if (runnable != null) {
+                runnable.run();
+            }
+        }
         this.field20917 = true;
 
         try {

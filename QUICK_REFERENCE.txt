@@ -1,0 +1,68 @@
+Quick Reference - Codebase Search Results
+============================================================
+
+1. ZXing Dependency Check
+Status: NOT FOUND
+File: /e/.sigma/SigmaClient/pom.xml
+Action: Need to add ZXing library
+
+2. QR Code Related Code
+Status: NO MATCHES FOUND
+Patterns searched: QR, zxing, qrcode
+Result: Clean slate for implementation
+
+3. Font Registry - ResourceRegistry.java
+File: /e/.sigma/SigmaClient/src/main/java/com/mentalfrostbyte/jello/util/client/render/ResourceRegistry.java
+Status: FOUND
+
+Available Fonts:
+- JelloLightFont12 through JelloLightFont50 (10 sizes)
+- JelloMediumFont20, 25, 40, 50 (4 sizes)
+- RegularFont20, RegularFont40
+- DefaultClientFont, LyricsFont (CJK support)
+
+Requested fonts found:
+✓ JelloLightFont14 (Line 13-14)
+✓ JelloLightFont20 (Line 17-18)
+✓ JelloLightFont25 (Line 19-20)
+✓ JelloLightFont40 (Line 21-22)
+✓ JelloMediumFont20 (Line 37-38)
+✓ JelloMediumFont25 (Line 39-40)
+
+4. RenderUtil.drawString Method Signatures
+File: /e/.sigma/SigmaClient/src/main/java/com/mentalfrostbyte/jello/util/game/render/RenderUtil.java
+Status: FOUND
+
+Three Overloads:
+
+Overload 1 (Lines 641-643):
+  public static void drawString(TrueTypeFont res, float var1, float var2, 
+                                String string, int var4, 
+                                FontSizeAdjust var5, FontSizeAdjust var6)
+
+Overload 2 - MAIN (Lines 645-710):
+  public static void drawString(TrueTypeFont font, float x, float y, 
+                                String text, int color, 
+                                FontSizeAdjust widthAdjust, 
+                                FontSizeAdjust heightAdjust, boolean var7)
+  
+  Features:
+  - ARGB color support
+  - Text alignment (center, left, right, top, bottom)
+  - Shadow rendering support
+  - DPI scaling (GuiManager.scaleFactor)
+  - GL blending (GL11.glBlendFunc(770, 771))
+
+Overload 3 (Lines 728-730):
+  public static void drawString(TrueTypeFont font, float x, float y, 
+                                String text, int color)
+  - Convenience method with default alignment and no shadow
+
+DOCUMENTATION FILES CREATED
+============================================================
+1. CODEBASE_ANALYSIS.md - Detailed analysis with code snippets
+2. SEARCH_RESULTS_SUMMARY.txt - Comprehensive search results
+3. FONT_REFERENCE.txt - Complete font system documentation
+4. QUICK_REFERENCE.txt - This file
+
+All files saved to: /e/.sigma/SigmaClient/

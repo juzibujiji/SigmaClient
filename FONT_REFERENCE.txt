@@ -1,0 +1,214 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                      FONT REGISTRY COMPLETE REFERENCE                      ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Font Family Structure
+═════════════════════════════════════════════════════════════════════════════
+
+JELLO LIGHT FONTS (Helvetica Neue Light)
+├─ JelloLightFont12   (12px)  - For very small UI text
+├─ JelloLightFont14   (14px)  - Small labels
+├─ JelloLightFont18   (18px)  - Medium UI text
+├─ JelloLightFont20   (20px)  - Standard UI text (COMMON)
+├─ JelloLightFont24   (24px)  - Slightly larger text
+├─ JelloLightFont25   (25px)  - Headers/titles
+├─ JelloLightFont28   (28px)  - Large headers
+├─ JelloLightFont36   (36px)  - Very large headers
+├─ JelloLightFont40   (40px)  - Large display text
+└─ JelloLightFont50   (50px)  - Extra large display text
+
+JELLO MEDIUM FONTS (Helvetica Neue Medium)
+├─ JelloMediumFont20  (20px)  - Bold standard UI text (COMMON)
+├─ JelloMediumFont25  (25px)  - Bold headers
+├─ JelloMediumFont40  (40px)  - Bold large text
+└─ JelloMediumFont50  (50px)  - Bold extra large text
+
+REGULAR FONTS
+├─ RegularFont20      (20px)  - Standard text
+└─ RegularFont40      (40px)  - Large text
+
+SPECIAL FONTS
+├─ DefaultClientFont         - Default client rendering font
+└─ LyricsFont                - Supports CJK (Chinese characters)
+
+
+Font Allocation Summary Table
+═════════════════════════════════════════════════════════════════════════════
+
+Size  │ Light Font      │ Medium Font     │ Regular Font    │ Scale 2x
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  12  │ JelloLightFont  │      ×          │      ×          │ → 24
+      │       12        │                 │                 │
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  14  │ JelloLightFont  │      ×          │      ×          │ → 28
+      │       14        │                 │                 │
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  18  │ JelloLightFont  │ JelloMediumFont │      ×          │ → 36
+      │       18        │      18_1       │                 │
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  20  │ JelloLightFont  │ JelloMediumFont │  RegularFont20  │ → 40
+      │       20        │       20        │                 │ → 40
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  24  │ JelloLightFont  │      ×          │      ×          │  ×
+      │       24        │                 │                 │
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  25  │ JelloLightFont  │ JelloMediumFont │      ×          │ → 50
+      │       25        │       25        │                 │ → 50
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  28  │ JelloLightFont  │      ×          │      ×          │  ×
+      │       28        │                 │                 │
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  36  │ JelloLightFont  │      ×          │      ×          │  ×
+      │       36        │                 │                 │
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  40  │ JelloLightFont  │ JelloMediumFont │  RegularFont40  │  ×
+      │       40        │       40        │                 │
+──────┼─────────────────┼─────────────────┼─────────────────┼──────────
+  50  │ JelloLightFont  │ JelloMediumFont │      ×          │  ×
+      │       50        │       50        │                 │
+
+
+Dynamic Scaling Rules (GuiManager.scaleFactor == 2.0)
+═════════════════════════════════════════════════════════════════════════════
+
+LIGHT FONTS:
+  JelloLightFont12 (12) ──→ JelloLightFont24 (24)
+  JelloLightFont14 (14) ──→ JelloLightFont28 (28)
+  JelloLightFont18 (18) ──→ JelloLightFont36 (36)
+  JelloLightFont20 (20) ──→ JelloLightFont40 (40)  ★ MOST COMMON
+  JelloLightFont25 (25) ──→ JelloLightFont50 (50)
+
+MEDIUM FONTS:
+  JelloMediumFont20 (20) ──→ JelloMediumFont40 (40) ★ COMMON
+  JelloMediumFont25 (25) ──→ JelloMediumFont50 (50)
+
+REGULAR FONTS:
+  RegularFont20 (20) ──→ RegularFont40 (40)
+
+
+RenderUtil.drawString Usage Pattern
+═════════════════════════════════════════════════════════════════════════════
+
+Basic Call (most common):
+  RenderUtil.drawString(
+      ResourceRegistry.JelloLightFont20,  // Font object
+      100.0F,                             // X position
+      50.0F,                              // Y position
+      "Hello World",                      // Text
+      0xFFFFFFFF                          // Color (ARGB: white)
+  );
+
+Full Control Call:
+  RenderUtil.drawString(
+      ResourceRegistry.JelloMediumFont25,
+      centerX,
+      centerY,
+      "Centered Text",
+      0xFF00FF00,                         // Color (ARGB: green)
+      FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2,  // Center X
+      FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2,  // Center Y
+      true                                // Draw shadow
+  );
+
+Color Format (ARGB - 32-bit integer):
+  0xAARRGGBB
+  0xFFFFFFFF = White (fully opaque)
+  0xFF000000 = Black (fully opaque)
+  0x80FFFFFF = White (50% transparent)
+  0x00FFFFFF = White (100% transparent)
+
+
+FontSizeAdjust Alignment Options
+═════════════════════════════════════════════════════════════════════════════
+
+field14488 (Width):
+  - LEFT: Normal left alignment
+  - NEGATE_AND_DIVIDE_BY_2: Center horizontally
+  - WIDTH_NEGATE: Right align (text ends at X coordinate)
+
+field14489 (Height):
+  - TOP: Normal top alignment
+  - NEGATE_AND_DIVIDE_BY_2: Center vertically
+  - HEIGHT_NEGATE: Bottom align (text ends at Y coordinate)
+
+Shadow (boolean):
+  - true: Renders shadow text at offset (x, y+2) with semi-transparent black
+  - false: No shadow
+
+
+Common Usage Scenarios
+═════════════════════════════════════════════════════════════════════════════
+
+Scenario 1: Centered Text (e.g., Dialog title)
+  RenderUtil.drawString(
+      ResourceRegistry.JelloMediumFont25,
+      screenWidth / 2.0F,
+      screenHeight / 4.0F,
+      "Dialog Title",
+      0xFFFFFFFF,
+      FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2,
+      FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2,
+      true  // shadow for emphasis
+  );
+
+Scenario 2: Right-aligned Label (e.g., stat value)
+  RenderUtil.drawString(
+      ResourceRegistry.JelloLightFont20,
+      rightEdgeX,
+      labelY,
+      "100",
+      0xFFFFFFFF,
+      FontSizeAdjust.WIDTH_NEGATE,  // Right align
+      FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2,  // Center vertical
+      false
+  );
+
+Scenario 3: Simple left-aligned text
+  RenderUtil.drawString(
+      ResourceRegistry.JelloLightFont20,
+      10.0F,
+      10.0F,
+      "Status: Ready",
+      0xFF00FF00
+  );
+
+
+Font Selection Guide
+═════════════════════════════════════════════════════════════════════════════
+
+Size 20-25px for:
+  ✓ Main UI text labels
+  ✓ Button labels
+  ✓ Status text
+  ✓ Most GUI elements
+
+Size 40-50px for:
+  ✓ Screen titles
+  ✓ Large dialogs
+  ✓ Emphasis text
+  ✓ High-DPI scaling (when GuiManager.scaleFactor == 2.0)
+
+Light weight for:
+  ✓ Regular UI text
+  ✓ Information displays
+  ✓ Less emphasis
+
+Medium weight for:
+  ✓ Important labels
+  ✓ Button text
+  ✓ Headers
+  ✓ More emphasis
+
+
+Font File Locations
+═════════════════════════════════════════════════════════════════════════════
+
+Light:   com/mentalfrostbyte/gui/resources/font/helvetica-neue-light.ttf
+Medium:  com/mentalfrostbyte/gui/resources/font/helvetica-neue medium.ttf
+Regular: com/mentalfrostbyte/gui/resources/font/regular.ttf
+
+All fonts loaded via Resources.readInputStream(fontPath)
+Fallback to Arial if font loading fails
+
+
+══════════════════════════════════════════════════════════════════════════════

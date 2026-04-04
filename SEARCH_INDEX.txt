@@ -1,0 +1,196 @@
+================================================================================
+                    CODEBASE SEARCH - DOCUMENTATION INDEX
+================================================================================
+
+This directory contains comprehensive documentation from the codebase search.
+
+GENERATED DOCUMENTS:
+────────────────────────────────────────────────────────────────────────────
+
+1. CODEBASE_ANALYSIS.md (7.3 KB)
+   ├─ ZXing Dependency Status
+   ├─ Existing QR Code Implementation Review
+   ├─ ResourceRegistry.java Font Declarations (with line numbers)
+   ├─ RenderUtil.drawString Method Signatures
+   └─ Summary Table with Status
+
+   Best for: Technical deep-dive, code snippets, detailed analysis
+
+2. SEARCH_RESULTS_SUMMARY.txt (6.2 KB)
+   ├─ ZXing Dependency Check
+   ├─ Existing QR Code / ZXing Code Search Results
+   ├─ Font Registry Details
+   ├─ RenderUtil.drawString Implementation Details
+   ├─ Font Allocation Table
+   ├─ Dynamic Font Scaling Rules
+   ├─ Usage Patterns
+   └─ File Paths Reference
+
+   Best for: Comprehensive reference, implementation patterns
+
+3. FONT_REFERENCE.txt (11 KB)
+   ├─ Font Family Structure (hierarchy tree)
+   ├─ Font Allocation Summary Table
+   ├─ Dynamic Scaling Rules (GuiManager.scaleFactor)
+   ├─ RenderUtil.drawString Usage Patterns
+   ├─ Color Format Guide (ARGB)
+   ├─ FontSizeAdjust Alignment Options
+   ├─ Common Usage Scenarios (3 examples)
+   ├─ Font Selection Guide
+   └─ Font File Locations
+
+   Best for: Visual reference, usage examples, selection guidance
+
+4. QUICK_REFERENCE.txt (2.4 KB)
+   ├─ ZXing Dependency Status
+   ├─ Font Registry Summary
+   ├─ RenderUtil Method Overview
+   └─ Documentation Files List
+
+   Best for: Quick lookup, at-a-glance information
+
+================================================================================
+
+SEARCH SUMMARY
+────────────────────────────────────────────────────────────────────────────
+
+Item                              Status    File Reference
+─────────────────────────────────────────────────────────────────────────
+ZXing Dependency in pom.xml      ❌ NO    CODEBASE_ANALYSIS.md
+Existing QR Code Code            ❌ NO    SEARCH_RESULTS_SUMMARY.txt
+ResourceRegistry.java Fonts      ✅ YES   FONT_REFERENCE.txt
+RenderUtil.drawString Method     ✅ YES   SEARCH_RESULTS_SUMMARY.txt
+
+================================================================================
+
+FILE LOCATIONS
+────────────────────────────────────────────────────────────────────────────
+
+pom.xml (Maven configuration):
+  /e/.sigma/SigmaClient/pom.xml
+  Status: ZXing NOT FOUND (need to add)
+
+ResourceRegistry.java (Font declarations):
+  /e/.sigma/SigmaClient/src/main/java/com/mentalfrostbyte/
+  jello/util/client/render/ResourceRegistry.java
+  Status: ✅ All 6 requested fonts found
+  Lines: 94 total
+
+RenderUtil.java (Text rendering):
+  /e/.sigma/SigmaClient/src/main/java/com/mentalfrostbyte/
+  jello/util/game/render/RenderUtil.java
+  Status: ✅ 3 drawString overloads found
+  Lines: ~25,026 total
+
+================================================================================
+
+FONTS FOUND - QUICK SUMMARY
+────────────────────────────────────────────────────────────────────────────
+
+Requested Fonts (All Found):
+✓ JelloLightFont14   (Line 13-14)  - Size 14px
+✓ JelloLightFont20   (Line 17-18)  - Size 20px
+✓ JelloLightFont25   (Line 19-20)  - Size 25px
+✓ JelloLightFont40   (Line 21-22)  - Size 40px
+✓ JelloMediumFont20  (Line 37-38)  - Size 20px
+✓ JelloMediumFont25  (Line 39-40)  - Size 25px
+
+Additional Available Fonts:
+- 4 more Light fonts: 12, 18, 24, 28, 36, 50px
+- 2 more Medium fonts: 40, 50px
+- 2 Regular fonts: 20, 40px
+- 2 Special fonts: DefaultClientFont, LyricsFont
+
+Total: 14+ distinct fonts
+
+================================================================================
+
+RENDERUTIL.DRAWSTRING - QUICK SUMMARY
+────────────────────────────────────────────────────────────────────────────
+
+Three Method Overloads:
+
+1. Lines 641-643 - Basic signature with FontSizeAdjust
+2. Lines 645-710 - Full implementation (MAIN)
+3. Lines 728-730 - Convenience method
+
+Key Features:
+✓ ARGB color format (0xAARRGGBB)
+✓ Text alignment support (left/center/right, top/center/bottom)
+✓ Shadow rendering (offset y+2, semi-transparent black)
+✓ DPI scaling (GuiManager.scaleFactor support)
+✓ GL blending for proper rendering
+✓ Dynamic font scaling @ 2.0x
+
+================================================================================
+
+RECOMMENDATIONS FOR QR CODE INTEGRATION
+────────────────────────────────────────────────────────────────────────────
+
+1. Add ZXing Dependency
+   Location: pom.xml in <dependencies> section
+   Add:
+   <dependency>
+       <groupId>com.google.zxing</groupId>
+       <artifactId>core</artifactId>
+       <version>3.5.0</version>
+   </dependency>
+
+2. Create QR Renderer
+   Use ZXing for QR code generation
+   Use RenderUtil.drawString for text overlays
+   Follow existing font and color patterns
+
+3. Integration Points
+   ResourceRegistry.java for fonts
+   RenderUtil.java for rendering
+   GuiManager for scaling factors
+
+4. Best Practices
+   Use ARGB color format (0xFFFFFFFF for white)
+   Support DPI scaling via GuiManager.scaleFactor
+   Consider shadow effects for visibility
+   Use appropriate font sizes (20-25px standard, 40-50px large)
+
+================================================================================
+
+HOW TO USE THIS DOCUMENTATION
+────────────────────────────────────────────────────────────────────────────
+
+For Quick Overview:
+  → Start with QUICK_REFERENCE.txt
+
+For Font Selection:
+  → Use FONT_REFERENCE.txt (has visual hierarchy and selection guide)
+
+For Implementation Details:
+  → Check SEARCH_RESULTS_SUMMARY.txt (has code patterns and details)
+
+For Code Snippets:
+  → See CODEBASE_ANALYSIS.md (includes actual code from the repo)
+
+For Complete Reference:
+  → All files together provide comprehensive coverage
+
+================================================================================
+
+SEARCH METHODOLOGY
+────────────────────────────────────────────────────────────────────────────
+
+Searches performed:
+1. Glob pattern: **/pom.xml (Maven configuration files)
+2. Glob pattern: **/ResourceRegistry.java (Font registry)
+3. Glob pattern: **/RenderUtil.java (Text rendering utility)
+4. Grep pattern: "QR|zxing|qrcode" across all .java files
+
+All searches completed successfully
+No configuration or build file issues detected
+All requested fonts located
+
+================================================================================
+
+Created: 2026-04-03
+Total Documentation: 4 files (~27 KB)
+Status: Complete and ready for review
+
+================================================================================

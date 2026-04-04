@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(ls -la *.xml)",
+      "Bash(ls -lh *.txt)",
+      "Bash(wc -l *.txt)",
+      "Bash(ls -la *.txt *.md)"
+    ]
+  }
+}

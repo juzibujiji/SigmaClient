@@ -1,0 +1,5 @@
+./src/main/java/com/mentalfrostbyte/jello/util/client/network/youtube/YoutubeContentType.java
+./src/main/java/com/mentalfrostbyte/jello/util/client/network/youtube/YoutubeJPGThumbnail.java
+./src/main/java/com/mentalfrostbyte/jello/util/client/network/youtube/YoutubeUtil.java
+./src/main/java/com/mentalfrostbyte/jello/util/client/network/youtube/YoutubeVideoData.java
+./src/main/resources/assets/minecraft/com/mentalfrostbyte/gui/resources/loading/youtube.png
