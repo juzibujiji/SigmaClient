@@ -1,6 +1,7 @@
 package net.minecraft.client.renderer.entity;
 
 import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.event.impl.game.render.EventRendererLivingEntity;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.impl.render.ItemPhysics;
 import com.mojang.blaze3d.matrix.MatrixStack;
@@ -17,6 +18,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.vector.Vector3f;
+import team.sdhq.eventBus.EventBus;
 
 public class ItemRenderer extends EntityRenderer<ItemEntity>
 {
@@ -56,6 +58,13 @@ public class ItemRenderer extends EntityRenderer<ItemEntity>
     }
 
     public void render(ItemEntity entityIn, float entityYaw, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int packedLightIn) {
+        EventRendererLivingEntity event = new EventRendererLivingEntity(true, entityIn);
+        EventBus.call(event);
+
+        if (event.cancelled) {
+            return;
+        }
+
         Module module = Client.getInstance().moduleManager.getModuleByClass(ItemPhysics.class);
         matrixStackIn.push();
         ItemStack itemstack = entityIn.getItem();
@@ -105,6 +114,7 @@ public class ItemRenderer extends EntityRenderer<ItemEntity>
         }
 
         matrixStackIn.pop();
+        EventBus.call(new EventRendererLivingEntity(false, entityIn));
         super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
     }
 

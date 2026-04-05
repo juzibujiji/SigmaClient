@@ -3,6 +3,7 @@ package net.minecraft.client.renderer.entity;
 import com.google.common.collect.Lists;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRenderEntity;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRenderNameTag;
+import com.mentalfrostbyte.jello.event.impl.game.render.EventRendererLivingEntity;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import java.util.List;
@@ -148,77 +149,76 @@ public abstract class LivingRenderer<T extends LivingEntity, M extends EntityMod
             float f9 = 0.0F;
             float f5 = 0.0F;
 
-            if (!entityIn.isPassenger() && entityIn.isAlive())
-            {
-                f9 = MathHelper.lerp(partialTicks, entityIn.prevLimbSwingAmount, entityIn.limbSwingAmount);
-                f5 = entityIn.limbSwing - entityIn.limbSwingAmount * (1.0F - partialTicks);
+            //这里没改完只改了alpha 为了blink的fakeplayer的透明度更改
+            EventRendererLivingEntity evt = new EventRendererLivingEntity(true, entityIn, f5, f9, f8, f2, f7, f, 0.0625f);
+            EventBus.call(evt);
 
-                if (entityIn.isChild())
-                {
-                    f5 *= 3.0F;
-                }
+            if (!evt.cancelled) {
+                if (!entityIn.isPassenger() && entityIn.isAlive()) {
+                    f9 = MathHelper.lerp(partialTicks, entityIn.prevLimbSwingAmount, entityIn.limbSwingAmount);
+                    f5 = entityIn.limbSwing - entityIn.limbSwingAmount * (1.0F - partialTicks);
 
-                if (f9 > 1.0F)
-                {
-                    f9 = 1.0F;
-                }
-            }
-
-            eventRenderEntity.setState(EventRenderEntity.RenderState.MID);
-            EventBus.call(eventRenderEntity);
-
-            this.entityModel.setLivingAnimations(entityIn, f5, f9, partialTicks);
-            this.entityModel.setRotationAngles(entityIn, f5, f9, f8, f2, f7);
-
-            if (CustomEntityModels.isActive())
-            {
-                this.renderEntity = entityIn;
-                this.renderLimbSwing = f5;
-                this.renderLimbSwingAmount = f9;
-                this.renderAgeInTicks = f8;
-                this.renderHeadYaw = f2;
-                this.renderHeadPitch = f7;
-                this.renderPartialTicks = partialTicks;
-            }
-
-            boolean flag = Config.isShaders();
-            Minecraft minecraft = Minecraft.getInstance();
-            boolean flag1 = this.isVisible(entityIn);
-            boolean flag2 = !flag1 && !entityIn.isInvisibleToPlayer(minecraft.player);
-            boolean flag3 = minecraft.isEntityGlowing(entityIn);
-            RenderType rendertype = this.func_230496_a_(entityIn, flag1, flag2, flag3);
-
-            if (rendertype != null)
-            {
-                IVertexBuilder ivertexbuilder = bufferIn.getBuffer(rendertype);
-                float f6 = this.getOverlayProgress(entityIn, partialTicks);
-
-                if (flag)
-                {
-                    if (entityIn.hurtTime > 0 || entityIn.deathTime > 0)
-                    {
-                        Shaders.setEntityColor(1.0F, 0.0F, 0.0F, 0.3F);
+                    if (entityIn.isChild()) {
+                        f5 *= 3.0F;
                     }
 
-                    if (f6 > 0.0F)
-                    {
-                        Shaders.setEntityColor(f6, f6, f6, 0.5F);
+                    if (f9 > 1.0F) {
+                        f9 = 1.0F;
                     }
                 }
 
-                int i = getPackedOverlay(entityIn, f6);
-                this.entityModel.render(matrixStackIn, ivertexbuilder, packedLightIn, i, 1.0F, 1.0F, 1.0F, flag2 ? 0.15F : 1.0F);
-            }
+                eventRenderEntity.setState(EventRenderEntity.RenderState.MID);
+                EventBus.call(eventRenderEntity);
 
-            if (!entityIn.isSpectator() && eventRenderEntity.method13954()) {
-                for (LayerRenderer<T, M> layerrenderer : this.layerRenderers) {
-                    layerrenderer.render(matrixStackIn, bufferIn, packedLightIn, entityIn, f5, f9, partialTicks, f8, f2, f7);
+                this.entityModel.setLivingAnimations(entityIn, f5, f9, partialTicks);
+                this.entityModel.setRotationAngles(entityIn, f5, f9, f8, f2, f7);
+
+                if (CustomEntityModels.isActive()) {
+                    this.renderEntity = entityIn;
+                    this.renderLimbSwing = f5;
+                    this.renderLimbSwingAmount = f9;
+                    this.renderAgeInTicks = f8;
+                    this.renderHeadYaw = f2;
+                    this.renderHeadPitch = f7;
+                    this.renderPartialTicks = partialTicks;
                 }
-            }
 
-            if (Config.isShaders())
-            {
-                Shaders.setEntityColor(0.0F, 0.0F, 0.0F, 0.0F);
+                boolean flag = Config.isShaders();
+                Minecraft minecraft = Minecraft.getInstance();
+                boolean flag1 = this.isVisible(entityIn);
+                boolean flag2 = !flag1 && !entityIn.isInvisibleToPlayer(minecraft.player);
+                boolean flag3 = minecraft.isEntityGlowing(entityIn);
+                RenderType rendertype = this.func_230496_a_(entityIn, flag1, flag2, flag3);
+
+                if (rendertype != null) {
+                    IVertexBuilder ivertexbuilder = bufferIn.getBuffer(rendertype);
+                    float f6 = this.getOverlayProgress(entityIn, partialTicks);
+
+                    if (flag) {
+                        if (entityIn.hurtTime > 0 || entityIn.deathTime > 0) {
+                            Shaders.setEntityColor(1.0F, 0.0F, 0.0F, 0.3F);
+                        }
+
+                        if (f6 > 0.0F) {
+                            Shaders.setEntityColor(f6, f6, f6, 0.5F);
+                        }
+                    }
+
+                    int i = getPackedOverlay(entityIn, f6);
+                    //this.entityModel.render(matrixStackIn, ivertexbuilder, packedLightIn, i, 1.0F, 1.0F, 1.0F, evt.getAlpha()/*flag2 ? 0.15F : 1.0F*/);
+                    // 在渲染方法中：
+                    this.entityModel.render(matrixStackIn, ivertexbuilder, packedLightIn, i, 1.0F, 1.0F, 1.0F, evt.getAlpha());
+                }
+
+                if (!entityIn.isSpectator() && eventRenderEntity.method13954()) {
+                    for (LayerRenderer<T, M> layerrenderer : this.layerRenderers) {
+                        layerrenderer.render(matrixStackIn, bufferIn, packedLightIn, entityIn, f5, f9, partialTicks, f8, f2, f7);
+                    }
+                }
+
+                if (Config.isShaders()) {
+                    Shaders.setEntityColor(0.0F, 0.0F, 0.0F, 0.0F);
+                }
             }
 
             if (CustomEntityModels.isActive())
@@ -228,6 +228,9 @@ public abstract class LivingRenderer<T extends LivingEntity, M extends EntityMod
 
             eventRenderEntity.setState(EventRenderEntity.RenderState.POST);
             EventBus.call(eventRenderEntity);
+
+            EventBus.call(new EventRendererLivingEntity(false, entityIn));
+
             matrixStackIn.pop();
             super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
 
