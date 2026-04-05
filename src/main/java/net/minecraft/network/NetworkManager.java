@@ -378,8 +378,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
         sendNoEventPacket(packetIn, null);
     }
 
-    public void sendNoEventPacket(IPacket<?> packetIn,
-            @Nullable GenericFutureListener<? extends Future<? super Void>> p_201058_2_) {
+    public void sendNoEventPacket(IPacket<?> packetIn, @Nullable GenericFutureListener<? extends Future<? super Void>> p_201058_2_) {
         if (this.isChannelOpen()) {
             IPacket<?> packet = packetIn;
             UserConnection var4;

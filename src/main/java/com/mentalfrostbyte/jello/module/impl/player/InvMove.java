@@ -24,6 +24,7 @@ public class InvMove extends Module {
         super(ModuleCategory.PLAYER, "InvMove", "Move freely in the inventory");
         this.registerSetting(new BooleanSetting("AACP", "Bypass for AACP", true));
         this.registerSetting(new BooleanSetting("Hypixel", "Bypass for Hypixel", false));
+        this.registerSetting(new BooleanSetting("NoSprint","NoSprint in Inv", false));
         this.field23757 = false;
     }
 
@@ -31,6 +32,7 @@ public class InvMove extends Module {
     public void method16583(EventKeyPress var1) {
         if (this.isEnabled()) {
             if (var1.getKey() == mc.gameSettings.keyBindInventory.keyCode.getKeyCode() && mc.player.isSprinting()) {
+
             }
         }
     }
@@ -39,7 +41,7 @@ public class InvMove extends Module {
     public void method16584(EventSendPacket var1) {
         if (this.isEnabled()) {
             if (this.field23757 && var1.packet instanceof CEntityActionPacket var4 && this.getBooleanValueFromSettingName("AACP")) {
-				if (var4.getAction() == CEntityActionPacket.Action.START_SPRINTING) {
+                if (var4.getAction() == CEntityActionPacket.Action.START_SPRINTING) {
                     var1.cancelled = true;
                 }
             }
@@ -71,7 +73,7 @@ public class InvMove extends Module {
                 }
 
                 if (mc.currentScreen instanceof CreativeScreen var9) {
-					if (var9.getSelectedTabIndex() == 5) {
+                    if (var9.getSelectedTabIndex() == 5) {
                         return;
                     }
                 }
@@ -91,6 +93,9 @@ public class InvMove extends Module {
                         int var8 = GLFW.glfwGetKey(mc.getMainWindow().getHandle(), bind.keyCode.getKeyCode());
                         bind.setPressed(var8 == 1);
                     }
+                }
+                if (this.getBooleanValueFromSettingName("NoSprint")) {
+                    mc.player.setSprinting(false);
                 }
             }
         }

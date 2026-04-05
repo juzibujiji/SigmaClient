@@ -8,7 +8,10 @@ import com.mentalfrostbyte.jello.event.impl.game.render.EventRenderFire;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRenderShulker;
 import com.mentalfrostbyte.jello.managers.GuiManager;
 import com.mentalfrostbyte.jello.module.impl.combat.KillAura;
+import com.mentalfrostbyte.jello.module.impl.combat.Teams;
+import com.mentalfrostbyte.jello.module.impl.player.Blink;
 import com.mentalfrostbyte.jello.util.client.ClientMode;
+import com.mentalfrostbyte.jello.util.game.player.combat.CombatUtil;
 import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.platform.GLX;
@@ -303,10 +306,29 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
             Vector3d vector3d2 = vector3d.add(vector3d1.x * d0, vector3d1.y * d0, vector3d1.z * d0);
             float f = 1.0F;
             AxisAlignedBB axisalignedbb = entity.getBoundingBox().expand(vector3d1.scale(d0)).grow(1.0D, 1.0D, 1.0D);
-            EntityRayTraceResult entityraytraceresult = ProjectileHelper.rayTraceEntities(entity, vector3d, vector3d2, axisalignedbb, (p_lambda$getMouseOver$0_0_) ->
-            {
-                return !p_lambda$getMouseOver$0_0_.isSpectator() && p_lambda$getMouseOver$0_0_.canBeCollidedWith();
-            }, d1);
+            EntityRayTraceResult entityraytraceresult = ProjectileHelper.rayTraceEntities(
+                    entity,
+                    vector3d,
+                    vector3d2,
+                    axisalignedbb,
+                    (targetEntity) -> {
+                        if (targetEntity.isSpectator() || !targetEntity.canBeCollidedWith()) {
+                            return false;
+                        }
+                        if (targetEntity == Blink.clientPlayerEntity) {
+                            return false;
+                        }
+                        if (targetEntity instanceof PlayerEntity) {
+                            PlayerEntity targetPlayer = (PlayerEntity) targetEntity;
+                            Teams teamsMod = (Teams) Client.getInstance().moduleManager.getModuleByClass(Teams.class);
+                            boolean removeHitbox = teamsMod != null && teamsMod.isEnabled() && teamsMod.getBooleanValueFromSettingName("RemoveHitbox");
+                            if (removeHitbox && CombatUtil.arePlayersOnSameTeam(targetPlayer)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    },
+                    d1);
 
             if (entityraytraceresult != null) {
                 Entity entity1 = entityraytraceresult.getEntity();

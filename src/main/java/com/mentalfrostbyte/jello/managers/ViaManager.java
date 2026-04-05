@@ -330,7 +330,7 @@ public class ViaManager extends Manager implements MinecraftUtil {
     @EventTarget
     @HighestPriority
     public void onRenderEntity(EventRenderEntity event) {
-        if (event.getEntity() == mc.player || event.getEntity() == Freecam.player || event.getEntity() == Blink.clientPlayerEntity) {
+        if (event.getEntity() == mc.player || event.getEntity() == Freecam.player) {
             if (event.getPartialTicks() != 1.0F) {
                 if (EventMotion._prevYaw - mc.player.rotationYawHead == 0.0F) {
                     if (shouldUpdateRenderRotation) {
