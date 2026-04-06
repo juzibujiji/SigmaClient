@@ -18,6 +18,8 @@ import team.sdhq.eventBus.EventBus;
 import team.sdhq.eventBus.annotations.EventTarget;
 import team.sdhq.eventBus.annotations.priority.LowestPriority;
 
+import net.optifine.Config;
+
 import java.io.IOException;
 
 public class BlurEngine {
@@ -51,6 +53,15 @@ public class BlurEngine {
     @EventTarget
     @LowestPriority
     public void on3DRender(EventRender3D event) {
+        // OptiFine shaders own the FBO pipeline during EventRender3D.
+        // Creating/clearing extra FBOs here corrupts the deferred pass → black screen.
+        if (Config.isShaders()) {
+            frameBuffWidth = mc.getFramebuffer().framebufferWidth;
+            frameBuffHeight = mc.getFramebuffer().framebufferHeight;
+            screenWidth = 0;
+            screenHeight = 0;
+            return;
+        }
         if (Client.getInstance().guiManager.getHqIngameBlur() && frameBuffWidth < screenWidth && frameBuffHeight < screenHeight) {
             if (frameBuff == null) {
                 try {
@@ -107,6 +118,7 @@ public class BlurEngine {
     }
 
     public static void endBlur() {
+        if (Config.isShaders()) return;
         if (frameBuff != null) {
             GL11.glPushMatrix();
             frameBuff.bindFramebufferTexture();

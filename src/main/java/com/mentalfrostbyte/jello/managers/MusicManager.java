@@ -40,7 +40,12 @@ import org.apache.http.impl.client.HttpClients;
 import org.newdawn.slick.opengl.Texture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Util;
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL20;
+import org.lwjgl.opengl.GL30;
 import org.newdawn.slick.util.BufferedImageUtil;
 import team.sdhq.eventBus.annotations.EventTarget;
 
@@ -177,7 +182,31 @@ public class MusicManager extends Manager implements MinecraftUtil {
     @EventTarget
     public void onRender2D(EventRender2DCustom event) {
         if (this.playing && !this.visualizerData.isEmpty() && this.spectrum) {
-            this.renderSpectrum();
+            // Save items not covered by the attrib stack
+            int prevProgram   = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+            int prevFBO       = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+            int prevTex       = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+            int prevActiveTex = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+
+            GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+            GL11.glPushClientAttrib(GL11.GL_CLIENT_ALL_ATTRIB_BITS);
+            try {
+                this.renderSpectrum();
+            } finally {
+                GL11.glPopClientAttrib();
+                GL11.glPopAttrib();
+
+                // Restore items outside the attrib stack
+                GL20.glUseProgram(prevProgram);
+                GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFBO);
+                GL13.glActiveTexture(prevActiveTex);
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex);
+
+                // Sync GlStateManager cache
+                RenderSystem.defaultBlendFunc();
+                RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
+                RenderSystem.clearCurrentColor();
+            }
         }
     }
 
@@ -213,13 +242,14 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     if (this.notificationImage != null && this.songThumbnail != null) {
                         RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(),
                                 (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
-                        // Restore GL state after full-screen cover texture
                         GL11.glDisable(GL11.GL_TEXTURE_2D);
                         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
                         GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+                        RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
                     }
 
                     RenderUtil.restorePreviousStencilBuffer();
+
                     double var9 = 0.0;
                     float var16 = 4750;
 
@@ -239,10 +269,10 @@ public class MusicManager extends Manager implements MinecraftUtil {
                             14.0F, 0.3F);
                     GL11.glPopMatrix();
 
-                    // Restore GL state after cover art rendering to prevent leaking into subsequent draws
                     GL11.glDisable(GL11.GL_TEXTURE_2D);
                     GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
                     GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+                    RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
 
                     String[] titleSplit = this.songTitle.split(" - ");
                     if (titleSplit.length <= 1) {
@@ -285,7 +315,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F));
                     }
 
-                    // Draw lyrics with gradient progress using NanoVG (CJK support)
+                    // Lyrics (NanoVG manages its own colorMask via glPushAttrib/glPopAttrib internally)
                     String lyric = this.getCurrentLyric();
                     if (lyric != null && !lyric.isEmpty() && NanoVGFontRenderer.isInitialized()) {
                         int screenWidth = mc.getMainWindow().getWidth();
@@ -297,17 +327,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
                         float progress = this.getLyricProgress();
                         float progressWidth = lyricWidth * progress;
 
-                        // Begin NanoVG frame
                         NanoVGFontRenderer.beginFrame(screenWidth, screenHeight);
-
-                        // Draw dim base text
                         int dimColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.35F);
                         NanoVGFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, dimColor);
-
-                        // End NanoVG frame for base text
                         NanoVGFontRenderer.endFrame();
 
-                        // Draw highlighted portion with scissor
                         RenderUtil.startScissor((int) lyricX, (int) lyricY, (int) (lyricX + progressWidth),
                                 (int) (lyricY + fontSize), true);
 
@@ -318,6 +342,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                         RenderUtil.restoreScissor();
                     }
+
+                    GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+                    RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
                 }
             }
         }

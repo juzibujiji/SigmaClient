@@ -20,6 +20,7 @@ import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
+import net.optifine.Config;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.shader.Framebuffer;
@@ -169,6 +170,9 @@ public class RearView extends Module {
     @EventTarget
     public void on2D(EventRender2D event) {
         if (this.isEnabled()) {
+            // OptiFine shader pipeline is NOT reentrant.
+            // Calling renderWorld() here re-enters Shaders.beginRender() → black screen.
+            if (Config.isShaders()) return;
             if (framebuffer != null) {
                 if (mc.currentScreen == null || this.getBooleanValueFromSettingName("Show in GUI") || this.visibilityTimer != 0) {
                     RenderSystem.pushMatrix();

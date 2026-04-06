@@ -1,8 +1,16 @@
 package com.mentalfrostbyte.jello.util.client.render;
 
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.shader.FramebufferConstants;
 import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL;
 import org.lwjgl.nanovg.NVGColor;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL20;
+import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
@@ -19,6 +27,7 @@ import static org.lwjgl.nanovg.NanoVGGL2.*;
  * Uses OpenGL 2 backend for better Minecraft compatibility.
  */
 public class NanoVGFontRenderer {
+    private static final int GL_FRAMEBUFFER_BINDING = 0x8CA6;
     private static long nvg = -1;
     private static int fontId = -1;
     private static boolean initialized = false;
@@ -26,9 +35,16 @@ public class NanoVGFontRenderer {
     private static ByteBuffer fontBuffer = null; // Keep reference to prevent GC
 
     // GL state preservation across NanoVG frames
-    private static boolean savedScissorEnabled = false;
-    private static final int[] savedScissorBox = new int[4];
-    private static boolean savedBlendEnabled = false;
+    private static boolean frameActive = false;
+    private static int savedProgram = 0;
+    private static int savedFramebuffer = 0;
+    private static int savedActiveTexture = GL13.GL_TEXTURE0;
+    private static int savedTextureBinding = 0;
+    private static int savedArrayBuffer = 0;
+    private static int savedElementArrayBuffer = 0;
+    private static int savedVertexArray = 0;
+    private static int savedMatrixMode = GL11.GL_MODELVIEW;
+    private static final int[] savedViewport = new int[4];
 
     /**
      * Initialize NanoVG context and load Chinese font.
@@ -102,21 +118,42 @@ public class NanoVGFontRenderer {
      * Saves critical GL state that NanoVG may modify.
      */
     public static void beginFrame(int width, int height) {
-        if (!initialized)
+        if (!initialized || frameActive)
             return;
-        // Save GL state before NanoVG modifies it
-        savedScissorEnabled = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
-        if (savedScissorEnabled) {
-            IntBuffer buf = BufferUtils.createIntBuffer(16);
-            GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, buf);
-            savedScissorBox[0] = buf.get(0);
-            savedScissorBox[1] = buf.get(1);
-            savedScissorBox[2] = buf.get(2);
-            savedScissorBox[3] = buf.get(3);
+
+        // NanoVG's GL2 backend can leave OptiFine's shader/FBO state dirty.
+        savedProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        savedFramebuffer = GL11.glGetInteger(GL_FRAMEBUFFER_BINDING);
+        savedActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        savedTextureBinding = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        savedArrayBuffer = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
+        savedElementArrayBuffer = GL11.glGetInteger(GL15.GL_ELEMENT_ARRAY_BUFFER_BINDING);
+        savedMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+
+        IntBuffer viewport = BufferUtils.createIntBuffer(16);
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
+        savedViewport[0] = viewport.get(0);
+        savedViewport[1] = viewport.get(1);
+        savedViewport[2] = viewport.get(2);
+        savedViewport[3] = viewport.get(3);
+
+        if (GL.getCapabilities().OpenGL30) {
+            savedVertexArray = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
+        } else {
+            savedVertexArray = 0;
         }
-        savedBlendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        GL11.glPushClientAttrib(GL11.GL_CLIENT_ALL_ATTRIB_BITS);
+        GL11.glMatrixMode(GL11.GL_TEXTURE);
+        GL11.glPushMatrix();
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPushMatrix();
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
 
         nvgBeginFrame(nvg, width, height, 1.0f);
+        frameActive = true;
     }
 
     /**
@@ -124,24 +161,39 @@ public class NanoVGFontRenderer {
      * Restores GL state that NanoVG may have modified.
      */
     public static void endFrame() {
-        if (!initialized)
+        if (!initialized || !frameActive)
             return;
-        nvgEndFrame(nvg);
+        try {
+            nvgEndFrame(nvg);
+        } finally {
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(GL11.GL_TEXTURE);
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(savedMatrixMode);
+            GL11.glPopClientAttrib();
+            GL11.glPopAttrib();
 
-        // Restore GL state after NanoVG rendering
-        if (savedScissorEnabled) {
-            GL11.glEnable(GL11.GL_SCISSOR_TEST);
-            GL11.glScissor(savedScissorBox[0], savedScissorBox[1], savedScissorBox[2], savedScissorBox[3]);
-        } else {
-            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            GlStateManager.useProgram(savedProgram);
+            GlStateManager.bindFramebuffer(FramebufferConstants.GL_FRAMEBUFFER, savedFramebuffer);
+            GlStateManager.viewport(savedViewport[0], savedViewport[1], savedViewport[2], savedViewport[3]);
+            GL13.glActiveTexture(savedActiveTexture);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, savedTextureBinding);
+            RenderSystem.activeTexture(savedActiveTexture);
+            GlStateManager.bindTexture(savedTextureBinding);
+            GlStateManager.bindBuffer(GL15.GL_ARRAY_BUFFER, savedArrayBuffer);
+            GlStateManager.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, savedElementArrayBuffer);
+
+            if (GL.getCapabilities().OpenGL30) {
+                GL30.glBindVertexArray(savedVertexArray);
+            }
+
+            // Invalidate cached GL color so the next RenderSystem color call always re-applies.
+            RenderSystem.clearCurrentColor();
+            frameActive = false;
         }
-        if (savedBlendEnabled) {
-            GL11.glEnable(GL11.GL_BLEND);
-        } else {
-            GL11.glDisable(GL11.GL_BLEND);
-        }
-        // Reset GL color state to prevent color bleeding
-        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     /**

@@ -25,6 +25,7 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.client.util.InputMappings;
 import net.minecraft.item.ItemStack;
+import net.optifine.Config;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.EXTFramebufferObject;
@@ -143,7 +144,7 @@ public class RenderUtil implements MinecraftUtil {
         GL11.glStencilFunc(512, 1, 1);
         GL11.glStencilOp(7681, 7680, 7680);
         GL11.glStencilMask(1);
-        GL11.glClear(1024);
+        if (!Config.isShaders()) GL11.glClear(1024);
         field18461 = true;
     }
 
@@ -403,12 +404,13 @@ public class RenderUtil implements MinecraftUtil {
         RenderSystem.enableBlend();
         RenderSystem.disableTexture();
 
-        // Corrected blend function with proper factors
+        // Alpha blend: (ZERO, ONE) preserves the destination alpha channel.
+        // (ONE, ZERO) overwrites FBO alpha which corrupts OptiFine shader composites.
         RenderSystem.blendFuncSeparate(
                 GlStateManager.SourceFactor.SRC_ALPHA,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-                GlStateManager.SourceFactor.ONE,
-                GlStateManager.DestFactor.ZERO
+                GlStateManager.SourceFactor.ZERO,
+                GlStateManager.DestFactor.ONE
         );
 
         RenderSystem.color4f(var8, var9, var10, var14);
@@ -477,7 +479,7 @@ public class RenderUtil implements MinecraftUtil {
             RenderSystem.activeTexture(GL13.GL_TEXTURE0);
             RenderSystem.enableBlend();
             RenderSystem.disableTexture();
-            RenderSystem.blendFuncSeparate(770, 771, 1, 0);
+            RenderSystem.blendFuncSeparate(770, 771, 0, 1);
             RenderSystem.color4f(r, g, b, a);
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -508,6 +510,9 @@ public class RenderUtil implements MinecraftUtil {
             GL11.glDisable(GL11.GL_BLEND);
             RenderSystem.enableTexture();
             RenderSystem.disableBlend();
+            // Reset color so callers don't inherit a tinted state.
+            GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+            RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
             RenderSystem.activeTexture(previousActiveTexture);
         }
     }
@@ -595,7 +600,7 @@ public class RenderUtil implements MinecraftUtil {
         Tessellator var10 = Tessellator.getInstance();
         BufferBuilder var11 = var10.getBuffer();
         RenderSystem.disableTexture();
-        RenderSystem.blendFuncSeparate(770, 771, 1, 0);
+        RenderSystem.blendFuncSeparate(770, 771, 0, 1);
         RenderSystem.color4f(r, g, b, a);
         GL11.glEnable(GL11.GL_POINT_SMOOTH);
         GL11.glEnable(GL11.GL_BLEND);
@@ -630,7 +635,7 @@ public class RenderUtil implements MinecraftUtil {
         BufferBuilder var12 = var11.getBuffer();
         RenderSystem.enableBlend();
         RenderSystem.disableTexture();
-        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
         RenderSystem.color4f(r, g, b, a);
         var12.begin(7, DefaultVertexFormats.POSITION);
         var12.pos(x, sizedY, 0.0).endVertex();
@@ -862,7 +867,7 @@ public class RenderUtil implements MinecraftUtil {
         float var14 = (float) (var4 & 0xFF) / 255.0F;
         RenderSystem.enableBlend();
         RenderSystem.disableTexture();
-        RenderSystem.blendFuncSeparate(770, 771, 1, 0);
+        RenderSystem.blendFuncSeparate(770, 771, 0, 1);
         RenderSystem.color4f(var12, var13, var14, var11);
         GL11.glEnable(3042);
         GL11.glEnable(3553);
@@ -1008,7 +1013,7 @@ public class RenderUtil implements MinecraftUtil {
         BufferBuilder var15 = var14.getBuffer();
         RenderSystem.enableBlend();
         RenderSystem.disableTexture();
-        RenderSystem.blendFuncSeparate(770, 771, 1, 0);
+        RenderSystem.blendFuncSeparate(770, 771, 0, 1);
         RenderSystem.color4f(var11, var12, var13, var10);
         if (var10 > 0.5F) {
             GL11.glEnable(2848);
@@ -1080,7 +1085,7 @@ public class RenderUtil implements MinecraftUtil {
         float var12 = (float) (var6 & 0xFF) / 255.0F;
         RenderSystem.enableBlend();
         RenderSystem.disableTexture();
-        RenderSystem.blendFuncSeparate(770, 771, 1, 0);
+        RenderSystem.blendFuncSeparate(770, 771, 0, 1);
         RenderSystem.color4f(var10, var11, var12, var9);
         GL11.glBegin(6);
         GL11.glVertex2f(var0, var1);
@@ -1108,7 +1113,7 @@ public class RenderUtil implements MinecraftUtil {
         RenderSystem.disableTexture();
         RenderSystem.enableBlend();
         RenderSystem.disableAlphaTest();
-        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
         RenderSystem.shadeModel(GL11.GL_SMOOTH);
         Tessellator var16 = Tessellator.getInstance();
         BufferBuilder var17 = var16.getBuffer();
@@ -1154,7 +1159,7 @@ public class RenderUtil implements MinecraftUtil {
         RenderSystem.disableTexture();
         RenderSystem.enableBlend();
         RenderSystem.disableAlphaTest();
-        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
         RenderSystem.shadeModel(GL11.GL_SMOOTH);
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder var27 = tessellator.getBuffer();
@@ -1184,7 +1189,7 @@ public class RenderUtil implements MinecraftUtil {
         GL11.glColor4f(0.0F, 0.0F, 0.0F, 0.0F);
         RenderSystem.enableBlend();
         RenderSystem.disableTexture();
-        RenderSystem.blendFuncSeparate(770, 771, 1, 0);
+        RenderSystem.blendFuncSeparate(770, 771, 0, 1);
         GL11.glColor4fv(RenderUtil2.intColorToFloatArrayColor(color));
         GL11.glEnable(2881);
         GL11.glBegin(4);
@@ -1221,6 +1226,12 @@ public class RenderUtil implements MinecraftUtil {
     }
 
     public static void resetDepthBuffer() {
+        // OptiFine shaders own the active render FBO. Replacing its depth/stencil
+        // attachment here can blank the whole frame, so leave shader FBOs alone.
+        if (Config.isShaders()) {
+            return;
+        }
+
         Framebuffer currentFramebuffer = Minecraft.getInstance().getFramebuffer();
 
         if (currentFramebuffer != null && currentFramebuffer.depthBuffer > -1) {
@@ -1257,7 +1268,7 @@ public class RenderUtil implements MinecraftUtil {
         GL11.glStencilFunc(GL11.GL_ACCUM_BUFFER_BIT, 1, 1);
         GL11.glStencilOp(GL11.GL_REPLACE, GL11.GL_KEEP, GL11.GL_KEEP);
         GL11.glStencilMask(1);
-        GL11.glClear(GL11.GL_STENCIL_BUFFER_BIT);
+        if (!Config.isShaders()) GL11.glClear(GL11.GL_STENCIL_BUFFER_BIT);
         stencilOpInProgress = true;
     }
 
@@ -1304,7 +1315,7 @@ public class RenderUtil implements MinecraftUtil {
             float g = (float) (color & 0xFF) / 255.0F;
             RenderSystem.enableBlend();
             RenderSystem.disableTexture();
-            RenderSystem.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
+            RenderSystem.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 0, 1);
             RenderSystem.color4f(a, r, g, b);
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glEnable(GL11.GL_TEXTURE_2D);

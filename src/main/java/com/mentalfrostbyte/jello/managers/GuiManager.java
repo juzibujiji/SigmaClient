@@ -311,6 +311,10 @@ public class GuiManager {
 
         if (this.screen != null && Minecraft.getInstance().loadingGui == null) {
             this.screen.draw(1.0F);
+            // Reset color after Jello GUI draw (MusicPlayer etc.) to prevent
+            // residual tint from leaking into subsequent rendering.
+            GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+            RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
         }
     }
 

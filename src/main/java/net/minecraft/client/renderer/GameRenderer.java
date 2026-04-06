@@ -898,8 +898,35 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
             RenderSystem.depthMask(false);
             GL11.glDisable(2896);
             EventBus.call(new EventRender3D());
+
+            // ── Comprehensive GL state restore after Jello EventRender3D handlers ──
+            // Handlers (ShadowESP, KillAura, Tracers, Projectiles, etc.) leave
+            // depth/blend/stencil/polygon/shade state dirty.  The OptiFine shader
+            // composite pass that follows needs clean defaults for correct sky,
+            // sun/moon, and bloom rendering — otherwise sky goes black and light
+            // sources render as oversized white quads.
+
+            // Direct GL calls first to guarantee real GPU state is correct,
+            // even if a handler bypassed GlStateManager's cache.
+            GL11.glDepthFunc(GL11.GL_LEQUAL);
+            GL11.glDisable(GL11.GL_STENCIL_TEST);
+            GL11.glStencilMask(0xFF);
+            GL11.glColorMask(true, true, true, true);
+            GL11.glShadeModel(GL11.GL_SMOOTH);
+            GL11.glDisable(GL11.GL_LINE_SMOOTH);
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_LINE);
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
+            GL11.glLineWidth(1.0F);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+
+            // Sync GlStateManager caches via RenderSystem wrappers.
             RenderSystem.enableDepthTest();
             RenderSystem.depthMask(true);
+            RenderSystem.disableBlend();
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.enableTexture();
+            RenderSystem.clearCurrentColor();
             mc.getTextureManager().bindTexture(TextureManager.RESOURCE_LOCATION_EMPTY);
         }
         RenderSystem.popMatrix();

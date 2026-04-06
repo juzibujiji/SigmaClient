@@ -83,6 +83,8 @@ import net.optifine.CustomItems;
 import net.optifine.TextureAnimations;
 import net.optifine.reflect.Reflector;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
+import org.lwjgl.opengl.GL30;
 import team.sdhq.eventBus.EventBus;
 
 public class IngameGui extends AbstractGui
@@ -207,10 +209,27 @@ public class IngameGui extends AbstractGui
         RenderSystem.enableBlend();
         RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
         GL11.glDisable(2896);
-        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE);
         Resources.gingerbreadIconPNG.bind();
+        // Ensure all custom HUD rendering (music bar, NanoVG lyrics, etc.) happens
+        // on the MC main framebuffer, not on OptiFine's shader gbuffer FBO.
+        int prevFBO = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int mcFBO = this.mc.getFramebuffer().framebufferObject;
+        if (prevFBO != mcFBO && mcFBO > 0) {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, mcFBO);
+        }
         EventBus.call(new EventRender2DCustom());
+        // Restore previous FBO
+        if (prevFBO != mcFBO && mcFBO > 0) {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFBO);
+        }
+        // Full state reset after EventRender2DCustom handlers (music bar etc.)
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.defaultBlendFunc();
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL20.glUseProgram(0);
+        RenderSystem.clearCurrentColor();
         RenderSystem.enableCull();
         RenderSystem.disableDepthTest();
         RenderSystem.enableBlend();
