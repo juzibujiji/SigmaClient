@@ -313,7 +313,8 @@ public class InvManager extends Module {
         )) {
             if (var5 instanceof ArmorItem) {
                 if (InvManagerUtil.isArmor(slot)) {
-                    return false;
+                    //return false;
+                    return true;
                 }
 
                 for (EquipmentSlotType var9 : EquipmentSlotType.values()) {
