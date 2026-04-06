@@ -130,6 +130,7 @@ public class ModuleManager {
         this.register(new NewChunks());
         this.register(new AntiCactus());
         this.register(new Auto32k());
+        this.register(new Bow32K());
         // MISC
         this.register(new GamePlay());
         this.register(new ChatCleaner());
