@@ -223,65 +223,142 @@ public class ChestStealer extends Module {
 
     private boolean method16369(ItemStack itemStack) {
         Item item = itemStack.getItem();
+        // 如果没有启用"忽略垃圾物品"选项，则拿取所有物品
         if (!this.getBooleanValueFromSettingName("Ignore Junk")) {
             return false;
-        } else if (!(item instanceof SwordItem)) {
-            if (item instanceof PickaxeItem) {
-                return !InvManager.method16442(itemStack);
-            } else if (!(item instanceof AxeItem)) {
-                if (item instanceof HoeItem) {
-                    return !InvManager.isHoe(itemStack);
-                } else if (!(item instanceof PotionItem)) {
-                    if (item instanceof BlockItem) {
-                        return !InvManagerUtil.shouldPlaceItem(item);
-                    } else if (!(item instanceof ArrowItem)
-                            && (!(item instanceof BowItem) || !Client.getInstance().moduleManager.getModuleByClass(InvManager.class).getBooleanValueFromSettingName("Archery"))) {
-                        if (item == Items.WATER_BUCKET && Client.getInstance().moduleManager.getModuleByClass(AutoMLG.class).isEnabled()) {
-                            return false;
-                        } else {
-                            ArrayList var5 = new ArrayList<Item>(
-                                    Arrays.asList(
-                                            Items.COMPASS,
-                                            Items.FEATHER,
-                                            Items.FLINT,
-                                            Items.EGG,
-                                            Items.STRING,
-                                            Items.STICK,
-                                            Items.TNT,
-                                            Items.BUCKET,
-                                            Items.LAVA_BUCKET,
-                                            Items.WATER_BUCKET,
-                                            Items.SNOW,
-                                            Items.ENCHANTED_BOOK,
-                                            Items.EXPERIENCE_BOTTLE,
-                                            Items.SHEARS,
-                                            Items.ANVIL,
-                                            Items.TORCH,
-                                            Items.BEETROOT_SEEDS,
-                                            Items.MELON_SEEDS,
-                                            Items.PUMPKIN_SEEDS,
-                                            Items.WHEAT_SEEDS,
-                                            Items.LEATHER,
-                                            Items.GLASS_BOTTLE,
-                                            Items.PISTON,
-                                            Items.SNOWBALL,
-                                            Items.FISHING_ROD
-                                    )
-                            );
-                            return var5.contains(item) || item.getName().getString().toLowerCase().contains("seed");
-                        }
-                    } else {
-                        return true;
-                    }
-                } else {
-                    return InvManagerUtil.hasNegativePotionEffects(itemStack);
-                }
-            } else {
-                return !InvManager.method16444(itemStack);
-            }
-        } else {
+        }
+
+        // 检查是否为武器
+        if (item instanceof SwordItem) {
+            // 如果当前没有更好的武器，则拿取
             return !InvManager.method16431(itemStack);
         }
+
+        // 检查是否为工具
+        if (item instanceof PickaxeItem) {
+            // 如果这是最好的镐子，则拿取
+            return !InvManager.method16442(itemStack);
+        }
+
+        if (item instanceof AxeItem) {
+            // 如果这是最好的斧头，则拿取
+            return !InvManager.method16444(itemStack);
+        }
+
+        if (item instanceof HoeItem) {
+            // 如果这是最好的锄头，则拿取
+            return !InvManager.isHoe(itemStack);
+        }
+
+        // 检查是否为药水
+        if (item instanceof PotionItem) {
+            // 如果药水有负面效果，则忽略
+            if (InvManagerUtil.hasNegativePotionEffects(itemStack)) {
+                return true;
+            }
+            // 否则拿取有用的药水
+            return false;
+        }
+
+        // 检查是否为方块
+        if (item instanceof BlockItem) {
+            // 如果是有用的建筑方块，则拿取
+            return !InvManagerUtil.shouldPlaceItem(item);
+        }
+
+        // 检查是否为弓箭
+        if (item instanceof ArrowItem || (item instanceof BowItem && Client.getInstance().moduleManager.getModuleByClass(InvManager.class).getBooleanValueFromSettingName("Archery"))) {
+            // 如果启用了弓箭选项，则拿取
+            return false;
+        }
+
+        // 检查是否为水桶（用于AutoMLG）
+        if (item == Items.WATER_BUCKET && Client.getInstance().moduleManager.getModuleByClass(AutoMLG.class).isEnabled()) {
+            return false;
+        }
+
+        // 检查是否为护甲
+        if (item instanceof ArmorItem) {
+            // 如果这是最好的护甲，则拿取
+            return !InvManagerUtil.isBestArmorPiece(itemStack);
+        }
+
+        // 检查是否为食物
+        if (itemStack.isFood()) {
+            // 如果是金苹果，则拿取
+            if (item.getFood() == Foods.GOLDEN_APPLE || item == Items.ENCHANTED_GOLDEN_APPLE) {
+                return false;
+            }
+            // 如果启用了食物清理选项，则忽略普通食物
+            if (Client.getInstance().moduleManager.getModuleByClass(InvManager.class).getBooleanValueFromSettingName("Food")) {
+                return true;
+            }
+            // 否则拿取食物
+            return false;
+        }
+
+        // 检查是否为盾牌
+        if (item instanceof ShieldItem && Client.getInstance().moduleManager.getModuleByClass(InvManager.class).getBooleanValueFromSettingName("Auto Shield")) {
+            return false;
+        }
+
+        // 检查是否为末影珍珠
+        if (item instanceof EnderPearlItem) {
+            return false;
+        }
+
+        // 检查是否为火药
+        if (item == Items.GUNPOWDER) {
+            return false;
+        }
+
+        // 检查是否为粘液球
+        if (item == Items.SLIME_BALL) {
+            return false;
+        }
+
+        // 检查是否为TNT
+        if (item == Items.TNT) {
+            return false;
+        }
+
+        // 检查是否为末影箱
+        if (item == Items.ENDER_CHEST) {
+            return false;
+        }
+
+        // 以下物品被视为垃圾物品，将被忽略
+        ArrayList<Item> junkItems = new ArrayList<>(
+                Arrays.asList(
+                        Items.COMPASS,
+                        Items.FEATHER,
+                        Items.FLINT,
+                        Items.EGG,
+                        Items.STRING,
+                        Items.STICK,
+                        Items.BUCKET,
+                        Items.LAVA_BUCKET,
+                        Items.WATER_BUCKET,
+                        Items.SNOW,
+                        Items.ENCHANTED_BOOK,
+                        Items.EXPERIENCE_BOTTLE,
+                        Items.SHEARS,
+                        Items.ANVIL,
+                        Items.TORCH,
+                        Items.BEETROOT_SEEDS,
+                        Items.MELON_SEEDS,
+                        Items.PUMPKIN_SEEDS,
+                        Items.WHEAT_SEEDS,
+                        Items.LEATHER,
+                        Items.GLASS_BOTTLE,
+                        Items.PISTON,
+                        Items.SNOWBALL,
+                        Items.FISHING_ROD
+                )
+        );
+
+        // 如果物品名称包含"seed"，则视为垃圾物品
+        return junkItems.contains(item) || item.getName().getString().toLowerCase().contains("seed");
     }
 
     private void method16370() {

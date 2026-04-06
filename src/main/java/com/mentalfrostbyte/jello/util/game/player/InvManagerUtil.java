@@ -206,15 +206,30 @@ public class InvManagerUtil {
     }
 
     public static int getArmorProtectionValue(ItemStack itemStack) {
-        if (itemStack != null) {
-            return itemStack.getItem() instanceof ArmorItem ? ((ArmorItem) itemStack.getItem()).getDamageReduceAmount() * 10
-                    //+ (int) ((ArmorItem) itemStack.getItem()).func_234657_f_()
-                    //+ (int) ((ArmorItem) itemStack.getItem()).getArmorMaterial().getKnockbackResistance()
-                    + EnchantmentHelper.getEnchantmentLevel(Enchantments.PROTECTION, itemStack) : 0;
+        if (itemStack != null && itemStack.getItem() instanceof ArmorItem) {
+            ArmorItem armorItem = (ArmorItem) itemStack.getItem();
+
+            // 基础护甲值
+            int baseProtection = armorItem.getDamageReduceAmount() * 10;
+
+            // 护甲韧性
+            int toughness = (int) armorItem.func_234657_f_();
+
+            // 保护附魔等级
+            int protectionLevel = EnchantmentHelper.getEnchantmentLevel(Enchantments.PROTECTION, itemStack);
+
+            // 耐久度计算 - 满耐久返回0.1，然后乘以剩余耐久度百分比
+            float durability = itemStack.getMaxDamage() > 0
+                    ? 0.1F * (1.0F - (float) itemStack.getDamage() / (float) itemStack.getMaxDamage())
+                    : 0.1F;
+
+            // 返回综合保护值（包含耐久度影响）
+            return baseProtection + toughness + protectionLevel + (int) (durability * 100);
         } else {
             return 0;
         }
     }
+
 
     public static int getTotalArmorProtection(PlayerEntity player) {
         int totalProtection = 0;
