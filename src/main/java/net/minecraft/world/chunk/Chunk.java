@@ -2,6 +2,7 @@ package net.minecraft.world.chunk;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.mentalfrostbyte.jello.module.impl.player.Blink;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.shorts.ShortList;
@@ -525,6 +526,11 @@ public class Chunk implements IChunk {
 
             for (int i1 = 0; i1 < l; ++i1) {
                 Entity entity = list.get(i1);
+
+                //排除fakeplayer与给你放方块
+                if (entity == Blink.clientPlayerEntity) {
+                    continue;
+                }
 
                 if (entity.getBoundingBox().intersects(aabb) && entity != entityIn) {
                     if (filter == null || filter.test(entity)) {
