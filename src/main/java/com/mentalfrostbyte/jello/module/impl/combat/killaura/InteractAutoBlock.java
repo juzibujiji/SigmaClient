@@ -44,6 +44,14 @@ public class InteractAutoBlock {
     }
 
     public void performAutoBlock(Entity var1, float var2, float var3) {
+        // "Fake" mode must be client-visual-only. Any CPlayerTryUseItemPacket with a sword in
+        // main hand is translated by ViaVersion into the 1.8 block gesture, so the server would
+        // announce the player as blocking. The local blocking animation is rendered by
+        // OldHitting based on KillAura.targetEntity + mode == "Fake".
+        if ("Fake".equals(this.parent.getStringSettingValueByName("Autoblock Mode"))) {
+            return;
+        }
+
         if (this.parent.getBooleanValueFromSettingName("Interact autoblock")) {
             EntityRayTraceResult var6 = EntityUtil.method17714(
                     !this.parent.getBooleanValueFromSettingName("Raytrace") ? var1 : null, var2, var3, var0 -> true,
@@ -63,6 +71,12 @@ public class InteractAutoBlock {
     }
 
     public void stopAutoBlock() {
+        // In "Fake" mode no CPlayerTryUseItemPacket was ever sent, so sending a matching
+        // RELEASE_USE_ITEM would be both useless and, under ViaVersion, another giveaway.
+        if ("Fake".equals(this.parent.getStringSettingValueByName("Autoblock Mode"))) {
+            this.setBlockingState(false);
+            return;
+        }
         CombatUtil.unblock();
         this.setBlockingState(false);
     }
@@ -70,6 +84,7 @@ public class InteractAutoBlock {
     public boolean canAutoBlock() {
         String settingValue = this.parent.getStringSettingValueByName("Autoblock Mode");
         return settingValue != null && !settingValue.equals("None")
+                && !settingValue.equals("Fake")
                 && Objects.requireNonNull(this.mc.player).getHeldItemMainhand().getItem() instanceof SwordItem
                 && !this.isBlocking();
     }

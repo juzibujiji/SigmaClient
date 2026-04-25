@@ -11,6 +11,8 @@ import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiSearch;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -41,6 +43,12 @@ public class SearchBox extends AnimatedIconPanel {
         }
     }
 
+    /**
+     * 将封面 URL 规范化并验证可被 {@link URL#URL(String)} 解析。
+     * 无效/非 http(s)/解析失败统一返回空串，让 ThumbnailButton 回退到占位图。
+     * <p>
+     * 注意：NeteaseApiSearch 已在返回前 normalize，这里是防御性二次校验。
+     */
     private static String normalizeCoverUrl(String coverUrl) {
         if (coverUrl == null) {
             return "";
@@ -55,14 +63,21 @@ public class SearchBox extends AnimatedIconPanel {
             normalized = "https:" + normalized;
         }
 
-        if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
-            if (!normalized.contains("param=")) {
-                normalized += (normalized.contains("?") ? "&" : "?") + "param=300y300";
-            }
-            return normalized;
+        if (!(normalized.startsWith("http://") || normalized.startsWith("https://"))) {
+            return "";
         }
 
-        return "";
+        if (!normalized.contains("param=")) {
+            normalized += (normalized.contains("?") ? "&" : "?") + "param=300y300";
+        }
+
+        try {
+            new URL(normalized);
+        } catch (MalformedURLException e) {
+            return "";
+        }
+
+        return normalized;
     }
 
     @Override

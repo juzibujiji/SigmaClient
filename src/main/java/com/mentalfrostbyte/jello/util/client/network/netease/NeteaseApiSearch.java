@@ -139,17 +139,10 @@ public class NeteaseApiSearch {
                     duration = song.get("dt").getAsLong();
                 }
 
-                // 封面图片 URL
-                String coverUrl = "";
-                if (song.has("al") && !song.get("al").isJsonNull()
-                        && song.getAsJsonObject("al").has("picUrl")) {
-                    coverUrl = song.getAsJsonObject("al").get("picUrl").getAsString();
-                } else if (song.has("album") && !song.get("album").isJsonNull()
-                        && song.getAsJsonObject("album").has("picUrl")) {
-                    coverUrl = song.getAsJsonObject("album").get("picUrl").getAsString();
-                }
-
-                tracks.add(new NeteaseTrack(id, name, artist, album, duration, coverUrl));
+                // 封面图片 URL：依次尝试 al.picUrl / album.picUrl / album.blurPicUrl，再做统一 normalize。
+                // 搜索接口的 picUrl 经常为空字符串，空值时返回 "" 让上层调用 getSongDetail 兜底补齐。
+                String coverUrl = extractPicUrl(song);
+                tracks.add(new NeteaseTrack(id, name, artist, album, duration, normalizeCoverUrl(coverUrl)));
             }
         } catch (Exception e) {
             System.err.println("[NeteaseSearch] search failed: " + e.getMessage());
@@ -231,22 +224,56 @@ public class NeteaseApiSearch {
 
     /**
      * 获取歌曲详情（用于获取封面等信息）。
+     * <p>
+     * 修正 weapi/v3/song/detail 请求体兼容性：
+     * <ul>
+     *   <li>c 与 ids 均按字符串化 JSON 数组传入（网易云 core.js 约定）</li>
+     *   <li>响应必须 code==200 才解析 songs</li>
+     *   <li>songIds 超过 50 时按 50 分批调用后合并</li>
+     * </ul>
      *
      * @param songIds 歌曲 ID 列表
-     * @return NeteaseTrack 列表
+     * @return NeteaseTrack 列表（保序：未返回的 ID 会被跳过，不会抛异常）
      */
     public static List<NeteaseTrack> getSongDetail(long... songIds) {
         List<NeteaseTrack> tracks = new ArrayList<>();
+        if (songIds == null || songIds.length == 0) {
+            return tracks;
+        }
+        final int batchSize = 50;
+        for (int start = 0; start < songIds.length; start += batchSize) {
+            int end = Math.min(start + batchSize, songIds.length);
+            long[] batch = new long[end - start];
+            System.arraycopy(songIds, start, batch, 0, batch.length);
+            tracks.addAll(getSongDetailBatch(batch));
+        }
+        return tracks;
+    }
+
+    /**
+     * 单批（<=50）的 /weapi/v3/song/detail 请求。单批失败不影响其它批次。
+     */
+    private static List<NeteaseTrack> getSongDetailBatch(long[] songIds) {
+        List<NeteaseTrack> tracks = new ArrayList<>();
         try {
-            JsonArray c = new JsonArray();
-            for (long id : songIds) {
-                JsonObject obj = new JsonObject();
-                obj.addProperty("id", id);
-                c.add(obj);
+            // weapi/v3/song/detail 要求 c 与 ids 为"字符串化的 JSON 数组"，
+            // 直接传 JsonArray 对象会导致服务器端返回空 songs。
+            StringBuilder cStr = new StringBuilder("[");
+            StringBuilder idsStr = new StringBuilder("[");
+            for (int i = 0; i < songIds.length; i++) {
+                if (i > 0) {
+                    cStr.append(',');
+                    idsStr.append(',');
+                }
+                cStr.append("{\"id\":").append(songIds[i]).append('}');
+                idsStr.append(songIds[i]);
             }
+            cStr.append(']');
+            idsStr.append(']');
 
             JsonObject data = new JsonObject();
-            data.add("c", c);
+            data.addProperty("c", cStr.toString());
+            data.addProperty("ids", idsStr.toString());
             data.addProperty("csrf_token", "");
 
             String[] encrypted = NeteaseApiEncrypt.encrypt(data.toString());
@@ -259,37 +286,116 @@ public class NeteaseApiSearch {
                     BASE_URL + "/weapi/v3/song/detail", body, cookie);
 
             JsonObject json = JsonParser.parseString(response).getAsJsonObject();
-            if (json.has("songs")) {
-                JsonArray songs = json.getAsJsonArray("songs");
-                for (JsonElement elem : songs) {
-                    JsonObject song = elem.getAsJsonObject();
-                    long id = song.get("id").getAsLong();
-                    String name = song.get("name").getAsString();
+            if (!json.has("code") || json.get("code").getAsInt() != 200) {
+                System.err.println("[NeteaseSearch] getSongDetail bad code: "
+                        + (json.has("code") ? json.get("code") : "<missing>"));
+                return tracks;
+            }
+            if (!json.has("songs") || json.get("songs").isJsonNull()) {
+                return tracks;
+            }
 
-                    String artist = "Unknown";
-                    if (song.has("ar") && song.getAsJsonArray("ar").size() > 0) {
-                        artist = song.getAsJsonArray("ar")
-                                .get(0).getAsJsonObject().get("name").getAsString();
-                    }
+            JsonArray songs = json.getAsJsonArray("songs");
+            for (JsonElement elem : songs) {
+                JsonObject song = elem.getAsJsonObject();
+                long id = song.get("id").getAsLong();
+                String name = song.has("name") && !song.get("name").isJsonNull()
+                        ? song.get("name").getAsString() : "";
 
-                    String album = "";
-                    String coverUrl = "";
-                    if (song.has("al") && !song.get("al").isJsonNull()) {
-                        JsonObject al = song.getAsJsonObject("al");
-                        album = al.has("name") ? al.get("name").getAsString() : "";
-                        coverUrl = al.has("picUrl") ? al.get("picUrl").getAsString() : "";
-                    }
-
-                    long duration = song.has("dt") ? song.get("dt").getAsLong() : 0;
-
-                    tracks.add(new NeteaseTrack(id, name, artist, album, duration, coverUrl));
+                String artist = "Unknown";
+                if (song.has("ar") && song.getAsJsonArray("ar").size() > 0) {
+                    artist = song.getAsJsonArray("ar")
+                            .get(0).getAsJsonObject().get("name").getAsString();
+                } else if (song.has("artists") && song.getAsJsonArray("artists").size() > 0) {
+                    artist = song.getAsJsonArray("artists")
+                            .get(0).getAsJsonObject().get("name").getAsString();
                 }
+
+                String album = "";
+                String coverUrl = "";
+                if (song.has("al") && !song.get("al").isJsonNull()) {
+                    JsonObject al = song.getAsJsonObject("al");
+                    album = al.has("name") && !al.get("name").isJsonNull()
+                            ? al.get("name").getAsString() : "";
+                    coverUrl = al.has("picUrl") && !al.get("picUrl").isJsonNull()
+                            ? al.get("picUrl").getAsString() : "";
+                } else if (song.has("album") && !song.get("album").isJsonNull()) {
+                    JsonObject alb = song.getAsJsonObject("album");
+                    album = alb.has("name") && !alb.get("name").isJsonNull()
+                            ? alb.get("name").getAsString() : "";
+                    coverUrl = alb.has("picUrl") && !alb.get("picUrl").isJsonNull()
+                            ? alb.get("picUrl").getAsString() : "";
+                }
+
+                long duration = song.has("dt") ? song.get("dt").getAsLong() : 0;
+                if (duration == 0 && song.has("duration")) {
+                    duration = song.get("duration").getAsLong();
+                }
+
+                tracks.add(new NeteaseTrack(id, name, artist, album, duration, normalizeCoverUrl(coverUrl)));
             }
         } catch (Exception e) {
-            System.err.println("[NeteaseSearch] getSongDetail failed: " + e.getMessage());
+            System.err.println("[NeteaseSearch] getSongDetail batch failed: " + e.getMessage());
             e.printStackTrace();
         }
         return tracks;
+    }
+
+    // ==================== 内部工具方法 ====================
+
+    /**
+     * 从搜索/详情接口返回的 song 对象中提取封面 URL。
+     * 兼容 {@code al.picUrl}（详情接口）、{@code album.picUrl} / {@code album.blurPicUrl}（搜索接口）。
+     */
+    private static String extractPicUrl(JsonObject song) {
+        if (song.has("al") && !song.get("al").isJsonNull()) {
+            JsonObject al = song.getAsJsonObject("al");
+            if (al.has("picUrl") && !al.get("picUrl").isJsonNull()) {
+                String u = al.get("picUrl").getAsString();
+                if (u != null && !u.trim().isEmpty()) return u;
+            }
+        }
+        if (song.has("album") && !song.get("album").isJsonNull()) {
+            JsonObject alb = song.getAsJsonObject("album");
+            if (alb.has("picUrl") && !alb.get("picUrl").isJsonNull()) {
+                String u = alb.get("picUrl").getAsString();
+                if (u != null && !u.trim().isEmpty()) return u;
+            }
+            if (alb.has("blurPicUrl") && !alb.get("blurPicUrl").isJsonNull()) {
+                String u = alb.get("blurPicUrl").getAsString();
+                if (u != null && !u.trim().isEmpty()) return u;
+            }
+        }
+        return "";
+    }
+
+    /**
+     * 统一封面 URL normalize：
+     * <ul>
+     *   <li>trim、空字符串 → ""</li>
+     *   <li>{@code //host/...} 补 https</li>
+     *   <li>仅保留 http/https，其它协议返回 ""</li>
+     *   <li>未带 {@code param=} 时追加 {@code param=300y300}（网易云 CDN 缩图约定）</li>
+     * </ul>
+     */
+    private static String normalizeCoverUrl(String coverUrl) {
+        if (coverUrl == null) {
+            return "";
+        }
+        String s = coverUrl.trim();
+        if (s.isEmpty()) {
+            return "";
+        }
+        if (s.startsWith("//")) {
+            s = "https:" + s;
+        }
+        if (!(s.startsWith("http://") || s.startsWith("https://"))) {
+            return "";
+        }
+        if (!s.contains("param=")) {
+            s += (s.contains("?") ? "&" : "?") + "param=300y300";
+        }
+        return s;
     }
 
     /**

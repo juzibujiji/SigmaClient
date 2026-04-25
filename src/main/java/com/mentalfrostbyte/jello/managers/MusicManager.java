@@ -46,7 +46,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
-import org.newdawn.slick.util.BufferedImageUtil;
+import com.mentalfrostbyte.jello.util.game.render.SafeTextureUploader;
 import team.sdhq.eventBus.annotations.EventTarget;
 
 import javax.imageio.ImageIO;
@@ -63,6 +63,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MusicManager extends Manager implements MinecraftUtil {
     // Use a neutral pink fallback instead of green when artwork color extraction fails.
@@ -79,12 +80,13 @@ public class MusicManager extends Manager implements MinecraftUtil {
     private Texture notificationImage;
     private BufferedImage thumbnailImage;
     private Texture songThumbnail;
-    private boolean processing = false;
+    // Must be atomic: touched by Render thread (onTick) and MusicCoverProcessor worker thread.
+    private final AtomicBoolean processing = new AtomicBoolean(false);
     private transient volatile Thread audioThread = null;
     private int currentVideoIndex2;
     private long totalDuration = 0L;
     private int currentVideoIndex;
-    private YoutubeVideoData currentVideo;
+    private volatile YoutubeVideoData currentVideo;
     private boolean spectrum = true;
     private AudioRepeatMode repeat = AudioRepeatMode.REPEAT;
     private boolean finished = false;
@@ -96,8 +98,14 @@ public class MusicManager extends Manager implements MinecraftUtil {
     private volatile long mp3SeekTargetSec = -1;
 
     // --- Texture cache to avoid re-creating every tick & prevent native crash ---
-    /** The song title for which the cached textures were created */
-    private String cachedTextureSongTitle = null;
+    // Three-key cover state machine, all written only with the render thread or under CAS:
+    //   requestedCoverKey : the latest desired cover (refreshed on every song switch).
+    //   pendingCoverKey   : a worker-produced result awaiting GL upload on the render thread.
+    //   appliedCoverKey   : the cover key whose textures are currently live on-screen.
+    // A new worker is spawned only when requestedCoverKey != appliedCoverKey, and worker
+    // results are dropped when coverKey != requestedCoverKey (stale). This decouples the
+    // "did cover change?" decision from song title equality and removes the old
+    // `currentVideo==null` upload gate that caused lost updates on fast song switches.
     /** Pending BufferedImage from worker thread, to be uploaded on render thread */
     private volatile BufferedImage pendingThumbnailImage = null;
     private volatile BufferedImage pendingScaledThumbnail = null;
@@ -105,6 +113,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
     private volatile String pendingSongTitle = null;
     private volatile String pendingCoverKey = null;
     private volatile String requestedCoverKey = null;
+    private volatile String appliedCoverKey = null;
     private volatile int coverAccentColor = DEFAULT_COVER_ACCENT_COLOR;
 
     @Override
@@ -156,8 +165,17 @@ public class MusicManager extends Manager implements MinecraftUtil {
     @EventTarget
     public void onRender2D(EventRender2DOffset event) {
         if (Client.getInstance().clientMode == ClientMode.JELLO) {
-            if (this.playing && !this.visualizerData.isEmpty()) {
-                double[] var4 = this.visualizerData.get(0);
+            // Snapshot the oldest amplitude frame under lock so audio-thread writes don't race
+            // with this read (isEmpty()+get(0) was a TOCTOU bug that threw IOOBE on fast resets).
+            double[] var4 = null;
+            if (this.playing) {
+                synchronized (this.visualizerData) {
+                    if (!this.visualizerData.isEmpty()) {
+                        var4 = this.visualizerData.get(0);
+                    }
+                }
+            }
+            if (var4 != null) {
                 if (this.amplitudes.isEmpty()) {
                     for (double v : var4) {
                         if (this.amplitudes.size() < 1024) {
@@ -169,6 +187,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
                 float fps = 60.0F / (float) Minecraft.getFps();
 
                 for (int i = 0; i < var4.length; i++) {
+                    if (i >= this.amplitudes.size()) break;
                     double var7 = this.amplitudes.get(i) - var4[i];
                     boolean var9 = !(this.amplitudes.get(i) < Double.MAX_VALUE);
                     this.amplitudes.set(i, Math.min(2.256E7,
@@ -189,7 +208,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     @EventTarget
     public void onRender2D(EventRender2DCustom event) {
-        if (this.playing && !this.visualizerData.isEmpty() && this.spectrum) {
+        boolean hasVisualData;
+        synchronized (this.visualizerData) {
+            hasVisualData = !this.visualizerData.isEmpty();
+        }
+        if (this.playing && hasVisualData && this.spectrum) {
             // Save items not covered by the attrib stack
             int prevProgram   = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
             int prevFBO       = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
@@ -219,7 +242,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
     }
 
     private void renderSpectrum() {
-        if (!this.visualizerData.isEmpty()) {
+        boolean hasData;
+        synchronized (this.visualizerData) {
+            hasData = !this.visualizerData.isEmpty();
+        }
+        if (hasData) {
             // Guard: only render artwork-driven HUD effects when both textures are fully ready.
             if (this.hasReadySongArtwork()) {
                 if (!this.amplitudes.isEmpty()) {
@@ -363,15 +390,19 @@ public class MusicManager extends Manager implements MinecraftUtil {
     @EventTarget
     public void onTick(EventUpdate event) {
         if (!this.playing) {
-            this.visualizerData.clear();
+            synchronized (this.visualizerData) {
+                this.visualizerData.clear();
+            }
             this.amplitudes.clear();
         }
 
         // --- Upload pending textures on the render thread (safe for OpenGL) ---
+        // Upload gate intentionally does NOT check currentVideo. currentVideo is owned by the
+        // audio thread and must never be used as a "cover processed" flag — doing so caused
+        // lost updates on fast A->B->... switches.
         try {
             if (this.pendingThumbnailImage != null && this.pendingScaledThumbnail != null
-                    && this.pendingCoverAccentColor != null
-                    && this.currentVideo == null && !mc.isGamePaused()) {
+                    && this.pendingCoverAccentColor != null && !mc.isGamePaused()) {
                 // Grab pending data atomically
                 BufferedImage thumbImg = this.pendingThumbnailImage;
                 BufferedImage scaledImg = this.pendingScaledThumbnail;
@@ -387,12 +418,13 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                 // Drop stale worker results (old song cover) to avoid async race overwriting current song state.
                 if (pendingKey != null && expectedKey != null && !pendingKey.equals(expectedKey)) {
-                    this.processing = false;
+                    this.processing.set(false);
                     return;
                 }
 
-                // Only recreate if song actually changed
-                if (title != null && !title.equals(this.cachedTextureSongTitle)) {
+                // Rebuild textures only when the pending key is a genuinely new cover.
+                // (Title-based comparison was unreliable for same-title / different-resource tracks.)
+                if (pendingKey != null && !pendingKey.equals(this.appliedCoverKey)) {
                     // Release old textures first
                     if (this.songThumbnail != null) {
                         try { this.songThumbnail.release(); } catch (Exception ignored) {}
@@ -402,29 +434,51 @@ public class MusicManager extends Manager implements MinecraftUtil {
                         try { this.notificationImage.release(); } catch (Exception ignored) {}
                         this.notificationImage = null;
                     }
+                    // Force driver to finalize any pending texture-delete DMAs before reusing IDs.
+                    try { GL11.glFinish(); } catch (Throwable ignored) {}
 
                     // Deep-copy to TYPE_INT_ARGB with power-of-two dims for safe GL upload
                     BufferedImage safeThumb = ensureSafeTexture(thumbImg);
                     BufferedImage safeScaled = ensureSafeTexture(scaledImg);
 
+                    // --- GL state hardening around texture upload ---
+                    // 1) Per-song unique keys to bypass Slick InternalTextureLoader's name cache
+                    //    (fixed "picture" aliases two images onto one TextureImpl -> release-after-free).
+                    // 2) SafeTextureUploader internally:
+                    //      - sets UNPACK_ALIGNMENT=1 (defends against driver row-end overreads)
+                    //      - calls glFinish() INSIDE the same stack frame that owns the
+                    //        DirectByteBuffer, so the Cleaner cannot race the driver's DMA
+                    //      - emits a Reference.reachabilityFence to block C2 scalar-replacing
+                    //        the buffer local before the native call returns
+                    //    This is the proper fix for the recurring AV @ nvoglv64+0xb77610.
+                    //    The previous approach of calling glFinish() AFTER
+                    //    BufferedImageUtil.getTexture() returned could not work because the
+                    //    buffer reference had already left scope by the time glFinish ran.
+                    final String keySuffix = pendingKey + "@" + System.nanoTime();
                     try {
-                        this.songThumbnail = BufferedImageUtil.getTexture("picture", safeThumb);
-                    } catch (Exception e) {
+                        this.songThumbnail = SafeTextureUploader.upload("music_thumb_" + keySuffix, safeThumb);
+                        if (this.songThumbnail == null) {
+                            System.err.println("[MusicManager] songThumbnail upload returned null (see prior stack trace)");
+                        }
+                    } catch (Throwable e) {
                         System.err.println("[MusicManager] Failed to create songThumbnail texture: " + e.getMessage());
                         e.printStackTrace();
                         this.songThumbnail = null;
                     }
 
                     try {
-                        this.notificationImage = BufferedImageUtil.getTexture("picture", safeScaled);
-                    } catch (Exception e) {
+                        this.notificationImage = SafeTextureUploader.upload("music_notif_" + keySuffix, safeScaled);
+                        if (this.notificationImage == null) {
+                            System.err.println("[MusicManager] notificationImage upload returned null (see prior stack trace)");
+                        }
+                    } catch (Throwable e) {
                         System.err.println("[MusicManager] Failed to create notificationImage texture: " + e.getMessage());
                         e.printStackTrace();
                         this.notificationImage = null;
                     }
 
                     this.songTitle = title;
-                    this.cachedTextureSongTitle = title;
+                    this.appliedCoverKey = pendingKey;
                     // Apply extracted accent only after artwork textures were uploaded successfully.
                     this.coverAccentColor = sanitizeAccentColor(pendingAccent);
 
@@ -436,10 +490,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 .send(new Notification("Now Playing", this.songTitle));
                     }
                 }
-                this.processing = false;
+                this.processing.set(false);
             }
-        } catch (Exception exc) {
-            // Catch all exceptions (including native wrapper errors) to prevent render thread crash
+        } catch (Throwable exc) {
+            // Catch Throwable (incl. OOM/LinkageError/UnsatisfiedLinkError) so the Render thread
+            // can recover on the next tick instead of being taken down.
             System.err.println("[MusicManager] Texture upload failed: " + exc.getMessage());
             exc.printStackTrace();
             // Release any textures that were successfully created before the error
@@ -451,12 +506,12 @@ public class MusicManager extends Manager implements MinecraftUtil {
             }
             this.songThumbnail = null;
             this.notificationImage = null;
-            this.cachedTextureSongTitle = null; // allow retry on next tick
+            this.appliedCoverKey = null; // allow retry on next tick (appliedCoverKey != requestedCoverKey)
             this.coverAccentColor = DEFAULT_COVER_ACCENT_COLOR;
-            this.processing = false;
+            this.processing.set(false);
         }
 
-        if (!this.processing) {
+        if (!this.processing.get()) {
             this.startProcessingVideoThumbnail();
         }
     }
@@ -715,27 +770,96 @@ public class MusicManager extends Manager implements MinecraftUtil {
         this.startProcessingVideoThumbnail(this.currentVideo);
     }
 
+    /**
+     * Record the latest requested cover and start a worker if idle.
+     * <p>
+     * Invariants:
+     * <ul>
+     *   <li>{@code requestedCoverKey} is refreshed on <b>every</b> call (never skipped), so
+     *       a concurrent in-flight worker will see the new key and drop its stale result.</li>
+     *   <li>If {@code requestedCoverKey == appliedCoverKey} no worker is spawned — the cover
+     *       is already on-screen.</li>
+     *   <li>If CAS on {@code processing} fails (another worker is running), we return without
+     *       spawning. The onTick pump will call us again after {@code processing} is released,
+     *       at which point {@code requestedCoverKey} already reflects the latest request and
+     *       a worker will be spawned for it. This is the "串行但不丢请求" guarantee.</li>
+     * </ul>
+     */
     private void startProcessingVideoThumbnail(YoutubeVideoData videoData) {
-        if (videoData != null && !this.processing) {
-            // Mark processing before starting thread to prevent duplicate workers racing each other.
-            this.processing = true;
-            this.visualizerData.clear();
-            String coverKey = buildCoverKey(videoData);
-            this.requestedCoverKey = coverKey;
-            new Thread(() -> this.processVideoThumbnail(videoData, coverKey), "MusicCoverProcessor").start();
+        if (videoData == null) return;
+        String coverKey = buildCoverKey(videoData);
+        // Always refresh the latest request before any early-return so in-flight workers
+        // can detect staleness via `coverKey != requestedCoverKey`.
+        this.requestedCoverKey = coverKey;
+        // Nothing to do if the cover currently on-screen already matches the latest request.
+        if (coverKey.equals(this.appliedCoverKey)) {
+            return;
         }
+        // A worker is already running; let it finish, then the onTick pump will re-trigger
+        // and pick up the (now updated) requestedCoverKey. Do NOT spawn a second worker.
+        if (!this.processing.compareAndSet(false, true)) {
+            return;
+        }
+        synchronized (this.visualizerData) {
+            this.visualizerData.clear();
+        }
+        Thread t = new Thread(() -> this.processVideoThumbnail(videoData, coverKey), "MusicCoverProcessor");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void initializeAudioPlayback() {
-        this.visualizerData.clear();
+        synchronized (this.visualizerData) {
+            this.visualizerData.clear();
+        }
         if (this.videoManager != null) {
-            while (this.audioThread != null && this.audioThread.isAlive()) {
-                this.audioThread.interrupt();
+            // Previously: `while (audioThread.isAlive()) audioThread.interrupt();`
+            // That busy-loop pegged a CPU core and raced with the thread's native audio cleanup,
+            // causing freezes and crashes when stopping / seeking / auto-advancing songs.
+            Thread prev = this.audioThread;
+            // Revoke the previous thread's progress-field ownership IMMEDIATELY,
+            // before any of the slow cleanup (interrupt + close + 1.5s join) below.
+            // The old thread's frame loop checks `Thread.currentThread() == this.audioThread`
+            // before writing totalDuration / currentPositionMs / field32170; setting this
+            // field to null here makes that check fail on the very next iteration, so the
+            // old thread can no longer overwrite values being set by `setDuration` or by
+            // the new thread we are about to spin up. This fixes the progress-bar
+            // oscillation that appeared when an old thread was stuck on a slow Netease
+            // HTTP read and outlived our 1.5s join window.
+            this.audioThread = null;
+            if (prev != null && prev.isAlive()) {
+                prev.interrupt();
+                // Help the old thread unblock from SourceDataLine.write()/drain() which are not
+                // interruptible on their own.
+                SourceDataLine prevLine = this.sourceDataLine;
+                if (prevLine != null) {
+                    try { prevLine.stop(); } catch (Exception ignored) {}
+                    try { prevLine.flush(); } catch (Exception ignored) {}
+                    try { prevLine.close(); } catch (Exception ignored) {}
+                    this.sourceDataLine = null;
+                }
+                try {
+                    prev.join(1500L);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                // If the old thread is still alive after 1.5s, it's almost certainly stuck in a
+                // native read on a dead HTTP stream; drop the reference and let it die on its own.
             }
 
             this.audioThread = new Thread(
                     () -> {
                         byte[] pcmBufferData;
+                        // Reusable visualizer buffers — allocated once per audio thread, reused per frame.
+                        // Prevents ~3.6 MB/sec of garbage (JavaFFT + padded PCM + fft output + frequencies.clone())
+                        // from being produced in the MP3 frame loop, which was the primary cause of OOM/stutter.
+                        float[] reusablePcmFloat = null;
+                        float[] reusablePaddedPcm = null;
+                        float[] reusableFftReal = null;
+                        float[] reusableFftImag = null;
+                        JavaFFT reusableFft = null;
+                        int reusableFftSize = -1;
+                        int reusablePcmLen = -1;
                         if (this.currentVideoIndex < 0
                                 || this.currentVideoIndex >= this.videoManager.videoList.size()) {
                             this.currentVideoIndex = 0;
@@ -775,7 +899,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                             this.currentVideoIndex2 = index;
                             this.currentVideo = this.videoManager.videoList.get(index);
-                            this.visualizerData.clear();
+                            synchronized (this.visualizerData) {
+                                this.visualizerData.clear();
+                            }
 
                             while (!this.playing) {
                                 try {
@@ -783,8 +909,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 } catch (final InterruptedException ignored) {
                                 }
 
-                                double[] var6 = new double[0];
-                                this.visualizerData.clear();
+                                synchronized (this.visualizerData) {
+                                    this.visualizerData.clear();
+                                }
                                 if (Thread.interrupted()) {
                                     if (this.sourceDataLine != null) {
                                         this.sourceDataLine.close();
@@ -939,7 +1066,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                 // Check for pause
                                                 while (!this.playing) {
                                                     Thread.sleep(300L);
-                                                    this.visualizerData.clear();
+                                                    synchronized (this.visualizerData) {
+                                                        this.visualizerData.clear();
+                                                    }
                                                     if (Thread.interrupted()) {
                                                         this.sourceDataLine.close();
                                                         bitstream.close();
@@ -976,34 +1105,80 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                     msPerFrame = frameHeader.ms_per_frame();
                                                 }
                                                 frameCount++;
-                                                this.totalDuration = (long) ((frameCount * msPerFrame) / 1000);
-                                                this.currentPositionMs = (long) (frameCount * msPerFrame);
-                                                this.field32170 = this.duration > 0
-                                                        ? (double) this.totalDuration / (double) this.duration
-                                                        : 0.0;
+                                                // Only the audio thread that currently owns playback may
+                                                // update the progress fields. A previous-generation thread
+                                                // stuck on a slow Netease HTTP read can outlive our 1.5s
+                                                // join window; without this guard, both threads write
+                                                // totalDuration/field32170 every frame and the GUI thread
+                                                // sees them oscillate, manifesting as a progress bar that
+                                                // visibly jumps back and forth between two positions.
+                                                if (Thread.currentThread() == this.audioThread) {
+                                                    this.totalDuration = (long) ((frameCount * msPerFrame) / 1000);
+                                                    this.currentPositionMs = (long) (frameCount * msPerFrame);
+                                                    this.field32170 = this.duration > 0
+                                                            ? (double) this.totalDuration / (double) this.duration
+                                                            : 0.0;
+                                                }
 
-                                                // Visualizer logic
-                                                float[] pcmFloat = MathHelper.convertToPCMFloatArray(pcmBytes,
-                                                        mp3Format);
+                                                // Visualizer logic — reuse FFT + buffers across frames to avoid per-frame GC pressure.
+                                                // Never let a visualizer failure kill audio playback.
+                                                try {
+                                                    int frameSize = mp3Format.getFrameSize();
+                                                    int n = pcmBytes.length / frameSize; // matches MathHelper.convertToPCMFloatArray output length
+                                                    if (n > 0) {
+                                                        int p = 1;
+                                                        while (p < n) p <<= 1;
 
-                                                // Pad to next power of 2 for FFT
-                                                int n = pcmFloat.length;
-                                                int p = 1;
-                                                while (p < n)
-                                                    p <<= 1;
+                                                        // (Re)allocate FFT state only when the padded size changes.
+                                                        if (reusableFftSize != p) {
+                                                            reusableFftSize = p;
+                                                            reusablePaddedPcm = new float[p];
+                                                            reusableFftReal = new float[p];
+                                                            reusableFftImag = new float[p];
+                                                            reusableFft = new JavaFFT(p);
+                                                        }
+                                                        // (Re)allocate PCM buffer only when the live sample count changes.
+                                                        if (reusablePcmLen != n || reusablePcmFloat == null) {
+                                                            reusablePcmLen = n;
+                                                            reusablePcmFloat = new float[n];
+                                                            // Clear tail of paddedPcm beyond n so FFT sees zeros in the pad region.
+                                                            java.util.Arrays.fill(reusablePaddedPcm, n, p, 0.0f);
+                                                        }
 
-                                                float[] paddedPcm = new float[p];
-                                                System.arraycopy(pcmFloat, 0, paddedPcm, 0, n);
+                                                        // Inlined PCM conversion (little-endian, bit depth = 16, frameSize=2*channels).
+                                                        // Mirrors MathHelper.convertToPCMFloatArray semantics but writes into reusable buffer.
+                                                        boolean bigEndian = mp3Format.isBigEndian();
+                                                        for (int i = 0; i < n; i++) {
+                                                            int base = i * frameSize;
+                                                            int sample = 0;
+                                                            if (!bigEndian) {
+                                                                for (int k = 0; k < frameSize; k++) {
+                                                                    sample += (pcmBytes[base + k] & 0xFF) << (8 * k);
+                                                                }
+                                                            } else {
+                                                                for (int k = 0; k < frameSize; k++) {
+                                                                    sample += (pcmBytes[base + k] & 0xFF) << (8 * (frameSize - k - 1));
+                                                                }
+                                                            }
+                                                            reusablePcmFloat[i] = sample / 32768.0f;
+                                                        }
+                                                        System.arraycopy(reusablePcmFloat, 0, reusablePaddedPcm, 0, n);
 
-                                                JavaFFT fft = new JavaFFT(paddedPcm.length);
-                                                float[][] transformed = fft.transform(paddedPcm);
-                                                float[] fftLeft = transformed[0];
-                                                float[] fftRight = transformed[1];
+                                                        // Imag input is null => JavaFFT's 5-arg transform relies on imagOut starting at zero.
+                                                        java.util.Arrays.fill(reusableFftImag, 0.0f);
+                                                        reusableFft.transform(false, reusablePaddedPcm, null,
+                                                                reusableFftReal, reusableFftImag);
 
-                                                this.visualizerData
-                                                        .add(MathHelper.calculateAmplitudes(fftLeft, fftRight));
-                                                if (this.visualizerData.size() > 18) {
-                                                    this.visualizerData.remove(0);
+                                                        double[] amps = MathHelper.calculateAmplitudes(reusableFftReal, reusableFftImag);
+                                                        synchronized (this.visualizerData) {
+                                                            this.visualizerData.add(amps);
+                                                            while (this.visualizerData.size() > 18) {
+                                                                this.visualizerData.remove(0);
+                                                            }
+                                                        }
+                                                    }
+                                                } catch (Throwable visualizerErr) {
+                                                    // Swallow — visualizer must never kill audio.
                                                 }
 
                                                 // Volume control
@@ -1020,10 +1195,18 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                 bitstream.closeFrame();
                                             } while ((frameHeader = bitstream.readFrame()) != null);
 
-                                            this.sourceDataLine.drain();
-                                            this.sourceDataLine.close();
-                                            bitstream.close();
-                                            fileStream.close();
+                                            // Natural song end. Each cleanup step is guarded because another thread
+                                            // (setPlaying/initializeAudioPlayback) may have concurrently closed the
+                                            // line, and double-close on javax.sound.sampled implementations can
+                                            // trigger native crashes.
+                                            SourceDataLine endLine = this.sourceDataLine;
+                                            if (endLine != null) {
+                                                try { endLine.drain(); } catch (Exception ignored) {}
+                                                try { endLine.close(); } catch (Exception ignored) {}
+                                                this.sourceDataLine = null;
+                                            }
+                                            try { bitstream.close(); } catch (Exception ignored) {}
+                                            try { fileStream.close(); } catch (Exception ignored) {}
                                             this.playing = false; // Reset playing state after loop finishes
                                         } catch (Exception e) {
                                             this.playing = false; // Reset playing state on exception
@@ -1070,7 +1253,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                     while (var13.hasMoreFrames()) {
                                         while (!this.playing) {
                                             Thread.sleep(300L);
-                                            this.visualizerData.clear();
+                                            synchronized (this.visualizerData) {
+                                                this.visualizerData.clear();
+                                            }
                                             if (Thread.interrupted()) {
                                                 this.sourceDataLine.close();
                                                 return;
@@ -1090,19 +1275,27 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                         float[] var21 = var20[0];
                                         float[] var22 = var20[1];
 
-                                        this.visualizerData.add(MathHelper.calculateAmplitudes(var21, var22));
-                                        if (this.visualizerData.size() > 18) {
-                                            this.visualizerData.remove(0);
+                                        synchronized (this.visualizerData) {
+                                            this.visualizerData.add(MathHelper.calculateAmplitudes(var21, var22));
+                                            while (this.visualizerData.size() > 18) {
+                                                this.visualizerData.remove(0);
+                                            }
                                         }
 
                                         this.adjustAudioVolume(this.sourceDataLine, this.volume);
                                         if (!Thread.interrupted()) {
-                                            this.totalDuration = Math.round(var13.getNextTimeStamp());
-                                            this.field32170 = var13.method23326();
-                                            if (this.field32169) {
-                                                var13.seek(this.field32168);
-                                                this.totalDuration = (long) this.field32168;
-                                                this.field32169 = false;
+                                            // Same ownership guard as the MP3 path above: only the
+                                            // current owner thread may update progress fields, so a
+                                            // dangling old AAC thread cannot make the progress bar
+                                            // oscillate.
+                                            if (Thread.currentThread() == this.audioThread) {
+                                                this.totalDuration = Math.round(var13.getNextTimeStamp());
+                                                this.field32170 = var13.method23326();
+                                                if (this.field32169) {
+                                                    var13.seek(this.field32168);
+                                                    this.totalDuration = (long) this.field32168;
+                                                    this.field32169 = false;
+                                                }
                                             }
                                         }
 
@@ -1111,7 +1304,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                         || this.repeat == AudioRepeatMode.REPEAT
                                                                 && this.videoManager.videoList.size() == 1)) {
                                             var13.seek(0.0);
-                                            this.totalDuration = 0L;
+                                            if (Thread.currentThread() == this.audioThread) {
+                                                this.totalDuration = 0L;
+                                            }
                                         }
 
                                         if (Thread.interrupted()) {
@@ -1166,7 +1361,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
     private void processVideoThumbnail(YoutubeVideoData videoData, String coverKey) {
         try {
             if (videoData == null) {
-                this.processing = false;
+                this.processing.set(false);
                 return;
             }
 
@@ -1215,21 +1410,25 @@ public class MusicManager extends Manager implements MinecraftUtil {
             int extractedAccent = extractDominantCoverColor(sampledCover);
 
             // Async guard: do not let stale worker results override a newer song's artwork/color.
+            // (Also checked again on the render thread in onTick as a belt-and-suspenders
+            // safety net, since requestedCoverKey can be updated between here and upload.)
             if (!coverKey.equals(this.requestedCoverKey)) {
-                this.processing = false;
+                this.processing.set(false);
                 return;
             }
 
-            // Store results for the render thread to pick up (no GL calls here!)
+            // Store results for the render thread to pick up (no GL calls here!).
+            // IMPORTANT: do NOT touch currentVideo here. currentVideo is owned by the audio
+            // thread; writing it from the worker caused the "stuck on first cover" bug by
+            // clobbering the audio thread's latest song and then confusing the pump.
             this.pendingThumbnailImage = ensureSafeTexture(thumbSub);
             this.pendingScaledThumbnail = sampledCover;
             this.pendingCoverAccentColor = extractedAccent;
             this.pendingSongTitle = title;
             this.pendingCoverKey = coverKey;
-            this.currentVideo = null;
-        } catch (Exception var5) {
+        } catch (Throwable var5) {
             var5.printStackTrace();
-            this.processing = false;
+            this.processing.set(false);
         }
     }
 
@@ -1381,6 +1580,14 @@ public class MusicManager extends Manager implements MinecraftUtil {
     }
 
     public void setDuration(double duration) {
+        // Revoke the current audio thread's ownership of the progress fields BEFORE
+        // we write the new seek target into totalDuration. Otherwise the still-running
+        // old thread would overwrite our write on its next frame iteration, making the
+        // progress bar visibly snap back to the old playback position for ~1 frame
+        // before the new (post-seek) thread takes over. initializeAudioPlayback below
+        // sets up a new thread that takes ownership.
+        this.audioThread = null;
+
         this.field32168 = duration;
         this.totalDuration = (long) this.field32168;
         this.field32169 = true;

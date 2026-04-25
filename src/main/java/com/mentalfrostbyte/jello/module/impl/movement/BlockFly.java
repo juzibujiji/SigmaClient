@@ -45,7 +45,12 @@ public class BlockFly extends ModuleWithModuleSettings {
                 new BlockFlyNCPMode(),
                 new BlockFlyAACMode(),
                 new BlockFlySmoothMode(),
-                new BlockFlyHypixelMode()
+                new BlockFlyHypixelMode(),
+                // GrimSemi: semi-silent scaffold hardened against GrimAntiCheat's
+                // block-place pipeline (post.Post, blockplace.FabricatedPlace /
+                // PositionPlace / AirLiquidPlace, badpackets.BadPacketsX/Y/W,
+                // movement.Rotations GCD filter). See BlockFlyGrimSemiMode javadoc.
+                new BlockFlyGrimSemiMode()
         );
         this.registerSetting(
                 new ModeSetting("ItemSpoof", "Item spoofing mode", 2, "None", "Switch", "Spoof", "LiteSpoof"));
