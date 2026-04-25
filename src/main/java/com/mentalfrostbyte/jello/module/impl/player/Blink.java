@@ -48,9 +48,7 @@ public class Blink extends Module {
     @EventTarget
     public void onRenderEntity(EventRendererLivingEntity e) {
         if (e.getEntity() == clientPlayerEntity) {
-            e.setShouldInvisible(true);
             e.setAlpha(0.4f);
-            e.setHideLayer(true);
         }
     }
 

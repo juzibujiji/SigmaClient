@@ -5,6 +5,7 @@ import com.google.common.collect.Queues;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.event.impl.game.world.EventTick;
 import com.mentalfrostbyte.jello.event.impl.player.EventRunLoop;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventPlace;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventUseItem;
@@ -1533,8 +1534,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
                     }
 
                     if (!itemstack.isEmpty()) {
-                        ActionResultType actionresulttype2 = this.playerController.processRightClick(this.player,
-                                this.world, hand);
+                        ActionResultType actionresulttype2 = this.playerController.processRightClick(this.player, this.world, hand);
 
                         if (actionresulttype2.isSuccessOrConsume()) {
                             if (actionresulttype2.isSuccess()) {
@@ -1585,6 +1585,8 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
             RotationCore.currentYaw = player.rotationYaw;
             RotationCore.currentPitch = player.rotationPitch;
         }
+
+        EventBus.call(new EventTick());
 
         if (this.world != null) {
             this.textureManager.tick();
