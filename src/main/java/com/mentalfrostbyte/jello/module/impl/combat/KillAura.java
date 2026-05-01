@@ -5,7 +5,6 @@ import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender2DOffset;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender3D;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
-import com.mentalfrostbyte.jello.event.impl.game.world.EventTick;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventPlace;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventStopUseItem;
@@ -210,7 +209,7 @@ public class KillAura extends Module {
     }
 
     @EventTarget
-    public void onTick2(EventTick var1) {
+    public void onTick2(EventUpdate var1) {
         if (this.isEnabled()) {
             if (this.targetPitch != -1.0F) {
                 this.targetPitch++;
@@ -249,7 +248,7 @@ public class KillAura extends Module {
 
     @EventTarget
     @LowestPriority
-    public void onTick(EventTick var1) {
+    public void onTick(EventUpdate var1) {
         if (Client.getInstance().moduleManager.getModuleByClass(BlockFly.class).enabled) {
             targetEntity = null;
             return;

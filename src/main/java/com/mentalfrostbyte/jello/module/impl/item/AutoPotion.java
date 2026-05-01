@@ -2,7 +2,7 @@ package com.mentalfrostbyte.jello.module.impl.item;
 
 
 import com.mentalfrostbyte.Client;
-import com.mentalfrostbyte.jello.event.impl.game.world.EventTick;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
@@ -51,8 +51,8 @@ public class AutoPotion extends Module {
 
     @EventTarget
     @LowestPriority
-    public void method16629(EventTick var1) {
-        if (this.isEnabled() /*&& var1.isPre()*/) {
+    public void method16629(EventUpdate var1) {
+        if (this.isEnabled() && mc.player != null/*&& var1.isPre()*/) {
             if (this.getBooleanValueFromSettingName("In fight") || KillAura.targetData == null && KillAura.targetEntity == null) {
                 int var4 = this.method16631();
                 this.field23808++;

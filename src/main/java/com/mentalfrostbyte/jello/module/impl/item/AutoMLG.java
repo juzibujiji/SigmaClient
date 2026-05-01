@@ -1,8 +1,7 @@
 package com.mentalfrostbyte.jello.module.impl.item;
 
 import com.mentalfrostbyte.Client;
-import com.mentalfrostbyte.jello.event.impl.game.world.EventTick;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
 import com.mentalfrostbyte.jello.managers.RotationManager;
@@ -13,26 +12,18 @@ import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.util.game.player.InvManagerUtil;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 import com.mentalfrostbyte.jello.util.game.player.combat.RotationUtil;
-import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
-import com.viaversion.viaversion.api.minecraft.BlockFace;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.network.play.client.CClientStatusPacket;
-import net.minecraft.util.Direction;
-import net.minecraft.util.Rotation;
 import net.minecraft.util.math.*;
 import net.minecraft.util.math.shapes.VoxelShape;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.play.client.CAnimateHandPacket;
 import net.minecraft.network.play.client.CCloseWindowPacket;
-import net.minecraft.network.play.client.CPlayerTryUseItemPacket;
 import net.minecraft.util.Hand;
-import net.minecraft.util.math.vector.Vector3d;
-import org.lwjgl.glfw.GLFW;
 import team.sdhq.eventBus.annotations.EventTarget;
 import team.sdhq.eventBus.annotations.priority.HighestPriority;
-import team.sdhq.eventBus.annotations.priority.LowerPriority;
 
 import java.util.Iterator;
 import java.util.stream.Stream;
@@ -67,15 +58,15 @@ public class AutoMLG extends Module {
     public void onMove(EventMove var1) {
         if (this.isEnabled()) {
             if (preTicks > 0 && !mc.player.isOnGround()) {
-                MovementUtil.setMotion(var1, 0.0);
+                //MovementUtil.setMotion(var1, 0.0);
             }
         }
     }
 
     @EventTarget
     @HighestPriority
-    public void onUpdate(EventTick var1) {
-        if (this.isEnabled() && mc.playerController.gameIsSurvivalOrAdventure()) {
+    public void onUpdate(EventUpdate var1) {
+        if (this.isEnabled() && mc.player != null && mc.playerController.gameIsSurvivalOrAdventure()) {
             if (/*var1.isPre() && */preTicks >= 0) {
                 preTicks++;
                 float[] var4 = RotationUtil.rotationToPos(
@@ -109,8 +100,8 @@ public class AutoMLG extends Module {
             int var7 = this.method16424();
             if (!Client.getInstance().moduleManager.getModuleByClass(Fly.class).isEnabled()
                     && var7 != -1
-                    && !mc.player.isOnGround()
-                    && mc.player.fallDistance > 3.0F) {
+                    && (!mc.player.isOnGround()
+                    && mc.player.fallDistance > 3.0F/* || mc.player.isBurning()*/)) {
                 BlockPos var5 = this.method16425();
                 if (var5 != null) {
                     if (/*var1.isPre() && */preTicks == -1) {

@@ -3,7 +3,6 @@ package com.mentalfrostbyte.jello.module.impl.movement.blockfly;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
-import com.mentalfrostbyte.jello.event.impl.game.world.EventTick;
 import com.mentalfrostbyte.jello.event.impl.player.EventGetFovModifier;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventPlace;
@@ -261,8 +260,8 @@ public class BlockFlyAACMode extends Module {
 
     @EventTarget
     @LowestPriority
-    public void onUpdate(EventTick event) {
-        if (this.isEnabled()) {
+    public void onUpdate(EventUpdate event) {
+        if (this.isEnabled() && mc.player != null) {
             double placeY = mc.player.getPosY();
             if (this.getBooleanValueFromSettingName("Telly") && GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {
                 placeY = this.placeY;
