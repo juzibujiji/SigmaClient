@@ -45,6 +45,11 @@ public abstract class Setting<T> {
         return hidden.getAsBoolean();
     }
 
+    public Setting<T> setHidden(BooleanSupplier hidden) {
+        this.hidden = hidden == null ? () -> false : hidden;
+        return this;
+    }
+
     public void resetToDefault() {
         this.currentValue = this.defaultValue;
     }

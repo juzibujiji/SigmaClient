@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.module.impl.movement;
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender2DOffset;
+import com.mentalfrostbyte.jello.event.impl.player.EventGetFovModifier;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.gui.base.animations.Animation;
@@ -11,6 +12,7 @@ import com.mentalfrostbyte.jello.module.data.ModuleWithModuleSettings;
 import com.mentalfrostbyte.jello.module.impl.movement.blockfly.*;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.ModeSetting;
+import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.client.ClientMode;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
@@ -32,6 +34,7 @@ import net.minecraft.network.play.client.CHeldItemChangePacket;
 import net.minecraft.util.Hand;
 import org.lwjgl.opengl.GL11;
 import team.sdhq.eventBus.annotations.EventTarget;
+import team.sdhq.eventBus.annotations.priority.LowestPriority;
 
 import java.util.Arrays;
 
@@ -46,6 +49,7 @@ public class BlockFly extends ModuleWithModuleSettings {
                 new BlockFlyAACMode(),
                 new BlockFlySmoothMode(),
                 new BlockFlyHypixelMode(),
+                new BlockFlyScaffoldMode(),
                 // GrimSemi: semi-silent scaffold hardened against GrimAntiCheat's
                 // block-place pipeline (post.Post, blockplace.FabricatedPlace /
                 // PositionPlace / AirLiquidPlace, badpackets.BadPacketsX/Y/W,
@@ -64,12 +68,13 @@ public class BlockFly extends ModuleWithModuleSettings {
         this.registerSetting(
                 new BooleanSetting("Intelligent Block Picker", "Always get the biggest blocks stack.", true));
         this.registerSetting(new BooleanSetting("No Sprint", "Disable sprint.", false));
-        this.registerSetting(new BooleanSetting("UesGameSprint", "Not (Keep No sprint).", true) {
-            @Override
-            public boolean isHidden() {
-                return getBooleanValueFromSettingName("No Sprint");
-            }
-        });
+        BooleanSetting useGameSprint = new BooleanSetting("UesGameSprint", "Not (Keep No sprint).", true);
+        useGameSprint.setHidden(() -> getBooleanValueFromSettingName("No Sprint"));
+        this.registerSetting(useGameSprint);
+        this.registerSetting(new BooleanSetting("KeepFOV", "Lock the FOV multiplier to prevent the view from zooming in/out when sprint state toggles.", true));
+        NumberSetting<Float> fovModifier = new NumberSetting<Float>("FOV Modifier", "FOV multiplier used when KeepFOV is on (1.15 = vanilla sprint FOV).", 1.15F, 1.0F, 1.5F, 0.01F);
+        fovModifier.setHidden(() -> !getBooleanValueFromSettingName("KeepFOV"));
+        this.registerSetting(fovModifier);
     }
 
     public boolean isEnabled2() {
@@ -353,6 +358,16 @@ public class BlockFly extends ModuleWithModuleSettings {
             if (this.getBooleanValueFromSettingName("Show Block Amount")) {
                 this.blockCount = this.getValidItemCount();
             }
+        }
+    }
+
+    @EventTarget
+    @LowestPriority
+    public void onFOV(EventGetFovModifier event) {
+        if (this.isEnabled()
+                && !(this.getModWithTypeSetToName() instanceof BlockFlyScaffoldMode)
+                && this.getBooleanValueFromSettingName("KeepFOV")) {
+            event.fovModifier = this.getNumberValueBySettingName("FOV Modifier");
         }
     }
 

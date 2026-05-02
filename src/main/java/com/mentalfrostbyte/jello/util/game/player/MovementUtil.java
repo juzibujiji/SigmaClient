@@ -379,15 +379,87 @@ public class MovementUtil implements MinecraftUtil {
         return Math.toRadians(rotationYaw);
     }
 
+    private static float inputDirection(float forward, float strafe) {
+        float direction = mc.player.rotationYaw;
+        boolean movingForward = forward > 0.0F;
+        boolean movingBack = forward < 0.0F;
+        boolean movingLeft = strafe > 0.0F;
+        boolean movingRight = strafe < 0.0F;
+        boolean movingSideways = movingLeft || movingRight;
+        boolean movingStraight = movingForward || movingBack;
+
+        if (forward != 0.0F || strafe != 0.0F) {
+            if (movingBack && !movingSideways) {
+                return direction + 180.0F;
+            }
+
+            if (movingForward && movingLeft) {
+                return direction + 45.0F;
+            }
+
+            if (movingForward && movingRight) {
+                return direction - 45.0F;
+            }
+
+            if (!movingStraight && movingLeft) {
+                return direction + 90.0F;
+            }
+
+            if (!movingStraight && movingRight) {
+                return direction - 90.0F;
+            }
+
+            if (movingBack && movingLeft) {
+                return direction + 135.0F;
+            }
+
+            if (movingBack) {
+                return direction - 135.0F;
+            }
+        }
+
+        return direction;
+    }
+
+    public static void fixMovement(EventMoveInput event, float yaw) {
+        float forward = event.forward;
+        float strafe = event.strafe;
+
+        if (forward == 0.0F && strafe == 0.0F) {
+            return;
+        }
+
+        float directionFactor = Math.max(Math.abs(forward), Math.abs(strafe));
+        double angleDifference = MathHelper.wrapDegrees(inputDirection(forward, strafe) - yaw);
+        double angleDistance = Math.abs(angleDifference);
+        forward = 0.0F;
+        strafe = 0.0F;
+
+        if (angleDistance <= 67.5D) {
+            forward++;
+        } else if (angleDistance >= 112.5D) {
+            forward--;
+        }
+
+        if (angleDifference >= 22.5D && angleDifference <= 157.5D) {
+            strafe--;
+        } else if (angleDifference <= -22.5D && angleDifference >= -157.5D) {
+            strafe++;
+        }
+
+        event.forward = forward * directionFactor;
+        event.strafe = strafe * directionFactor;
+    }
+
     public static void silentStrafe(final EventMoveInput event, float yaw) {
         final float forward = event.forward;
         final float strafe = event.strafe;
 
-        final double angle = MathHelper.wrapDegrees(Math.toDegrees(direction(mc.player.rotationYaw, forward, strafe)));
-
         if (forward == 0 && strafe == 0) {
             return;
         }
+
+        final double angle = MathHelper.wrapDegrees(Math.toDegrees(direction(mc.player.rotationYaw, forward, strafe)));
 
         float closestForward = 0, closestStrafe = 0, closestDifference = Float.MAX_VALUE;
 
@@ -396,7 +468,11 @@ public class MovementUtil implements MinecraftUtil {
                 if (predictedStrafe == 0 && predictedForward == 0) continue;
 
                 final double predictedAngle = MathHelper.wrapDegrees(Math.toDegrees(direction(yaw, predictedForward, predictedStrafe)));
-                final double difference = Math.abs(angle - predictedAngle);
+                // Wrap the difference into [-180, 180] so values straddling the 0/360 boundary
+                // (e.g. visual yaw 359° vs predicted 1°) are compared by their true angular gap.
+                // Without this the algorithm picked totally wrong (forward, strafe) pairs and the
+                // player crab-walked instead of moving in a straight line.
+                final double difference = Math.abs(MathHelper.wrapDegrees(angle - predictedAngle));
 
                 if (difference < closestDifference) {
                     closestDifference = (float) difference;
@@ -404,10 +480,10 @@ public class MovementUtil implements MinecraftUtil {
                     closestStrafe = predictedStrafe;
                 }
             }
-
-            event.forward = closestForward;
-            event.strafe = closestStrafe;
         }
+
+        event.forward = closestForward;
+        event.strafe = closestStrafe;
     }
 
 }

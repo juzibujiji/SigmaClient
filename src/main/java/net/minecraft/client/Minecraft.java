@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.EventRunLoop;
+import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventPlace;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventUseItem;
 import com.mentalfrostbyte.jello.gui.impl.jello.mainmenu.ChangelogScreen;
@@ -1561,6 +1562,11 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
      * Runs the current tick.
      */
     public void runTick() {
+        // Naven-style EventRunTicks PRE: fires at the head of the game tick so
+        // modules (Scaffold, RotationManager, etc.) can run their per-tick
+        // setup logic BEFORE processKeyBinds() dispatches mouse-click events.
+        team.sdhq.eventBus.EventBus.call(new EventRunTicks(true));
+
         if (this.rightClickDelayTimer > 0) {
             --this.rightClickDelayTimer;
         }
@@ -1701,6 +1707,10 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
         this.profiler.endStartSection("keyboard");
         this.keyboardListener.tick();
         this.profiler.endSection();
+
+        // Naven-style EventRunTicks POST: paired with the HEAD dispatch above,
+        // gives modules a hook for end-of-tick cleanup.
+        team.sdhq.eventBus.EventBus.call(new EventRunTicks(false));
     }
 
     private boolean func_244600_aM() {

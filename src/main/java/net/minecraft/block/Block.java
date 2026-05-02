@@ -56,13 +56,7 @@ public class Block extends AbstractBlock implements IItemProvider
 {
     protected static final Logger LOGGER = LogManager.getLogger();
     public static final ObjectIntIdentityMap<BlockState> BLOCK_STATE_IDS = new ObjectIntIdentityMap<>();
-    private static final LoadingCache<VoxelShape, Boolean> OPAQUE_CACHE = CacheBuilder.newBuilder().maximumSize(512L).weakKeys().build(new CacheLoader<VoxelShape, Boolean>()
-    {
-        public Boolean load(VoxelShape p_load_1_)
-        {
-            return !VoxelShapes.compare(VoxelShapes.fullCube(), p_load_1_, IBooleanFunction.NOT_SAME);
-        }
-    });
+    private static final LoadingCache<VoxelShape, Boolean> OPAQUE_CACHE = CacheBuilder.newBuilder().maximumSize(512L).weakKeys().build(new OpaqueCacheLoader());
     protected final StateContainer<Block, BlockState> stateContainer;
     private BlockState defaultState;
     @Nullable
@@ -71,12 +65,7 @@ public class Block extends AbstractBlock implements IItemProvider
     private Item item;
     private static final ThreadLocal<Object2ByteLinkedOpenHashMap<Block.RenderSideCacheKey>> SHOULD_SIDE_RENDER_CACHE = ThreadLocal.withInitial(() ->
     {
-        Object2ByteLinkedOpenHashMap<Block.RenderSideCacheKey> object2bytelinkedopenhashmap = new Object2ByteLinkedOpenHashMap<Block.RenderSideCacheKey>(2048, 0.25F)
-        {
-            protected void rehash(int p_rehash_1_)
-            {
-            }
-        };
+        Object2ByteLinkedOpenHashMap<Block.RenderSideCacheKey> object2bytelinkedopenhashmap = new RenderSideCacheMap();
         object2bytelinkedopenhashmap.defaultReturnValue((byte)127);
         return object2bytelinkedopenhashmap;
     });
@@ -580,6 +569,26 @@ public class Block extends AbstractBlock implements IItemProvider
     protected Block getSelf()
     {
         return this;
+    }
+
+    private static final class OpaqueCacheLoader extends CacheLoader<VoxelShape, Boolean>
+    {
+        public Boolean load(VoxelShape p_load_1_)
+        {
+            return !VoxelShapes.compare(VoxelShapes.fullCube(), p_load_1_, IBooleanFunction.NOT_SAME);
+        }
+    }
+
+    private static final class RenderSideCacheMap extends Object2ByteLinkedOpenHashMap<Block.RenderSideCacheKey>
+    {
+        private RenderSideCacheMap()
+        {
+            super(2048, 0.25F);
+        }
+
+        protected void rehash(int p_rehash_1_)
+        {
+        }
     }
 
     public static final class RenderSideCacheKey

@@ -66,6 +66,7 @@ public class ModuleManager {
             this.register(new KeyStrokes());
             this.register(new com.mentalfrostbyte.jello.module.impl.render.jello.ESP());
             this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.InfoHUD());
+            this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.TargetHUD());
             this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.ShulkerInfo());
             this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.TabGUI());
             this.register(new com.mentalfrostbyte.jello.module.impl.render.jello.NameTags());
@@ -192,6 +193,7 @@ public class ModuleManager {
         this.register(new HighJump());
         this.register(new LongJump());
         this.register(new BlockFly());
+        this.register(new Scaffold());
         this.register(new NoSlow());
         this.register(new TargetStrafe());
         this.register(new Phase());

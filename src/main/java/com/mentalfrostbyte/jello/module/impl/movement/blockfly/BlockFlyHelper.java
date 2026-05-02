@@ -49,17 +49,25 @@ public class BlockFlyHelper {
             if (!BlockUtil.method34538(var0, var1)) {
                 return var5;
             } else {
+                // Order matters: prefer placing on the top face of the block below (most natural
+                // for scaffold), then the four side faces, and only fall back to the bottom face
+                // of a block above the target. The previous order put `var1.up(), Direction.DOWN`
+                // first, which made the algorithm aim at the ceiling/player's head.
                 PositionFacing[] tryThese = new PositionFacing[]{
-                        new PositionFacing(var1.up(), Direction.DOWN),
+                        new PositionFacing(var1.down(), Direction.UP),
                         new PositionFacing(var1.north(), Direction.SOUTH),
                         new PositionFacing(var1.east(), Direction.WEST),
                         new PositionFacing(var1.south(), Direction.NORTH),
                         new PositionFacing(var1.west(), Direction.EAST),
-                        new PositionFacing(var1.down(), Direction.UP)
+                        new PositionFacing(var1.up(), Direction.DOWN)
                 };
 
                 for (PositionFacing var10 : tryThese) {
-                    if (!BlockUtil.method34538(var0, var10.blockPos())) {
+                    // Use a direct solid-block presence check. The previous `!method34538(...)`
+                    // proxy also returned true for "above-player" positions and positions with
+                    // entity collision, which let the algorithm pick the player's own body as
+                    // a phantom anchor.
+                    if (BlockUtil.isValidBlockPosition(var10.blockPos())) {
                         var5.add(var10);
                         return var5;
                     }

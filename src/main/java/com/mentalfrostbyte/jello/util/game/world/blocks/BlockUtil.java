@@ -283,14 +283,6 @@ public class BlockUtil {
             case WEST:
                 var4 -= 0.49F;
                 break;
-            case UP:
-                var6 = 0.0F;
-                var4 = 0.26F - (float) (Math.random() * 0.2F);
-                var5 = 0.26F - (float) (Math.random() * 0.2F);
-            case DOWN:
-                var6 = 1.0F;
-                var4 = 0.26F - (float) (Math.random() * 0.2F);
-                var5 = 0.26F - (float) (Math.random() * 0.2F);
         }
 
         if (var4 == 0.0F) {

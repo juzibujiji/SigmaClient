@@ -21,7 +21,7 @@ public class Strafe extends Module {
             movementMagnitude = 0.0;
         }
         if (!(movementMagnitude > currentSpeed + 0.1F)) {
-            MovementUtil.strafe(movementMagnitude);
+            MovementUtil.setMotion(event, MovementUtil.getSpeed());
         }
         currentSpeed = movementMagnitude;
     }

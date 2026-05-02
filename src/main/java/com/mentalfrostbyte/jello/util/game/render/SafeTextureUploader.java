@@ -96,7 +96,7 @@ public final class SafeTextureUploader {
         int texH = 2;
         while (texH < origH) texH *= 2;
 
-        final long byteCount = (long) texW * texH * 4L;
+        final long byteCount = (long) origW * origH * 4L;
 
         // 4 KB tail pad. Belt-and-suspenders defence against driver SIMD
         // overread on tiny textures (e.g. 4x4 = 64 bytes). nmemCalloc
@@ -127,13 +127,14 @@ public final class SafeTextureUploader {
             // host, which means the int written by memPutInt must be
             //   (A << 24) | (B << 16) | (G << 8) | R    — i.e. "ABGR".
             //
-            // POT padding regions (columns origW..texW-1, rows origH..texH-1)
-            // are left as zero from nmemCalloc.
+            // The GL texture storage is still POT-sized, but we only upload
+            // the real image rectangle. This keeps the transfer tightly
+            // bounded to the pixels we actually wrote.
             final int[] pixels = new int[origW * origH];
             image.getRGB(0, 0, origW, origH, pixels, 0, origW);
 
             for (int y = 0; y < origH; y++) {
-                final long rowBase = ptr + ((long) y * texW) * 4L;
+                final long rowBase = ptr + ((long) y * origW) * 4L;
                 final int srcRow = y * origW;
                 for (int x = 0; x < origW; x++) {
                     final int argb = pixels[srcRow + x];
@@ -168,7 +169,17 @@ public final class SafeTextureUploader {
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, 33071);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, 33071);
 
+            final int prevUnpackSwapBytes = GL11.glGetInteger(GL11.GL_UNPACK_SWAP_BYTES);
+            final int prevUnpackLsbFirst = GL11.glGetInteger(GL11.GL_UNPACK_LSB_FIRST);
+            final int prevUnpackRowLength = GL11.glGetInteger(GL11.GL_UNPACK_ROW_LENGTH);
+            final int prevUnpackSkipRows = GL11.glGetInteger(GL11.GL_UNPACK_SKIP_ROWS);
+            final int prevUnpackSkipPixels = GL11.glGetInteger(GL11.GL_UNPACK_SKIP_PIXELS);
             final int prevUnpackAlign = GL11.glGetInteger(GL11.GL_UNPACK_ALIGNMENT);
+            GL11.glPixelStorei(GL11.GL_UNPACK_SWAP_BYTES, 0);
+            GL11.glPixelStorei(GL11.GL_UNPACK_LSB_FIRST, 0);
+            GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, 0);
+            GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, 0);
+            GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, 0);
             GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 4);
             try {
                 // Stage 1 — allocate storage with NULL pixel data. Use the
@@ -208,7 +219,7 @@ public final class SafeTextureUploader {
                         GL11.GL_TEXTURE_2D,
                         0,
                         0, 0,
-                        texW, texH,
+                        origW, origH,
                         GL11.GL_RGBA,
                         GL11.GL_UNSIGNED_BYTE,
                         ptr);
@@ -218,6 +229,11 @@ public final class SafeTextureUploader {
                 // any in-flight DMA.
                 GL11.glFinish();
             } finally {
+                GL11.glPixelStorei(GL11.GL_UNPACK_SWAP_BYTES, prevUnpackSwapBytes);
+                GL11.glPixelStorei(GL11.GL_UNPACK_LSB_FIRST, prevUnpackLsbFirst);
+                GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, prevUnpackRowLength);
+                GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, prevUnpackSkipRows);
+                GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, prevUnpackSkipPixels);
                 GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, prevUnpackAlign);
             }
 

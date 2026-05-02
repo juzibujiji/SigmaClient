@@ -636,21 +636,54 @@ public class MusicPlayer extends AnimatedIconPanel {
     }
 
     private void method13194(float var1) {
-        if (this.musicManager.getSongTitle() != null) {
-            String[] var4 = this.musicManager.getSongTitle().split(" - ");
+        String songTitle = this.musicManager.getSongTitle();
+        if (songTitle != null && !songTitle.trim().isEmpty()) {
+            TrackTitleParts titleParts = this.parseTrackTitle(songTitle);
             int var5 = 30;
-            if (var4.length <= 1) {
-                this.drawNanoString(var1, !var4[0].isEmpty() ? var4[0] : "Jello Music", this.width - var5 * 2, 12, 0);
-            } else {
-                this.drawNanoString(var1, var4[1], this.width - var5 * 2, 0, 0);
 
-                String lyric = this.musicManager.getCurrentLyric();
-                if (lyric != null && !lyric.isEmpty()) {
-                    this.drawLyricString(var1, lyric, this.width - var5 * 2, 20, -1000);
-                } else {
-                    this.drawNanoString(var1, var4[0], this.width - var5 * 2, 20, -1000);
+            String lyric = this.musicManager.getCurrentLyric();
+            boolean hasLyric = lyric != null && !lyric.isEmpty();
+            String primaryText = hasLyric ? lyric : (!titleParts.title.isEmpty() ? titleParts.title : "Jello Music");
+            String secondaryText = titleParts.artist;
+
+            this.drawNanoString(var1, primaryText, this.width - var5 * 2, 0, 0);
+
+            if (secondaryText != null && !secondaryText.isEmpty()) {
+                this.drawNanoString(var1, secondaryText, this.width - var5 * 2, 20, -1000);
+            }
+        }
+    }
+
+    private TrackTitleParts parseTrackTitle(String rawTitle) {
+        String safeTitle = rawTitle == null ? "" : rawTitle.trim();
+        if (safeTitle.isEmpty()) {
+            return new TrackTitleParts("", "", "");
+        }
+
+        String[] delimiters = {" - ", " – ", " — ", "-", "–", "—"};
+        for (String delimiter : delimiters) {
+            int splitAt = safeTitle.indexOf(delimiter);
+            if (splitAt > 0 && splitAt + delimiter.length() < safeTitle.length()) {
+                String artist = safeTitle.substring(0, splitAt).trim();
+                String title = safeTitle.substring(splitAt + delimiter.length()).trim();
+                if (!artist.isEmpty() && !title.isEmpty()) {
+                    return new TrackTitleParts(artist, title, safeTitle);
                 }
             }
+        }
+
+        return new TrackTitleParts("", safeTitle, "");
+    }
+
+    private static class TrackTitleParts {
+        private final String artist;
+        private final String title;
+        private final String fallback;
+
+        private TrackTitleParts(String artist, String title, String fallback) {
+            this.artist = artist;
+            this.title = title;
+            this.fallback = fallback;
         }
     }
 

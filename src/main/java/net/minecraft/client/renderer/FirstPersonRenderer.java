@@ -3,6 +3,7 @@ package net.minecraft.client.renderer;
 import com.google.common.base.MoreObjects;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.EventHandAnimation;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdateHeldItem;
 import com.mentalfrostbyte.jello.module.impl.player.OldHitting;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
@@ -450,6 +451,13 @@ public class FirstPersonRenderer {
         ClientPlayerEntity clientplayerentity = this.mc.player;
         ItemStack itemstack = clientplayerentity.getHeldItemMainhand();
         ItemStack itemstack1 = clientplayerentity.getHeldItemOffhand();
+        EventUpdateHeldItem mainHandEvent = new EventUpdateHeldItem(Hand.MAIN_HAND, itemstack);
+        EventBus.call(mainHandEvent);
+        itemstack = mainHandEvent.getItem();
+
+        EventUpdateHeldItem offHandEvent = new EventUpdateHeldItem(Hand.OFF_HAND, itemstack1);
+        EventBus.call(offHandEvent);
+        itemstack1 = offHandEvent.getItem();
 
         if (ItemStack.areItemStacksEqual(this.itemStackMainHand, itemstack)) {
             this.itemStackMainHand = itemstack;

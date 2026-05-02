@@ -54,7 +54,7 @@ public class MovementInputFromOptions extends MovementInput {
         this.jump = eventMoveInput.jumping;
         this.sneaking = eventMoveInput.sneaking;
 
-        if (this.sneaking) {
+        if (forcedDown) {
             this.moveStrafe *= eventMoveInput.sneakFactor;
             this.moveForward *= eventMoveInput.sneakFactor;
         }
