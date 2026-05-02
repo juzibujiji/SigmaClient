@@ -20,7 +20,8 @@ public class AntiKnockback extends ModuleWithModuleSettings {
                 new GommeAntiKB(),
                 new VulcanAntiKB(),
                 new LegitAntiKB(),
-                new GrimAntiKB()
+                new GrimAntiKB(),
+                new GrimC08FullAntiKB()
         );
     }
 

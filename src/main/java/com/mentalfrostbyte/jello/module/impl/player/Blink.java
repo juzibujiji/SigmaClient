@@ -48,9 +48,7 @@ public class Blink extends Module {
     @EventTarget
     public void onRenderEntity(EventRendererLivingEntity e) {
         if (e.getEntity() == clientPlayerEntity) {
-            e.setShouldInvisible(true);
             e.setAlpha(0.4f);
-            e.setHideLayer(true);
         }
     }
 
@@ -76,7 +74,7 @@ public class Blink extends Module {
     @EventTarget
     public void onSendPacket(EventSendPacket event) {
         if (mc.player != null) {
-            if (event.packet instanceof CHandshakePacket || event.packet instanceof CLoginStartPacket || event.packet instanceof CServerQueryPacket || event.packet instanceof  CChatMessagePacket || event.packet instanceof CEncryptionResponsePacket || event.packet instanceof CPingPacket || event.packet instanceof CKeepAlivePacket) {
+            if (event.packet instanceof CHandshakePacket || event.packet instanceof CLoginStartPacket || event.packet instanceof CServerQueryPacket || event.packet instanceof  CChatMessagePacket || event.packet instanceof CEncryptionResponsePacket /*|| event.packet instanceof CPingPacket || event.packet instanceof CKeepAlivePacket*/) {
                 return;
             }
             this.packets.add(event.packet);
@@ -103,45 +101,47 @@ public class Blink extends Module {
     }
 
     private void handleFakePlayerPacket(IPacket<?> packet) {
-        if (packet instanceof CPlayerPacket.PositionPacket) {
-            CPlayerPacket.PositionPacket position = (CPlayerPacket.PositionPacket) packet;
-            clientPlayerEntity.setPositionAndRotationDirect(position.getX(0.0d), position.getY(0.0d), position.getZ(0.0d), clientPlayerEntity.rotationYaw, clientPlayerEntity.rotationPitch, 3, true);
-            clientPlayerEntity.onGround = position.isOnGround();
+        if (clientPlayerEntity != null) {
+            if (packet instanceof CPlayerPacket.PositionPacket) {
+                CPlayerPacket.PositionPacket position = (CPlayerPacket.PositionPacket) packet;
+                clientPlayerEntity.setPositionAndRotationDirect(position.getX(0.0d), position.getY(0.0d), position.getZ(0.0d), clientPlayerEntity.rotationYaw, clientPlayerEntity.rotationPitch, 3, true);
+                clientPlayerEntity.onGround = position.isOnGround();
 
-            posX = position.getX(0.0d);
-            posY = position.getY(0.0d);
-            posZ = position.getZ(0.0d);
-        } else if (packet instanceof CPlayerPacket.RotationPacket) {
-            CPlayerPacket.RotationPacket look = (CPlayerPacket.RotationPacket) packet;
-            clientPlayerEntity.setPositionAndRotationDirect(clientPlayerEntity.positionVec.x, clientPlayerEntity.positionVec.y, clientPlayerEntity.positionVec.z, look.getYaw(0.0f), look.getPitch(0.0f), 3, true);
-            clientPlayerEntity.onGround = look.isOnGround();
-            clientPlayerEntity.rotationYawHead = look.getYaw(0.0f);
-            clientPlayerEntity.rotationYaw = look.getYaw(0.0f);
-            clientPlayerEntity.rotationPitch = look.getPitch(0.0f);
-        } else if (packet instanceof CPlayerPacket.PositionRotationPacket) {
-            CPlayerPacket.PositionRotationPacket posLook = (CPlayerPacket.PositionRotationPacket) packet;
-            clientPlayerEntity.setPositionAndRotationDirect(posLook.getX(0.0d), posLook.getY(0.0d), posLook.getZ(0.0d), posLook.getYaw(0.0f), posLook.getPitch(0.0f), 3, true);
-            clientPlayerEntity.onGround = posLook.isOnGround();
+                posX = position.getX(0.0d);
+                posY = position.getY(0.0d);
+                posZ = position.getZ(0.0d);
+            } else if (packet instanceof CPlayerPacket.RotationPacket) {
+                CPlayerPacket.RotationPacket look = (CPlayerPacket.RotationPacket) packet;
+                clientPlayerEntity.setPositionAndRotationDirect(clientPlayerEntity.positionVec.x, clientPlayerEntity.positionVec.y, clientPlayerEntity.positionVec.z, look.getYaw(0.0f), look.getPitch(0.0f), 3, true);
+                clientPlayerEntity.onGround = look.isOnGround();
+                clientPlayerEntity.rotationYawHead = look.getYaw(0.0f);
+                clientPlayerEntity.rotationYaw = look.getYaw(0.0f);
+                clientPlayerEntity.rotationPitch = look.getPitch(0.0f);
+            } else if (packet instanceof CPlayerPacket.PositionRotationPacket) {
+                CPlayerPacket.PositionRotationPacket posLook = (CPlayerPacket.PositionRotationPacket) packet;
+                clientPlayerEntity.setPositionAndRotationDirect(posLook.getX(0.0d), posLook.getY(0.0d), posLook.getZ(0.0d), posLook.getYaw(0.0f), posLook.getPitch(0.0f), 3, true);
+                clientPlayerEntity.onGround = posLook.isOnGround();
 
-            posX = posLook.getX(0.0d);
-            posY = posLook.getY(0.0d);
-            posZ = posLook.getZ(0.0d);
-            clientPlayerEntity.rotationYawHead = posLook.getYaw(0.0f);
-            clientPlayerEntity.rotationYaw = posLook.getYaw(0.0f);
-            clientPlayerEntity.rotationPitch = posLook.getPitch(0.0f);
-        } else if (packet instanceof CEntityActionPacket) {
-            CEntityActionPacket action = (CEntityActionPacket) packet;
-            if (action.getAction() == CEntityActionPacket.Action.START_SPRINTING) {
-                clientPlayerEntity.setSprinting(true);
-            } else if (action.getAction() == CEntityActionPacket.Action.STOP_SPRINTING) {
-                clientPlayerEntity.setSprinting(false);
-            } else if (action.getAction() == CEntityActionPacket.Action.PRESS_SHIFT_KEY) {
-                clientPlayerEntity.setSneaking(true);
-            } else if (action.getAction() == CEntityActionPacket.Action.RELEASE_SHIFT_KEY) {
-                clientPlayerEntity.setSneaking(false);
+                posX = posLook.getX(0.0d);
+                posY = posLook.getY(0.0d);
+                posZ = posLook.getZ(0.0d);
+                clientPlayerEntity.rotationYawHead = posLook.getYaw(0.0f);
+                clientPlayerEntity.rotationYaw = posLook.getYaw(0.0f);
+                clientPlayerEntity.rotationPitch = posLook.getPitch(0.0f);
+            } else if (packet instanceof CEntityActionPacket) {
+                CEntityActionPacket action = (CEntityActionPacket) packet;
+                if (action.getAction() == CEntityActionPacket.Action.START_SPRINTING) {
+                    clientPlayerEntity.setSprinting(true);
+                } else if (action.getAction() == CEntityActionPacket.Action.STOP_SPRINTING) {
+                    clientPlayerEntity.setSprinting(false);
+                } else if (action.getAction() == CEntityActionPacket.Action.PRESS_SHIFT_KEY) {
+                    clientPlayerEntity.setSneaking(true);
+                } else if (action.getAction() == CEntityActionPacket.Action.RELEASE_SHIFT_KEY) {
+                    clientPlayerEntity.setSneaking(false);
+                }
+            } else if (packet instanceof CAnimateHandPacket) {
+                clientPlayerEntity.swingArm(((CAnimateHandPacket) packet).getHand());
             }
-        } else if (packet instanceof CAnimateHandPacket) {
-            clientPlayerEntity.swingArm(((CAnimateHandPacket) packet).getHand());
         }
     }
 }

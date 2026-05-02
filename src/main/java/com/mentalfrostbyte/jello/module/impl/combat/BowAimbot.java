@@ -2,7 +2,9 @@ package com.mentalfrostbyte.jello.module.impl.combat;
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender3D;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.combat.bowaimbot.BowAngleSorter;
@@ -46,8 +48,8 @@ public class BowAimbot extends Module {
     }
 
     @EventTarget
-    public void method16569(EventMotion event) {
-        if (this.isEnabled() && event.isPre()) {
+    public void method16569(EventUpdate event) {
+        if (this.isEnabled() /*&& event.isPre()*/) {
             if (!(mc.player.getActiveItemStack().getItem() instanceof BowItem)) {
                 this.field23754.clear();
             } else {
@@ -56,8 +58,9 @@ public class BowAimbot extends Module {
 
             if (!this.field23754.isEmpty() && this.getBooleanValueFromSettingName("Silent")) {
                 float[] rots = RotationUtil.method34146((LivingEntity) this.field23754.get(0));
-                event.setYaw(rots[0]);
-                event.setPitch(rots[1]);
+                //event.setYaw(rots[0]);
+                //event.setPitch(rots[1]);
+                RotationManager.setRotations(rots[0], rots[1]);
             }
         }
     }

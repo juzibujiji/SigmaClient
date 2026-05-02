@@ -224,7 +224,7 @@ public class InvManagerUtil {
                     : 0.1F;
 
             // 返回综合保护值（包含耐久度影响）
-            return baseProtection + toughness + protectionLevel + (int) (durability * 100);
+            return baseProtection + toughness + protectionLevel /*+ (int) (durability * 100)*/;
         } else {
             return 0;
         }

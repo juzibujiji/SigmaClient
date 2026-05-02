@@ -1,9 +1,10 @@
 package com.mentalfrostbyte.jello.module.impl.item;
 
 import com.mentalfrostbyte.Client;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.movement.Fly;
@@ -14,17 +15,15 @@ import com.mentalfrostbyte.jello.util.game.player.combat.RotationUtil;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.network.play.client.CClientStatusPacket;
+import net.minecraft.util.math.*;
 import net.minecraft.util.math.shapes.VoxelShape;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.play.client.CAnimateHandPacket;
 import net.minecraft.network.play.client.CCloseWindowPacket;
-import net.minecraft.network.play.client.CPlayerTryUseItemPacket;
 import net.minecraft.util.Hand;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
 import team.sdhq.eventBus.annotations.EventTarget;
-import team.sdhq.eventBus.annotations.priority.LowerPriority;
+import team.sdhq.eventBus.annotations.priority.HighestPriority;
 
 import java.util.Iterator;
 import java.util.stream.Stream;
@@ -59,22 +58,23 @@ public class AutoMLG extends Module {
     public void onMove(EventMove var1) {
         if (this.isEnabled()) {
             if (preTicks > 0 && !mc.player.isOnGround()) {
-                MovementUtil.setMotion(var1, 0.0);
+                //MovementUtil.setMotion(var1, 0.0);
             }
         }
     }
 
     @EventTarget
-    @LowerPriority
-    public void onUpdate(EventMotion var1) {
-        if (this.isEnabled() && mc.playerController.gameIsSurvivalOrAdventure()) {
-            if (var1.isPre() && preTicks >= 0) {
+    @HighestPriority
+    public void onUpdate(EventUpdate var1) {
+        if (this.isEnabled() && mc.player != null && mc.playerController.gameIsSurvivalOrAdventure()) {
+            if (/*var1.isPre() && */preTicks >= 0) {
                 preTicks++;
                 float[] var4 = RotationUtil.rotationToPos(
                         (double) this.field23650.getX() + 0.5, (double) this.field23650.getZ() + 0.5, (double) this.field23650.getY() + 0.5
                 );
-                var1.setYaw(var4[0]);
-                var1.setPitch(var4[1]);
+                RotationManager.setRotations(var4[0],var4[1]);
+                //var1.setYaw(var4[0]);
+                //var1.setPitch(var4[1]);
             }
 
             if (preTicks == (!this.getBooleanValueFromSettingName("Cubecraft") ? 3 : 5)) {
@@ -85,7 +85,13 @@ public class AutoMLG extends Module {
                 }
 
                 mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
-                mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.MAIN_HAND));
+                //BlockRayTraceResult var9 = BlockUtil.rayTrace(RotationCore.currentYaw, RotationCore.currentPitch, 5.0F);
+                //if (var9.getPos().equals(this.field23650) && var9.getFace().equals(Direction.UP)) {
+                    //mc.objectMouseOver = var9;
+                    mc.playerController.processRightClick(mc.player, mc.world, Hand.MAIN_HAND);
+                //}
+                //mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.MAIN_HAND));
+
                 preTicks = -1;
                 this.field23650 = null;
                 mc.player.inventory.currentItem = this.field23648;
@@ -94,14 +100,15 @@ public class AutoMLG extends Module {
             int var7 = this.method16424();
             if (!Client.getInstance().moduleManager.getModuleByClass(Fly.class).isEnabled()
                     && var7 != -1
-                    && !mc.player.isOnGround()
-                    && mc.player.fallDistance > 3.0F) {
+                    && (!mc.player.isOnGround()
+                    && mc.player.fallDistance > 3.0F/* || mc.player.isBurning()*/)) {
                 BlockPos var5 = this.method16425();
                 if (var5 != null) {
-                    if (var1.isPre() && preTicks == -1) {
+                    if (/*var1.isPre() && */preTicks == -1) {
                         float[] var6 = RotationUtil.rotationToPos((double) var5.getX() + 0.5, (double) var5.getZ() + 0.5, (double) var5.getY() + 0.5);
-                        var1.setYaw(var6[0]);
-                        var1.setPitch(var6[1]);
+                        RotationManager.setRotations(var6[0],var6[1]);
+                        //var1.setYaw(var6[0]);
+                        //var1.setPitch(var6[1]);
                         if (var7 != mc.player.inventory.currentItem) {
                             this.field23648 = mc.player.inventory.currentItem;
                             mc.player.inventory.currentItem = var7;
@@ -116,7 +123,12 @@ public class AutoMLG extends Module {
 
                     if (this.field23650 != null) {
                         mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
-                        mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.MAIN_HAND));
+                        //BlockRayTraceResult var9 = BlockUtil.rayTrace(RotationCore.currentYaw, RotationCore.currentPitch, 5.0F);
+                        //if (var9.getPos().equals(this.field23650) && var9.getFace().equals(Direction.UP)) {
+                            //mc.objectMouseOver = var9;
+                            mc.playerController.processRightClick(mc.player, mc.world, Hand.MAIN_HAND);
+                        //}
+                        //mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.MAIN_HAND));
                     }
                 }
             }

@@ -423,8 +423,8 @@ public class KillAura extends Module {
                 eventUpdatePitch = event.getPitch();
 
                 if (targetEntity != null && !this.targets.isEmpty()) {
-                    event.setYaw(RotationCore.currentYaw);
-                    event.setPitch(RotationCore.currentPitch);
+                    //event.setYaw(RotationCore.currentYaw);
+                    //event.setPitch(RotationCore.currentPitch);
                 }
             }
         }

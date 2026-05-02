@@ -9,7 +9,7 @@ import team.sdhq.eventBus.annotations.EventTarget;
 
 public class GrimAntiKB extends Module {
     public GrimAntiKB() {
-        super(ModuleCategory.COMBAT, "Grim", "Epic prediction bypass 2025 dont let stormingmoon code again");
+        super(ModuleCategory.COMBAT, "GrimC0F", "Epic prediction bypass 2025 dont let stormingmoon code again");
     }
 
     @EventTarget

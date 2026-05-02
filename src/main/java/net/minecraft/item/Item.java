@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import javax.annotation.Nullable;
+
+import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.util.ITooltipFlag;
@@ -381,6 +383,22 @@ public class Item implements IItemProvider
     {
         float f = player.rotationPitch;
         float f1 = player.rotationYaw;
+        Vector3d vector3d = player.getEyePosition(1.0F);
+        float f2 = MathHelper.cos(-f1 * ((float)Math.PI / 180F) - (float)Math.PI);
+        float f3 = MathHelper.sin(-f1 * ((float)Math.PI / 180F) - (float)Math.PI);
+        float f4 = -MathHelper.cos(-f * ((float)Math.PI / 180F));
+        float f5 = MathHelper.sin(-f * ((float)Math.PI / 180F));
+        float f6 = f3 * f4;
+        float f7 = f2 * f4;
+        double d0 = 5.0D;
+        Vector3d vector3d1 = vector3d.add((double)f6 * 5.0D, (double)f5 * 5.0D, (double)f7 * 5.0D);
+        return worldIn.rayTraceBlocks(new RayTraceContext(vector3d, vector3d1, RayTraceContext.BlockMode.OUTLINE, fluidMode, player));
+    }
+
+    protected static BlockRayTraceResult rayTrace2(World worldIn, PlayerEntity player, RayTraceContext.FluidMode fluidMode)
+    {
+        float f = RotationCore.currentPitch;
+        float f1 = RotationCore.currentYaw;
         Vector3d vector3d = player.getEyePosition(1.0F);
         float f2 = MathHelper.cos(-f1 * ((float)Math.PI / 180F) - (float)Math.PI);
         float f3 = MathHelper.sin(-f1 * ((float)Math.PI / 180F) - (float)Math.PI);

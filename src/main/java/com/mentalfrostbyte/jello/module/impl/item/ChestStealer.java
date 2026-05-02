@@ -1,9 +1,10 @@
 package com.mentalfrostbyte.jello.module.impl.item;
 
 import com.mentalfrostbyte.Client;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender2DOffset;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
@@ -60,8 +61,8 @@ public class ChestStealer extends Module {
     }
 
     @EventTarget
-    public void onUpdate(EventMotion var1) {
-        if (this.isEnabled() && var1.isPre()) {
+    public void onUpdate(EventUpdate var1) {
+        if (this.isEnabled() /*&& var1.isPre()*/) {
             if (this.getBooleanValueFromSettingName("Aura")) {
                 if (this.field23624.getElapsedTime() > 2000L && this.field23621) {
                     this.field23624.reset();
@@ -109,8 +110,9 @@ public class ChestStealer extends Module {
                                 && var12.getPos().getZ() == var7.getPos().getZ()) {
                             this.targetChest = var7;
                             float[] var13 = RotationUtil.rotationToPos((double) var9 + 0.5, (double) var11 + 0.5, (double) var10 + 0.35);
-                            var1.setYaw(var13[0]);
-                            var1.setPitch(var13[1]);
+                            //var1.setYaw(var13[0]);
+                            //var1.setPitch(var13[1]);
+                            RotationManager.setRotations(var13[0], var13[1]);
                             var14 = true;
                         }
                     }

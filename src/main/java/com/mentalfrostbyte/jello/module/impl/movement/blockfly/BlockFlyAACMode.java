@@ -247,12 +247,78 @@ public class BlockFlyAACMode extends Module {
     }
 
     @EventTarget
+<<<<<<< HEAD
     public void onJump(EventJump var1) {
         if (this.isEnabled()
                 && this.access().getStringSettingValueByName("Tower Mode").equalsIgnoreCase("Vanilla")
                 && (!MovementUtil.isMoving()
                 || this.access().getBooleanValueFromSettingName("Tower while moving"))) {
             var1.cancelled = true;
+=======
+    @LowestPriority
+    public void onUpdate(EventUpdate event) {
+        if (this.isEnabled() && mc.player != null) {
+            double placeY = mc.player.getPosY();
+            if (this.getBooleanValueFromSettingName("Telly") && GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {
+                placeY = this.placeY;
+            }
+            if (MovementUtil.isMoving() && mc.player.isOnGround() && this.getBooleanValueFromSettingName("Haphe (AACAP)") && !mc.player.isJumping) {
+                mc.player.jump();
+            }
+            if (!mc.player.isJumping && this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
+                placeY = this.placeY;
+            }
+            BlockPos var6 = new BlockPos(mc.player.getPosX(), (double) Math.round(placeY - 1.0), mc.player.getPosZ());
+            List var7 = this.method16208(Blocks.STONE, var6);
+
+            if (!var7.isEmpty()) {
+                PositionFacing var8 = (PositionFacing) var7.get(var7.size() - 1);
+                BlockRayTraceResult var9 = BlockUtil.rayTrace(this.yaw, this.pitch, 5.0F);
+                if (!var9.getPos().equals(var8.blockPos()) || !var9.getFace().equals(var8.direction())) {
+                    float[] var10 = BlockUtil.rotationsToBlock(var8.blockPos(), var8.direction());
+                    this.yaw = var10[0];
+                    this.pitch = var10[1];
+                }
+            }
+            if (this.getBooleanValueFromSettingName("Telly") && mc.player.isOnGround()) {
+                if (useRotationSpeed.getCurrentValue()) {
+                    //Rotation limitrot = RotationUtils.limitAngleChange(new Rotation(RotationCore.lastYaw, RotationCore.lastPitch), new Rotation(mc.player.rotationYaw, this.pitch), rotationSpeed.getCurrentValue(), rotationSpeed.getCurrentValue());
+                    //RotationManager.setRotations(limitrot.yaw, limitrot.pitch);
+                } else {
+                    //RotationManager.setRotations(mc.player.rotationYaw, this.pitch);
+                }
+            } else {
+                if (useRotationSpeed.getCurrentValue()) {
+                    float[] limitrot = RotationUtils.gcdFix(new float[]{
+                            RotationUtils.limitAngleChange(new Rotation(RotationCore.lastYaw, RotationCore.lastPitch), new Rotation(this.yaw, this.pitch), hrotationSpeed.getCurrentValue(), vrotationSpeed.getCurrentValue()).yaw,
+                            RotationUtils.limitAngleChange(new Rotation(RotationCore.lastYaw, RotationCore.lastPitch), new Rotation(this.yaw, this.pitch), hrotationSpeed.getCurrentValue(), vrotationSpeed.getCurrentValue()).pitch},
+                            new float[]{mc.player.lastReportedYaw, mc.player.lastReportedPitch}
+                    );
+                    RotationManager.setRotations(limitrot[0], limitrot[1]);
+                } else {
+                    RotationManager.setRotations(this.yaw, this.pitch);
+                }
+            }
+
+            if (this.getBooleanValueFromSettingName("Telly") && mc.player.isOnGround() && MovementUtil.isMoving()) {
+                mc.gameSettings.keyBindJump.setPressed(true);
+            }
+
+            if (this.getBooleanValueFromSettingName("Telly") && !MovementUtil.isMoving() && GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {
+                mc.gameSettings.keyBindJump.setPressed(false);
+            }
+            if (!this.getBooleanValueFromSettingName("Haphe (AACAP)")) {
+                if (!this.method16207()) {
+                    float var11 = 0.0F;
+
+                    while (var11 < 0.7F && !this.method16207()) {
+                        var11 += 0.1F;
+                    }
+                }
+            } else {
+                this.method16207();
+            }
+>>>>>>> a2cb78427defbe5aaccbf808001b554a3107eb07
         }
     }
 
