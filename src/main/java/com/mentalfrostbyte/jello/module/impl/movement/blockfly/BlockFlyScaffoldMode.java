@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.module.impl.movement.blockfly;
 
 import com.mentalfrostbyte.jello.event.impl.game.action.EventClick;
 import com.mentalfrostbyte.jello.event.impl.player.EventGetFovModifier;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdateHeldItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventJump;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
@@ -290,20 +291,17 @@ public class BlockFlyScaffoldMode extends Module {
 
     @EventTarget
     @LowestPriority
-    public void onMotion(EventMotion event) {
+    public void onMotion(EventUpdate event) {
         if (!this.isEnabled() || mc.player == null || mc.world == null) {
             return;
         }
 
-        if (event.isPre()) {
-            this.onPreMotion(event);
-        } else {
-            this.placeBlock();
-        }
+
+        this.onPreMotion();
+        this.placeBlock();
     }
 
-    private void onPreMotion(EventMotion event) {
-        event.setMoving(true);
+    private void onPreMotion() {
         this.placedJump = false;
         this.selectHotbarBlock();
         this.pos = this.getBlockPos();
@@ -326,7 +324,7 @@ public class BlockFlyScaffoldMode extends Module {
             mc.gameSettings.keyBindJump.setPressed(this.hasMovementInput() || holdingJump);
             if (mc.player.isOnGround() && this.hasMovementInput()) {
                 this.rots.yaw = RotationUtils.updateRotation(this.rots.yaw, mc.player.rotationYaw, 180.0F);
-                this.publishRotations(event);
+                this.publishRotations();
                 this.lastRots = new Rotation(this.rots.yaw, this.rots.pitch);
                 return;
             }
@@ -344,11 +342,11 @@ public class BlockFlyScaffoldMode extends Module {
             mc.gameSettings.keyBindJump.setPressed(holdingJump);
         }
 
-        this.publishRotations(event);
+        this.publishRotations();
         this.lastRots = new Rotation(this.rots.yaw, this.rots.pitch);
     }
 
-    private void publishRotations(EventMotion event) {
+    private void publishRotations() {
         Rotation visibleRotation = this.hideSnap.getCurrentValue()
                 && this.isNormalMode()
                 && this.snap.getCurrentValue()
@@ -356,8 +354,6 @@ public class BlockFlyScaffoldMode extends Module {
                 : this.rots;
 
         RotationManager.setRotations(visibleRotation.yaw, visibleRotation.pitch);
-        event.setYaw(this.rots.yaw);
-        event.setPitch(this.rots.pitch);
     }
 
     private void handleSneakPulse() {

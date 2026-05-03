@@ -85,7 +85,7 @@ public class RotationManager extends Manager implements MinecraftUtil {
 
     @EventTarget
     public void onInput(EventMoveInput event) {
-        Float movementFixYaw = this.getMovementFixYaw();
+        /*Float movementFixYaw = this.getMovementFixYaw();
         if (movementFixYaw != null) {
             // Both scaffold variants want a hard back-place fix; CorrectMovement
             // wants the gentler silent strafe.
@@ -94,14 +94,20 @@ public class RotationManager extends Manager implements MinecraftUtil {
             } else {
                 MovementUtil.silentStrafe(event, movementFixYaw);
             }
+        }*/
+        if (Client.getInstance().moduleManager.getModuleByClass(CorrectMovement.class).isEnabled()) {
+            MovementUtil.silentStrafe(event, RotationCore.currentYaw);
         }
     }
 
     @EventTarget
     public void onJump(EventJump event) {
-        Float movementFixYaw = this.getMovementFixYaw();
+        /*Float movementFixYaw = this.getMovementFixYaw();
         if (movementFixYaw != null) {
             event.yaw = movementFixYaw;
+        }*/
+        if (Client.getInstance().moduleManager.getModuleByClass(CorrectMovement.class).isEnabled()) {
+            event.yaw = RotationCore.currentYaw;
         }
     }
 
@@ -115,9 +121,12 @@ public class RotationManager extends Manager implements MinecraftUtil {
 
     @EventTarget
     public void onStrafe(EventMoveFlying event) {
-        Float movementFixYaw = this.getMovementFixYaw();
+        /*Float movementFixYaw = this.getMovementFixYaw();
         if (movementFixYaw != null) {
             event.yaw = movementFixYaw;
+        }*/
+        if (Client.getInstance().moduleManager.getModuleByClass(CorrectMovement.class).isEnabled()) {
+            event.yaw = RotationCore.currentYaw;
         }
     }
 }
