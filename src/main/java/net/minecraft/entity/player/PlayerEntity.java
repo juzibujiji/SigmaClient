@@ -9,6 +9,7 @@ import com.mentalfrostbyte.jello.event.impl.player.movement.EventSafeWalk;
 import com.mentalfrostbyte.jello.module.impl.player.AutoSprint;
 import com.mojang.authlib.GameProfile;
 import com.mojang.datafixers.util.Either;
+import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.block.BedBlock;
 import net.minecraft.block.Block;
@@ -482,7 +483,7 @@ public abstract class PlayerEntity extends LivingEntity {
         super.livingTick();
         this.jumpMovementFactor = 0.02F;
 
-        if (this.isSprinting()) {
+        if (!PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics() && this.isSprinting()) {
             this.jumpMovementFactor = (float) ((double) this.jumpMovementFactor + 0.005999999865889549D);
         }
 
@@ -1022,18 +1023,27 @@ public abstract class PlayerEntity extends LivingEntity {
         return !this.abilities.isFlying;
     }
 
+    @Override
+    public boolean shouldSwimInFluids() {
+        return !this.abilities.isFlying;
+    }
+
     protected Vector3d maybeBackOffFromEdge(Vector3d vec, MoverType mover) {
         // MODIFICATION START: Send on edge `SafeWalkEvent`
         EventSafeWalk event = new EventSafeWalk(true);
         EventBus.call(event);
         // MODIFICATION END
         // MODIFICATION START (ENDS AFTER NEXT LINE): Add `event.getSituation() == Situation.PLAYER`
-        if (event.getSituation() == EventSafeWalk.Situation.SAFE || !this.abilities.isFlying && (mover == MoverType.SELF || mover == MoverType.PLAYER) && this.isStayingOnGroundSurface() && this.func_242375_q()) {
+        float f = this.stepHeight;
+        if (event.getSituation() == EventSafeWalk.Situation.SAFE
+                || (!PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics() || !(vec.y > 0.0D))
+                && !this.abilities.isFlying && (mover == MoverType.SELF || mover == MoverType.PLAYER)
+                && this.isStayingOnGroundSurface() && this.method_30263(f)) {
             double d0 = vec.x;
             double d1 = vec.z;
             double d2 = 0.05D;
 
-            while (d0 != 0.0D && this.world.hasNoCollisions(this, this.getBoundingBox().offset(d0, (double) (-this.stepHeight), 0.0D))) {
+            while (d0 != 0.0D && this.isSpaceAroundPlayerEmpty(d0, 0.0D, f)) {
                 if (d0 < 0.05D && d0 >= -0.05D) {
                     d0 = 0.0D;
                 } else if (d0 > 0.0D) {
@@ -1043,7 +1053,7 @@ public abstract class PlayerEntity extends LivingEntity {
                 }
             }
 
-            while (d1 != 0.0D && this.world.hasNoCollisions(this, this.getBoundingBox().offset(0.0D, (double) (-this.stepHeight), d1))) {
+            while (d1 != 0.0D && this.isSpaceAroundPlayerEmpty(0.0D, d1, f)) {
                 if (d1 < 0.05D && d1 >= -0.05D) {
                     d1 = 0.0D;
                 } else if (d1 > 0.0D) {
@@ -1053,7 +1063,7 @@ public abstract class PlayerEntity extends LivingEntity {
                 }
             }
 
-            while (d0 != 0.0D && d1 != 0.0D && this.world.hasNoCollisions(this, this.getBoundingBox().offset(d0, (double) (-this.stepHeight), d1))) {
+            while (d0 != 0.0D && d1 != 0.0D && this.isSpaceAroundPlayerEmpty(d0, d1, f)) {
                 if (d0 < 0.05D && d0 >= -0.05D) {
                     d0 = 0.0D;
                 } else if (d0 > 0.0D) {
@@ -1083,6 +1093,15 @@ public abstract class PlayerEntity extends LivingEntity {
 
     private boolean func_242375_q() {
         return this.onGround || this.fallDistance < this.stepHeight && !this.world.hasNoCollisions(this, this.getBoundingBox().offset(0.0D, (double) (this.fallDistance - this.stepHeight), 0.0D));
+    }
+
+    private boolean method_30263(float stepHeight) {
+        return this.onGround || this.fallDistance < stepHeight && !this.isSpaceAroundPlayerEmpty(0.0D, 0.0D, stepHeight - this.fallDistance);
+    }
+
+    private boolean isSpaceAroundPlayerEmpty(double offsetX, double offsetZ, float stepHeight) {
+        AxisAlignedBB box = this.getBoundingBox();
+        return this.world.hasNoCollisions(this, new AxisAlignedBB(box.minX + offsetX, box.minY - (double) stepHeight - 1.0E-5F, box.minZ + offsetZ, box.maxX + offsetX, box.minY, box.maxZ + offsetZ));
     }
 
     /**
@@ -1443,12 +1462,16 @@ public abstract class PlayerEntity extends LivingEntity {
 
         if (this.abilities.isFlying && !this.isPassenger()) {
             double d5 = this.getMotion().y;
-            float f = this.jumpMovementFactor;
-            this.jumpMovementFactor = this.abilities.getFlySpeed() * (float) (this.isSprinting() ? 2 : 1);
-            super.travel(travelVector);
+            if (PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics()) {
+                super.travel(travelVector);
+            } else {
+                float f = this.jumpMovementFactor;
+                this.jumpMovementFactor = this.abilities.getFlySpeed() * (float) (this.isSprinting() ? 2 : 1);
+                super.travel(travelVector);
+                this.jumpMovementFactor = f;
+            }
             Vector3d vector3d = this.getMotion();
             this.setMotion(vector3d.x, d5 * 0.6D, vector3d.z);
-            this.jumpMovementFactor = f;
             this.fallDistance = 0.0F;
             this.setFlag(7, false);
         } else {
@@ -1456,6 +1479,19 @@ public abstract class PlayerEntity extends LivingEntity {
         }
 
         this.addMovementStat(this.getPosX() - d0, this.getPosY() - d1, this.getPosZ() - d2);
+    }
+
+    @Override
+    protected float getOffGroundSpeed() {
+        if (PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics()) {
+            if (this.abilities.isFlying && !this.isPassenger()) {
+                return this.isSprinting() ? this.abilities.getFlySpeed() * 2.0F : this.abilities.getFlySpeed();
+            }
+
+            return this.isSprinting() ? 0.025999999F : 0.02F;
+        }
+
+        return super.getOffGroundSpeed();
     }
 
     public void updateSwimming() {

@@ -3,6 +3,7 @@ package de.florianmichael.viamcp;
 import com.mentalfrostbyte.jello.util.game.world.ChunkDataInterceptor;
 import com.mentalfrostbyte.jello.util.game.network.ServerboundPacketDebugHandler;
 import com.viaversion.viaversion.api.connection.UserConnection;
+import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import de.florianmichael.vialoadingbase.netty.event.CompressionReorderEvent;
 import de.florianmichael.vialoadingbase.netty.VLBPipeline;
 import io.netty.channel.ChannelHandlerContext;
@@ -20,6 +21,7 @@ public class MCPVLBPipeline extends VLBPipeline {
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
         super.handlerAdded(ctx);
         installChunkInterceptor(ctx);
+        installMovementFlagFixHandler(ctx);
         installServerboundDebugHandler(ctx);
     }
 
@@ -29,6 +31,7 @@ public class MCPVLBPipeline extends VLBPipeline {
 
         if (evt instanceof CompressionReorderEvent) {
             moveChunkInterceptorAfterDecompression(ctx);
+            moveMovementFlagFixHandler(ctx);
             moveServerboundDebugHandler(ctx);
         }
     }
@@ -98,6 +101,28 @@ public class MCPVLBPipeline extends VLBPipeline {
                     new ServerboundPacketDebugHandler());
             logPipeline(ctx, "serverbound debug installed after " + anchor);
         }
+    }
+
+    private void installMovementFlagFixHandler(ChannelHandlerContext ctx) {
+        if (ctx.pipeline().get(PacketFixFor1_21Plus.HANDLER_NAME) != null) {
+            return;
+        }
+
+        String anchor = ctx.pipeline().get(getCompressionHandlerName()) != null
+                ? getCompressionHandlerName()
+                : "prepender";
+        if (ctx.pipeline().get(anchor) != null) {
+            ctx.pipeline().addAfter(anchor, PacketFixFor1_21Plus.HANDLER_NAME,
+                    PacketFixFor1_21Plus.createServerboundMovementFlagHandler());
+        }
+    }
+
+    private void moveMovementFlagFixHandler(ChannelHandlerContext ctx) {
+        if (ctx.pipeline().get(PacketFixFor1_21Plus.HANDLER_NAME) != null) {
+            ctx.pipeline().remove(PacketFixFor1_21Plus.HANDLER_NAME);
+        }
+
+        installMovementFlagFixHandler(ctx);
     }
 
     private void moveServerboundDebugHandler(ChannelHandlerContext ctx) {

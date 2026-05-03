@@ -11,6 +11,7 @@ import com.mentalfrostbyte.jello.event.impl.player.movement.EventSlowDown;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.*;
@@ -232,6 +233,9 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
                 if (entity != this && entity.canPassengerSteer()) {
                     this.connection.sendPacket(new CMoveVehiclePacket(entity));
+                    if (PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics()) {
+                        this.sendSprintingPacket();
+                    }
                 }
             } else {
                 this.onUpdateWalkingPlayer();
@@ -258,29 +262,19 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
      * normally happen during movement.
      */
     protected void onUpdateWalkingPlayer() {
+        this.sendMovementPackets();
+    }
+
+    private void sendMovementPackets() {
         AxisAlignedBB bounds = this.getBoundingBox();
         EventMotion event = new EventMotion(this.getPosX(), bounds.minY, this.getPosZ(), this.rotationYaw,
                 this.rotationPitch, this.onGround);
         EventBus.call(event);
         if (event.cancelled)
             return;
-        boolean flag = this.isSprinting();
+        this.sendSprintingPacket();
 
-        if (flag != this.serverSprintState) {
-            CEntityActionPacket.Action centityactionpacket$action = flag ? CEntityActionPacket.Action.START_SPRINTING
-                    : CEntityActionPacket.Action.STOP_SPRINTING;
-            this.connection.sendPacket(new CEntityActionPacket(this, centityactionpacket$action));
-            this.serverSprintState = flag;
-        }
-
-        boolean flag3 = this.isSneaking();
-
-        if (flag3 != this.clientSneakState) {
-            CEntityActionPacket.Action centityactionpacket$action1 = flag3 ? CEntityActionPacket.Action.PRESS_SHIFT_KEY
-                    : CEntityActionPacket.Action.RELEASE_SHIFT_KEY;
-            this.connection.sendPacket(new CEntityActionPacket(this, centityactionpacket$action1));
-            this.clientSneakState = flag3;
-        }
+        this.sendSneakingPacket();
 
         if (this.isCurrentViewEntity()) {
             double x = event.getX();
@@ -305,9 +299,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             final boolean isLegacy = targetVersion.equalTo(ProtocolVersion.v1_8);
             final double minimumMovement = targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_18_2) ? 4.0E-8D
                     : 9.0E-4D;
+            final int positionPacketInterval = PacketFixFor1_21Plus.getPositionPacketInterval(isLegacy);
 
             boolean posMoved = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ > minimumMovement
-                    || (isLegacy ? this.positionUpdateTicks >= 21 : this.positionUpdateTicks >= 19);
+                    || this.positionUpdateTicks >= positionPacketInterval;
             boolean rotMoved = deltaYaw != 0.0D || deltaPitch != 0.0D;
 
             if (this.isPassenger()) {
@@ -321,7 +316,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                 this.connection.sendPacket(new CPlayerPacket.PositionPacket(x, y, z, onGround));
             } else if (rotMoved) {
                 this.connection.sendPacket(new CPlayerPacket.RotationPacket(yaw, pitch, onGround));
-            } else if (this.prevOnGround != this.onGround || isLegacy) {
+            } else if (this.prevOnGround != onGround || isLegacy) {
                 this.connection.sendPacket(new CPlayerPacket(onGround));
             }
             EventBus.call(new EventMovePacketAfter());
@@ -338,7 +333,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                 this.lastReportedPitch = event.getPitch();
             }
 
-            this.prevOnGround = event.isOnGround();
+            this.prevOnGround = onGround;
             this.autoJumpEnabled = this.mc.gameSettings.autoJump;
         }
 
@@ -348,6 +343,28 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
         event.postUpdate();
         EventBus.call(event);
+    }
+
+    private void sendSneakingPacket() {
+        boolean flag3 = this.isSneaking();
+
+        if (flag3 != this.clientSneakState) {
+            CEntityActionPacket.Action centityactionpacket$action1 = flag3 ? CEntityActionPacket.Action.PRESS_SHIFT_KEY
+                    : CEntityActionPacket.Action.RELEASE_SHIFT_KEY;
+            this.connection.sendPacket(new CEntityActionPacket(this, centityactionpacket$action1));
+            this.clientSneakState = flag3;
+        }
+    }
+
+    private void sendSprintingPacket() {
+        boolean flag = this.isSprinting();
+
+        if (flag != this.serverSprintState) {
+            CEntityActionPacket.Action centityactionpacket$action = flag ? CEntityActionPacket.Action.START_SPRINTING
+                    : CEntityActionPacket.Action.STOP_SPRINTING;
+            this.connection.sendPacket(new CEntityActionPacket(this, centityactionpacket$action));
+            this.serverSprintState = flag;
+        }
     }
 
     public boolean drop(boolean p_225609_1_) {

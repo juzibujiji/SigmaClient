@@ -14,7 +14,11 @@ import java.nio.charset.StandardCharsets;
 
 import java.util.ArrayList;
 
+import java.util.HashMap;
+
 import java.util.List;
+
+import java.util.Map;
 
 
 
@@ -458,6 +462,23 @@ public class NeteaseApiSearch {
 
     }
 
+    public static Map<Long, NeteaseSongUrl> getSongUrlMap(long... songIds) {
+
+        Map<Long, NeteaseSongUrl> urlMap = new HashMap<>();
+        if (songIds == null || songIds.length == 0) {
+            return urlMap;
+        }
+
+        for (NeteaseSongUrl songUrl : getSongUrls(songIds)) {
+
+            urlMap.put(songUrl.id, songUrl);
+
+        }
+
+        return urlMap;
+
+    }
+
 
 
     /**
@@ -479,6 +500,7 @@ public class NeteaseApiSearch {
         try {
 
             JsonArray c = new JsonArray();
+            JsonArray ids = new JsonArray();
 
             for (long id : songIds) {
 
@@ -487,6 +509,7 @@ public class NeteaseApiSearch {
                 obj.addProperty("id", id);
 
                 c.add(obj);
+                ids.add(id);
 
             }
 
@@ -494,7 +517,8 @@ public class NeteaseApiSearch {
 
             JsonObject data = new JsonObject();
 
-            data.add("c", c);
+            data.addProperty("c", c.toString());
+            data.addProperty("ids", ids.toString());
 
             data.addProperty("csrf_token", "");
 

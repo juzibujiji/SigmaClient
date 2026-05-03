@@ -26,6 +26,7 @@ import javax.annotation.Nullable;
 
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
+import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.block.BedBlock;
 import net.minecraft.block.Block;
@@ -2104,25 +2105,44 @@ public abstract class LivingEntity extends Entity {
         return 0.8F;
     }
 
+    protected float getBaseMovementSpeedMultiplier() {
+        return this.getWaterSlowDown();
+    }
+
     public boolean func_230285_a_(Fluid p_230285_1_) {
         return false;
     }
 
+    public boolean shouldSwimInFluids() {
+        return this.func_241208_cS_();
+    }
+
+    protected double getGravity() {
+        return 0.08D;
+    }
+
+    public final double getFinalGravity() {
+        return this.hasNoGravity() ? 0.0D : this.getGravity();
+    }
+
     public void travel(Vector3d travelVector) {
         if (this.isServerWorld() || this.canPassengerSteer()) {
-            double d0 = 0.08D;
+            final boolean use1_21Movement = PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics();
+            double d0 = this.getFinalGravity();
             boolean flag = this.getMotion().y <= 0.0D;
 
             if (flag && this.isPotionActive(Effects.SLOW_FALLING)) {
-                d0 = 0.01D;
-                this.fallDistance = 0.0F;
+                d0 = use1_21Movement ? Math.min(d0, 0.01D) : 0.01D;
+                if (!use1_21Movement) {
+                    this.fallDistance = 0.0F;
+                }
             }
 
             FluidState fluidstate = this.world.getFluidState(this.getPosition());
 
-            if (this.isInWater() && this.func_241208_cS_() && !this.func_230285_a_(fluidstate.getFluid())) {
+            if (this.isInWater() && this.shouldSwimInFluids() && !this.func_230285_a_(fluidstate.getFluid())) {
                 double d8 = this.getPosY();
-                float f5 = this.isSprinting() ? 0.9F : this.getWaterSlowDown();
+                float f5 = this.isSprinting() ? 0.9F : this.getBaseMovementSpeedMultiplier();
                 float f6 = 0.02F;
                 float f7 = (float) EnchantmentHelper.getDepthStriderModifier(this);
 
@@ -2152,26 +2172,26 @@ public abstract class LivingEntity extends Entity {
                 }
 
                 this.setMotion(vector3d6.mul((double) f5, (double) 0.8F, (double) f5));
-                Vector3d vector3d2 = this.func_233626_a_(d0, flag, this.getMotion());
+                Vector3d vector3d2 = this.applyFluidMovingSpeed(d0, flag, this.getMotion());
                 this.setMotion(vector3d2);
 
                 if (this.collidedHorizontally && this.isOffsetPositionInLiquid(vector3d2.x, vector3d2.y + (double) 0.6F - this.getPosY() + d8, vector3d2.z)) {
                     this.setMotion(vector3d2.x, (double) 0.3F, vector3d2.z);
                 }
-            } else if (this.isInLava() && this.func_241208_cS_() && !this.func_230285_a_(fluidstate.getFluid())) {
+            } else if (this.isInLava() && this.shouldSwimInFluids() && !this.func_230285_a_(fluidstate.getFluid())) {
                 double d7 = this.getPosY();
                 this.moveRelative(0.02F, travelVector);
                 this.move(MoverType.SELF, this.getMotion());
 
                 if (this.func_233571_b_(FluidTags.LAVA) <= this.func_233579_cu_()) {
                     this.setMotion(this.getMotion().mul(0.5D, (double) 0.8F, 0.5D));
-                    Vector3d vector3d3 = this.func_233626_a_(d0, flag, this.getMotion());
+                    Vector3d vector3d3 = this.applyFluidMovingSpeed(d0, flag, this.getMotion());
                     this.setMotion(vector3d3);
                 } else {
                     this.setMotion(this.getMotion().scale(0.5D));
                 }
 
-                if (!this.hasNoGravity()) {
+                if (d0 != 0.0D) {
                     this.setMotion(this.getMotion().add(0.0D, -d0 / 4.0D, 0.0D));
                 }
 
@@ -2231,19 +2251,21 @@ public abstract class LivingEntity extends Entity {
                 BlockPos blockpos = this.getPositionUnderneath();
                 float f3 = this.world.getBlockState(blockpos).getBlock().getSlipperiness();
                 float f4 = this.onGround ? f3 * 0.91F : 0.91F;
-                Vector3d vector3d5 = this.func_233633_a_(travelVector, f3);
+                Vector3d vector3d5 = this.applyMovementInput(travelVector, f3);
                 double d2 = vector3d5.y;
 
                 if (this.isPotionActive(Effects.LEVITATION)) {
                     d2 += (0.05D * (double) (this.getActivePotionEffect(Effects.LEVITATION).getAmplifier() + 1) - vector3d5.y) * 0.2D;
-                    this.fallDistance = 0.0F;
+                    if (!use1_21Movement) {
+                        this.fallDistance = 0.0F;
+                    }
                 } else if (this.world.isRemote && !this.world.isBlockLoaded(blockpos)) {
                     if (this.getPosY() > 0.0D) {
                         d2 = -0.1D;
                     } else {
                         d2 = 0.0D;
                     }
-                } else if (!this.hasNoGravity()) {
+                } else if (d0 != 0.0D) {
                     d2 -= d0;
                 }
 
@@ -2270,7 +2292,11 @@ public abstract class LivingEntity extends Entity {
     }
 
     public Vector3d func_233633_a_(Vector3d p_233633_1_, float p_233633_2_) {
-        this.moveRelative(this.getRelevantMoveFactor(p_233633_2_), p_233633_1_);
+        return this.applyMovementInput(p_233633_1_, p_233633_2_);
+    }
+
+    public Vector3d applyMovementInput(Vector3d movementInput, float slipperiness) {
+        this.moveRelative(this.getMovementSpeed(slipperiness), movementInput);
         this.setMotion(this.handleOnClimbable(this.getMotion()));
         this.move(MoverType.SELF, this.getMotion());
         Vector3d vector3d = this.getMotion();
@@ -2283,18 +2309,22 @@ public abstract class LivingEntity extends Entity {
     }
 
     public Vector3d func_233626_a_(double p_233626_1_, boolean p_233626_3_, Vector3d p_233626_4_) {
-        if (!this.hasNoGravity() && !this.isSprinting()) {
+        return this.applyFluidMovingSpeed(p_233626_1_, p_233626_3_, p_233626_4_);
+    }
+
+    public Vector3d applyFluidMovingSpeed(double gravity, boolean falling, Vector3d motion) {
+        if (gravity != 0.0D && !this.isSprinting()) {
             double d0;
 
-            if (p_233626_3_ && Math.abs(p_233626_4_.y - 0.005D) >= 0.003D && Math.abs(p_233626_4_.y - p_233626_1_ / 16.0D) < 0.003D) {
+            if (falling && Math.abs(motion.y - 0.005D) >= 0.003D && Math.abs(motion.y - gravity / 16.0D) < 0.003D) {
                 d0 = -0.003D;
             } else {
-                d0 = p_233626_4_.y - p_233626_1_ / 16.0D;
+                d0 = motion.y - gravity / 16.0D;
             }
 
-            return new Vector3d(p_233626_4_.x, d0, p_233626_4_.z);
+            return new Vector3d(motion.x, d0, motion.z);
         } else {
-            return p_233626_4_;
+            return motion;
         }
     }
 
@@ -2317,7 +2347,19 @@ public abstract class LivingEntity extends Entity {
     }
 
     private float getRelevantMoveFactor(float p_213335_1_) {
-        return this.onGround ? this.getAIMoveSpeed() * (0.21600002F / (p_213335_1_ * p_213335_1_ * p_213335_1_)) : this.jumpMovementFactor;
+        return this.getMovementSpeed(p_213335_1_);
+    }
+
+    private float getMovementSpeed(float slipperiness) {
+        return this.onGround ? this.getAIMoveSpeed() * (0.21600002F / (slipperiness * slipperiness * slipperiness)) : this.getOffGroundSpeed();
+    }
+
+    protected float getOffGroundSpeed() {
+        if (PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics()) {
+            return this.getControllingPassenger() instanceof PlayerEntity ? this.getAIMoveSpeed() * 0.1F : 0.02F;
+        }
+
+        return this.jumpMovementFactor;
     }
 
     /**

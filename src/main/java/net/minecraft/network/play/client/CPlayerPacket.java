@@ -1,6 +1,7 @@
 package net.minecraft.network.play.client;
 
 import java.io.IOException;
+import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import net.minecraft.network.IPacket;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.network.play.IServerPlayNetHandler;
@@ -13,6 +14,7 @@ public class CPlayerPacket implements IPacket<IServerPlayNetHandler>
     protected float yaw;
     protected float pitch;
     public boolean onGround;
+    public boolean horizontalCollision;
     public boolean moving; // MODIFICATION: publicize
     protected boolean rotating;
 
@@ -23,6 +25,7 @@ public class CPlayerPacket implements IPacket<IServerPlayNetHandler>
     public CPlayerPacket(boolean onGroundIn)
     {
         this.onGround = onGroundIn;
+        this.horizontalCollision = PacketFixFor1_21Plus.horizontalCollision();
     }
 
     /**
@@ -38,7 +41,9 @@ public class CPlayerPacket implements IPacket<IServerPlayNetHandler>
      */
     public void readPacketData(PacketBuffer buf) throws IOException
     {
-        this.onGround = buf.readUnsignedByte() != 0;
+        int flags = buf.readUnsignedByte();
+        this.onGround = PacketFixFor1_21Plus.unpackOnGround(flags);
+        this.horizontalCollision = PacketFixFor1_21Plus.unpackHorizontalCollision(flags);
     }
 
     /**
@@ -46,6 +51,7 @@ public class CPlayerPacket implements IPacket<IServerPlayNetHandler>
      */
     public void writePacketData(PacketBuffer buf) throws IOException
     {
+        PacketFixFor1_21Plus.rememberMovementPacket(this.horizontalCollision);
         buf.writeByte(this.onGround ? 1 : 0);
     }
 
@@ -109,6 +115,11 @@ public class CPlayerPacket implements IPacket<IServerPlayNetHandler>
         return this.onGround;
     }
 
+    public boolean horizontalCollision()
+    {
+        return this.horizontalCollision;
+    }
+
     public static class PositionPacket extends CPlayerPacket
     {
         public PositionPacket()
@@ -122,6 +133,7 @@ public class CPlayerPacket implements IPacket<IServerPlayNetHandler>
             this.y = yIn;
             this.z = zIn;
             this.onGround = onGroundIn;
+            this.horizontalCollision = PacketFixFor1_21Plus.horizontalCollision();
             this.moving = true;
         }
 
@@ -158,6 +170,7 @@ public class CPlayerPacket implements IPacket<IServerPlayNetHandler>
             this.yaw = yawIn;
             this.pitch = pitchIn;
             this.onGround = onGroundIn;
+            this.horizontalCollision = PacketFixFor1_21Plus.horizontalCollision();
             this.rotating = true;
             this.moving = true;
         }
@@ -195,6 +208,7 @@ public class CPlayerPacket implements IPacket<IServerPlayNetHandler>
             this.yaw = yawIn;
             this.pitch = pitchIn;
             this.onGround = onGroundIn;
+            this.horizontalCollision = PacketFixFor1_21Plus.horizontalCollision();
             this.rotating = true;
         }
 

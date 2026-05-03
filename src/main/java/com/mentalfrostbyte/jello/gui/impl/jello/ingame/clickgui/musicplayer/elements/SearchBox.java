@@ -164,6 +164,14 @@ public class SearchBox extends AnimatedIconPanel {
 
                                 NeteaseApiSearch.search(this.searchBox.getText());
 
+                        long[] trackIds = new long[tracks.size()];
+                        for (int i = 0; i < tracks.size(); i++) {
+                            trackIds[i] = tracks.get(i).id;
+                        }
+
+                        Map<Long, NeteaseApiSearch.NeteaseSongUrl> playableUrlMap =
+                                NeteaseApiSearch.getSongUrlMap(trackIds);
+
 
 
                         List<Long> missingCoverIds = new ArrayList<>();
@@ -206,6 +214,12 @@ public class SearchBox extends AnimatedIconPanel {
 
                         for (NeteaseApiSearch.NeteaseTrack track : tracks) {
 
+                            NeteaseApiSearch.NeteaseSongUrl playableUrl = playableUrlMap.get(track.id);
+                            if (!playableUrlMap.isEmpty()
+                                    && (playableUrl == null || playableUrl.url == null || playableUrl.url.isEmpty())) {
+                                continue;
+                            }
+
                             String normalizedCover = normalizeCoverUrl(track.coverUrl);
 
                             if (normalizedCover.isEmpty()) {
@@ -222,7 +236,9 @@ public class SearchBox extends AnimatedIconPanel {
 
                             this.field20842.add(new YoutubeVideoData(
 
-                                    "netease://" + track.id,
+                                    playableUrl != null && playableUrl.url != null && !playableUrl.url.isEmpty()
+                                            ? playableUrl.url
+                                            : "netease://" + track.id,
 
                                     track.getDisplayTitle(),
 
