@@ -17,6 +17,7 @@ import net.minecraft.util.IStringSerializable;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.IChunk;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 
 public class Heightmap
 {
@@ -28,7 +29,7 @@ public class Heightmap
     {
         return p_222689_0_.getMaterial().blocksMovement();
     };
-    private final BitArray data = new BitArray(9, 256);
+    private final BitArray data = new BitArray(WorldHeightHelper.getHeightmapBits(), WorldHeightHelper.getHeightmapSize());
     private final Predicate<BlockState> heightLimitPredicate;
     private final IChunk chunk;
 
@@ -43,7 +44,7 @@ public class Heightmap
         int i = types.size();
         ObjectList<Heightmap> objectlist = new ObjectArrayList<>(i);
         ObjectListIterator<Heightmap> objectlistiterator = objectlist.iterator();
-        int j = chunkIn.getTopFilledSegment() + 16;
+        int j = Math.min(chunkIn.getTopFilledSegment() + 16, WorldHeightHelper.getMaxY());
         BlockPos.Mutable blockpos$mutable = new BlockPos.Mutable();
 
         for (int k = 0; k < 16; ++k)
@@ -55,7 +56,7 @@ public class Heightmap
                     objectlist.add(chunkIn.getHeightmap(heightmap$type));
                 }
 
-                for (int i1 = j - 1; i1 >= 0; --i1)
+                for (int i1 = j - 1; i1 >= WorldHeightHelper.getMinY(); --i1)
                 {
                     blockpos$mutable.setPos(k, i1, l);
                     BlockState blockstate = chunkIn.getBlockState(blockpos$mutable);
@@ -107,7 +108,7 @@ public class Heightmap
             {
                 BlockPos.Mutable blockpos$mutable = new BlockPos.Mutable();
 
-                for (int j = p_202270_2_ - 1; j >= 0; --j)
+                for (int j = p_202270_2_ - 1; j >= WorldHeightHelper.getMinY(); --j)
                 {
                     blockpos$mutable.setPos(p_202270_1_, j, p_202270_3_);
 
@@ -118,7 +119,7 @@ public class Heightmap
                     }
                 }
 
-                this.set(p_202270_1_, p_202270_3_, 0);
+                this.set(p_202270_1_, p_202270_3_, WorldHeightHelper.getMinY());
                 return true;
             }
 
@@ -133,12 +134,12 @@ public class Heightmap
 
     private int getHeight(int dataArrayIndex)
     {
-        return this.data.getAt(dataArrayIndex);
+        return WorldHeightHelper.heightmapWorldValue(this.data.getAt(dataArrayIndex));
     }
 
     private void set(int x, int z, int value)
     {
-        this.data.setAt(getDataArrayIndex(x, z), value);
+        this.data.setAt(getDataArrayIndex(x, z), WorldHeightHelper.heightmapStorageValue(value));
     }
 
     public void setDataArray(long[] dataIn)

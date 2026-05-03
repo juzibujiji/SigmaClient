@@ -21,7 +21,11 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkSection;
 import net.minecraft.world.chunk.ChunkStatus;
 import net.minecraft.world.chunk.EmptyChunk;
+import net.minecraft.world.gen.Heightmap;
 import net.minecraft.world.lighting.WorldLightManager;
+import com.mentalfrostbyte.jello.util.game.world.ChunkDataInterceptor;
+import com.mentalfrostbyte.jello.util.game.world.ExtendedChunkData;
+import com.mentalfrostbyte.jello.util.game.world.ExtendedChunkDataStore;
 import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import net.optifine.ChunkDataOF;
 import net.optifine.ChunkOF;
@@ -139,8 +143,34 @@ public class ClientChunkProvider extends AbstractChunkProvider {
                 this.array.replace(i, chunk);
             }
 
-            ChunkSection[] achunksection = chunk.getSections();
             WorldLightManager worldlightmanager = this.getLightManager();
+            ExtendedChunkData extendedChunkData = WorldHeightHelper.isExtendedHeight()
+                    ? ExtendedChunkDataStore.take(chunkX, chunkZ)
+                    : null;
+
+            if (extendedChunkData != null) {
+                int appliedSections = 0;
+                int capturedNegativeSections = extendedChunkData.getNonEmptyNegativeSectionCount();
+                if (extendedChunkData.hasSections()) {
+                    appliedSections = extendedChunkData.applySections(chunk);
+                    Heightmap.updateChunkHeightmaps(chunk, ChunkStatus.FULL.getHeightMaps());
+                    markExtendedHeightForRerender(chunkX, chunkZ);
+                }
+
+                int appliedLight = extendedChunkData.applyLight(worldlightmanager);
+
+                if (ChunkDataInterceptor.isDebugEnabled()) {
+                    logExtendedCaptureVerdict(chunkX, chunkZ, extendedChunkData, appliedSections, appliedLight,
+                            capturedNegativeSections, countClientNegativeSections(chunk));
+                }
+            } else if (WorldHeightHelper.isExtendedHeight() && ChunkDataInterceptor.isDebugEnabled()) {
+                LOGGER.warn(
+                        "[ExtendedHeightProbe] verdict=NO_RAW_CAPTURE chunk=({}, {}) translatedMask=0x{} target={} expectedRawChunkPacketId={} meaning=API_OR_PIPELINE_CAPTURE_MISSING",
+                        chunkX, chunkZ, Integer.toHexString(sizeIn), WorldHeightHelper.getTargetVersionSafe(),
+                        WorldHeightHelper.getRawChunkPacketId(WorldHeightHelper.getTargetVersionSafe()));
+            }
+
+            ChunkSection[] achunksection = chunk.getSections();
             worldlightmanager.enableLightSources(new ChunkPos(chunkX, chunkZ), true);
 
             for (int j = 0; j < achunksection.length; ++j) {
@@ -197,6 +227,55 @@ public class ClientChunkProvider extends AbstractChunkProvider {
 
     private static int adjustViewDistance(int p_217254_0_) {
         return Math.max(2, p_217254_0_) + 3;
+    }
+
+    private static void logExtendedCaptureVerdict(int chunkX, int chunkZ, ExtendedChunkData data, int appliedSections,
+            int appliedLight, int capturedNegativeSections, int clientNegativeSections) {
+        String verdict;
+        if (!data.hasSections()) {
+            verdict = "RAW_CAPTURE_LIGHT_ONLY";
+        } else if (capturedNegativeSections == 0) {
+            verdict = "RAW_CAPTURED_NO_NEGATIVE_BLOCKS";
+        } else if (clientNegativeSections == 0) {
+            verdict = "RAW_CAPTURED_NEGATIVE_BUT_CLIENT_EMPTY";
+        } else {
+            verdict = "RAW_CAPTURED_CLIENT_OK";
+        }
+
+        String message = String.format(
+                "[ExtendedHeightProbe] verdict=%s chunk=(%d, %d) appliedSections=%d capturedNegative=%d/%d clientNegative=%d negativeY=%s lightSections=%d",
+                verdict, chunkX, chunkZ, appliedSections, capturedNegativeSections,
+                data.getNegativeSectionPayloadCount(), clientNegativeSections,
+                data.describeNonEmptyNegativeSections(6), appliedLight);
+
+        if ("RAW_CAPTURED_NEGATIVE_BUT_CLIENT_EMPTY".equals(verdict)) {
+            LOGGER.warn(message + " meaning=CAPTURE_OK_CLIENT_APPLY_OR_RENDER_BROKEN");
+        } else {
+            LOGGER.info(message);
+        }
+    }
+
+    private static int countClientNegativeSections(Chunk chunk) {
+        ChunkSection[] sections = chunk.getSections();
+        int count = 0;
+
+        for (int i = 0; i < sections.length; ++i) {
+            if (WorldHeightHelper.getSectionYForIndex(i) < 0 && !ChunkSection.isEmpty(sections[i])) {
+                ++count;
+            }
+        }
+
+        return count;
+    }
+
+    private static void markExtendedHeightForRerender(int chunkX, int chunkZ) {
+        if (Minecraft.getInstance().worldRenderer == null) {
+            return;
+        }
+
+        for (int sectionY = WorldHeightHelper.getMinSection(); sectionY < WorldHeightHelper.getMaxSection(); ++sectionY) {
+            Minecraft.getInstance().worldRenderer.markForRerender(chunkX, sectionY, chunkZ);
+        }
     }
 
     /**

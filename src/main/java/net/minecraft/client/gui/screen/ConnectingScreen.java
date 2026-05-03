@@ -1,5 +1,6 @@
 package net.minecraft.client.gui.screen;
 
+import com.mentalfrostbyte.jello.util.game.network.ServerConnectionErrorLogger;
 import com.mojang.blaze3d.matrix.MatrixStack;
 
 import java.net.InetAddress;
@@ -76,6 +77,7 @@ public class ConnectingScreen extends Screen {
                     }
 
                     ConnectingScreen.LOGGER.error("Couldn't connect to server", (Throwable) unknownhostexception);
+                    ServerConnectionErrorLogger.logConnectionException("ConnectingScreen.UnknownHost", unknownhostexception);
                     ConnectingScreen.this.minecraft.execute(() ->
                     {
                         ConnectingScreen.this.minecraft.displayGuiScreen(new DisconnectedScreen(ConnectingScreen.this.previousGuiScreen, DialogTexts.CONNECTION_FAILED, new TranslationTextComponent("disconnect.genericReason", "Unknown host")));
@@ -86,6 +88,7 @@ public class ConnectingScreen extends Screen {
                     }
 
                     ConnectingScreen.LOGGER.error("Couldn't connect to server", (Throwable) exception);
+                    ServerConnectionErrorLogger.logConnectionException("ConnectingScreen.Exception", exception);
                     String s = inetaddress == null ? exception.toString() : exception.toString().replaceAll(inetaddress + ":" + port, "");
                     ConnectingScreen.this.minecraft.execute(() ->
                     {

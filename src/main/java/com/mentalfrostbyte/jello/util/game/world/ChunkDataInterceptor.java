@@ -1,251 +1,268 @@
 package com.mentalfrostbyte.jello.util.game.world;
 
+import com.viaversion.viaversion.api.minecraft.chunks.Chunk;
+import com.viaversion.viaversion.api.minecraft.chunks.DataPalette;
+import com.viaversion.viaversion.api.minecraft.chunks.PaletteType;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import com.viaversion.viaversion.api.type.Type;
+import com.viaversion.viaversion.api.type.types.chunk.ChunkType1_18;
+import com.viaversion.viaversion.api.type.types.chunk.ChunkType1_20_2;
+import com.viaversion.viaversion.api.type.types.chunk.ChunkType1_21_5;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.network.PacketBuffer;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkSection;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.lang.reflect.Method;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
- * Intercepts raw 1.17+ chunk packets BEFORE ViaVersion translates them.
- * Captures Y<0 section data that ViaBackwards strips during translation.
- * Uses reflection for ViaBackwards API to avoid compile-time dependency issues.
+ * Captures raw 1.18+ chunk data before ViaBackwards narrows it to 1.16.
  */
 public class ChunkDataInterceptor extends ChannelInboundHandlerAdapter {
-
     private static final Logger LOGGER = LogManager.getLogger();
+    private static final String DEBUG_PROPERTY = "sigma.viamcp.debugChunkCapture";
     public static final String HANDLER_NAME = "chunk-data-interceptor";
-    private static final int CHUNK_PACKET_ID = 0x22;
-    private static final int NEG_SECTION_COUNT = 4;
-    private static final int MAX_STORED = 2048;
-
-    private static final ConcurrentHashMap<Long, byte[]> STORE = new ConcurrentHashMap<>();
-
-    // Block state mapping: 1.17 ID -> 1.16.4 ID (lazily loaded via reflection)
-    private static volatile int[] blockStateMap = null;
-    private static volatile boolean mapLoaded = false;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        if (msg instanceof ByteBuf && WorldHeightHelper.isExtendedHeight()) {
+        if (msg instanceof ByteBuf && WorldHeightHelper.canUseRawExtendedChunks()) {
             ByteBuf buf = (ByteBuf) msg;
-            int saved = buf.readerIndex();
+            int savedReaderIndex = buf.readerIndex();
+            int packetId = -1;
+
             try {
-                int packetId = readVarInt(buf);
-                if (packetId == CHUNK_PACKET_ID) {
-                    int cx = buf.readInt();
-                    int cz = buf.readInt();
-                    byte[] data = new byte[buf.readableBytes()];
-                    buf.getBytes(buf.readerIndex(), data);
-                    if (STORE.size() < MAX_STORED) {
-                        STORE.put(ChunkPos.asLong(cx, cz), data);
+                packetId = readVarInt(buf);
+                if (WorldHeightHelper.isRawChunkPacket(packetId)) {
+                    ExtendedChunkData data = readChunkWithLight(buf);
+                    if (data != null) {
+                        ExtendedChunkDataStore.put(data);
+                        logCapturedChunk(packetId, data);
+                    }
+                } else if (WorldHeightHelper.isRawLightPacket(packetId)) {
+                    ExtendedChunkData data = readLightUpdate(buf);
+                    if (data != null) {
+                        ExtendedChunkDataStore.put(data);
+                        logCapturedLight(packetId, data);
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                if (isDebugEnabled()) {
+                    LOGGER.warn("[ExtendedHeight] Could not capture raw packet id={} target={}: {}", packetId,
+                            WorldHeightHelper.getTargetVersionSafe(), e.toString());
+                } else {
+                    LOGGER.debug("[ExtendedHeight] Could not capture raw packet: {}", e.getMessage());
+                }
             } finally {
-                buf.readerIndex(saved);
+                buf.readerIndex(savedReaderIndex);
             }
         }
+
         super.channelRead(ctx, msg);
     }
 
-    /**
-     * Inject Y<0 sections into a chunk using stored raw 1.17+ data.
-     */
-    public static void injectNegativeYSections(Chunk chunk, int chunkX, int chunkZ) {
-        byte[] raw = STORE.remove(ChunkPos.asLong(chunkX, chunkZ));
-        if (raw == null)
-            return;
+    public static void clearAll() {
+        ExtendedChunkDataStore.clearAll();
+    }
 
-        int offset = WorldHeightHelper.getSectionOffset();
-        if (offset <= 0)
-            return;
+    public static boolean isDebugEnabled() {
+        return Boolean.getBoolean(DEBUG_PROPERTY);
+    }
 
-        try {
-            PacketBuffer buf = new PacketBuffer(Unpooled.wrappedBuffer(raw));
-            buf.readCompoundTag(); // skip heightmaps NBT
-            buf.readVarInt(); // skip data size
+    private static void logCapturedChunk(int packetId, ExtendedChunkData data) {
+        if (isDebugEnabled()) {
+            LOGGER.info(
+                    "[ExtendedHeightProbe] RAW_CAPTURED packetId={} target={} chunk=({}, {}) sections={}/{} negativeSections={}/{} negativeY={} lightSections={}",
+                    packetId, WorldHeightHelper.getTargetVersionSafe(), data.getChunkX(), data.getChunkZ(),
+                    data.getNonEmptySectionCount(), data.getSectionPayloadCount(),
+                    data.getNonEmptyNegativeSectionCount(), data.getNegativeSectionPayloadCount(),
+                    data.describeNonEmptyNegativeSections(6), data.getLightPayloadCount());
+        }
+    }
 
-            loadBlockStateMap(); // ensure mapping is loaded
-            ChunkSection[] sections = chunk.getSections();
-            int toRead = Math.min(NEG_SECTION_COUNT, offset);
+    private static void logCapturedLight(int packetId, ExtendedChunkData data) {
+        if (isDebugEnabled()) {
+            LOGGER.info("[ExtendedHeightProbe] RAW_LIGHT_CAPTURED packetId={} target={} chunk=({}, {}) lightSections={}",
+                    packetId, WorldHeightHelper.getTargetVersionSafe(), data.getChunkX(), data.getChunkZ(),
+                    data.getLightPayloadCount());
+        }
+    }
 
-            for (int i = 0; i < toRead; i++) {
-                int sectionY = i - offset;
-                buf.readShort(); // block count (unused, we count ourselves)
-                ChunkSection section = readBlockStates(buf, sectionY);
-                skipPaletted(buf, 3); // skip biomes
-                if (section != null) {
-                    sections[i] = section;
+    private static ExtendedChunkData readChunkWithLight(ByteBuf buf) throws Exception {
+        ProtocolVersion version = WorldHeightHelper.getTargetVersionSafe();
+        Type<Chunk> chunkType = createChunkType(version);
+
+        Chunk viaChunk = chunkType.read(buf);
+        ExtendedChunkData data = new ExtendedChunkData(viaChunk.getX(), viaChunk.getZ());
+        com.viaversion.viaversion.api.minecraft.chunks.ChunkSection[] sections = viaChunk.getSections();
+
+        for (int i = 0; i < sections.length && i < WorldHeightHelper.getSectionCount(); ++i) {
+            int sectionY = WorldHeightHelper.getRawChunkMinSection() + i;
+            data.setSection(WorldHeightHelper.sectionToIndex(sectionY), convertSection(sections[i], sectionY));
+        }
+
+        if (buf.isReadable()) {
+            readLightPayload(buf, data);
+        }
+
+        return data;
+    }
+
+    private static Type<Chunk> createChunkType(ProtocolVersion version) {
+        if (WorldHeightHelper.shouldUseChunkType1_21_5(version)) {
+            return new ChunkType1_21_5(WorldHeightHelper.getRawChunkSectionCount(),
+                    WorldHeightHelper.getDefaultBlockGlobalPaletteBits(),
+                    WorldHeightHelper.getDefaultBiomeGlobalPaletteBits());
+        }
+
+        if (WorldHeightHelper.shouldUseChunkType1202(version)) {
+            return new ChunkType1_20_2(WorldHeightHelper.getRawChunkSectionCount(),
+                    WorldHeightHelper.getDefaultBlockGlobalPaletteBits(),
+                    WorldHeightHelper.getDefaultBiomeGlobalPaletteBits());
+        }
+
+        return new ChunkType1_18(WorldHeightHelper.getRawChunkSectionCount(),
+                WorldHeightHelper.getDefaultBlockGlobalPaletteBits(),
+                WorldHeightHelper.getDefaultBiomeGlobalPaletteBits());
+    }
+
+    private static ExtendedChunkData readLightUpdate(ByteBuf buf) {
+        int chunkX = readVarInt(buf);
+        int chunkZ = readVarInt(buf);
+        ExtendedChunkData data = new ExtendedChunkData(chunkX, chunkZ);
+        readLightPayload(buf, data);
+        return data;
+    }
+
+    private static ChunkSection convertSection(com.viaversion.viaversion.api.minecraft.chunks.ChunkSection source,
+            int sectionY) {
+        if (source == null) {
+            return null;
+        }
+
+        DataPalette palette = source.palette(PaletteType.BLOCKS);
+        if (palette == null) {
+            return null;
+        }
+
+        ChunkSection target = new ChunkSection(sectionY << 4);
+        boolean nonAir = false;
+
+        for (int y = 0; y < 16; ++y) {
+            for (int z = 0; z < 16; ++z) {
+                for (int x = 0; x < 16; ++x) {
+                    int rawId = palette.idAt(x, y, z);
+                    net.minecraft.block.BlockState state = ExtendedBlockStateMapper.mapToBlockState(rawId);
+                    if (state != Blocks.AIR.getDefaultState()) {
+                        target.setBlockState(x, y, z, state, false);
+                        nonAir = true;
+                    }
                 }
             }
-        } catch (Exception e) {
-            LOGGER.warn("[ChunkInterceptor] Failed for ({},{}): {}", chunkX, chunkZ, e.getMessage());
         }
+
+        return nonAir ? target : null;
     }
 
-    private static ChunkSection readBlockStates(PacketBuffer buf, int sectionY) {
-        int bpe = buf.readUnsignedByte();
-
-        if (bpe == 0) {
-            int rawId = buf.readVarInt();
-            int dataLen = buf.readVarInt();
-            for (int d = 0; d < dataLen; d++)
-                buf.readLong();
-
-            BlockState state = stateFromId(mapId(rawId));
-            ChunkSection sec = new ChunkSection(sectionY << 4);
-            if (state != Blocks.AIR.getDefaultState()) {
-                for (int x = 0; x < 16; x++)
-                    for (int y = 0; y < 16; y++)
-                        for (int z = 0; z < 16; z++)
-                            sec.setBlockState(x, y, z, state);
-            }
-            return sec;
-        }
-
-        int[] palette = null;
-        if (bpe <= 8) {
-            int palLen = buf.readVarInt();
-            palette = new int[palLen];
-            for (int p = 0; p < palLen; p++) {
-                palette[p] = mapId(buf.readVarInt());
-            }
-        }
-
-        int dataLen = buf.readVarInt();
-        long[] data = new long[dataLen];
-        for (int d = 0; d < dataLen; d++)
-            data[d] = buf.readLong();
-
-        ChunkSection sec = new ChunkSection(sectionY << 4);
-        long mask = (1L << bpe) - 1;
-        int perLong = 64 / bpe;
-
-        for (int idx = 0; idx < 4096; idx++) {
-            int li = idx / perLong;
-            int bo = (idx % perLong) * bpe;
-            if (li >= data.length)
-                break;
-
-            int palIdx = (int) ((data[li] >> bo) & mask);
-            int stateId;
-            if (palette != null) {
-                stateId = (palIdx >= 0 && palIdx < palette.length) ? palette[palIdx] : 0;
-            } else {
-                stateId = mapId(palIdx);
-            }
-
-            BlockState state = stateFromId(stateId);
-            if (state != Blocks.AIR.getDefaultState()) {
-                sec.setBlockState(idx & 0xF, (idx >> 8) & 0xF, (idx >> 4) & 0xF, state);
-            }
-        }
-        return sec;
-    }
-
-    private static void skipPaletted(PacketBuffer buf, int indirectThreshold) {
-        int bpe = buf.readUnsignedByte();
-        if (bpe == 0) {
-            buf.readVarInt();
-        } else if (bpe <= indirectThreshold) {
-            int palLen = buf.readVarInt();
-            for (int i = 0; i < palLen; i++)
-                buf.readVarInt();
-        }
-        int dataLen = buf.readVarInt();
-        buf.skipBytes(dataLen * 8);
-    }
-
-    /**
-     * Map a 1.17+ block state ID to 1.16.4 using ViaBackwards mapping (loaded via
-     * reflection).
-     */
-    private static int mapId(int newId) {
-        if (blockStateMap != null && newId >= 0 && newId < blockStateMap.length) {
-            int mapped = blockStateMap[newId];
-            return mapped != -1 ? mapped : 1; // stone fallback
-        }
-        return newId; // no mapping available, pass through
-    }
-
-    private static BlockState stateFromId(int id) {
-        BlockState s = Block.BLOCK_STATE_IDS.getByValue(id);
-        return s != null ? s : Blocks.STONE.getDefaultState();
-    }
-
-    /**
-     * Load ViaBackwards block state mapping via reflection to avoid compile-time
-     * API dependency.
-     */
-    @SuppressWarnings("all")
-    private static void loadBlockStateMap() {
-        if (mapLoaded)
+    private static void readLightPayload(ByteBuf buf, ExtendedChunkData data) {
+        if (!buf.isReadable()) {
             return;
-        mapLoaded = true;
-        try {
-            // Via.getManager().getProtocolManager().getProtocol(Protocol1_17To1_16_4.class)
-            Class<?> viaClass = Class.forName("com.viaversion.viaversion.api.Via");
-            Object manager = viaClass.getMethod("getManager").invoke(null);
-            Object protocolManager = manager.getClass().getMethod("getProtocolManager").invoke(manager);
-            Class<?> protoClass = Class.forName(
-                    "com.viaversion.viabackwards.protocol.v1_17to1_16_4.Protocol1_17To1_16_4");
-            Method getProtocol = protocolManager.getClass().getMethod("getProtocol", Class.class);
-            Object protocol = getProtocol.invoke(protocolManager, protoClass);
-            if (protocol == null)
-                return;
+        }
 
-            // protocol.getMappingData().getBlockStateMappings()
-            Object mappingData = protocol.getClass().getMethod("getMappingData").invoke(protocol);
-            if (mappingData == null)
-                return;
+        buf.readBoolean(); // trust edges
+        long[] skyMask = readLongArray(buf);
+        long[] blockMask = readLongArray(buf);
+        long[] emptySkyMask = readLongArray(buf);
+        long[] emptyBlockMask = readLongArray(buf);
+        applyResetMask(data, true, emptySkyMask);
+        applyResetMask(data, false, emptyBlockMask);
+        readLightArrays(buf, data, true, skyMask);
+        readLightArrays(buf, data, false, blockMask);
+    }
 
-            Object blockMappings = mappingData.getClass().getMethod("getBlockStateMappings").invoke(mappingData);
-            if (blockMappings == null)
-                return;
+    private static void applyResetMask(ExtendedChunkData data, boolean sky, long[] mask) {
+        int max = WorldHeightHelper.getLightSectionCount();
 
-            // mappings.size() and mappings.getNewId(id)
-            Method sizeMethod = blockMappings.getClass().getMethod("size");
-            Method getNewIdMethod = blockMappings.getClass().getMethod("getNewId", int.class);
-            int size = (int) sizeMethod.invoke(blockMappings);
-
-            int[] map = new int[size];
-            for (int i = 0; i < size; i++) {
-                map[i] = (int) getNewIdMethod.invoke(blockMappings, i);
+        for (int i = 0; i < max; ++i) {
+            if (isBitSet(mask, i)) {
+                if (sky) {
+                    data.setSkyLight(i, WorldHeightHelper.lightResetMarker());
+                } else {
+                    data.setBlockLight(i, WorldHeightHelper.lightResetMarker());
+                }
             }
-            blockStateMap = map;
-            LOGGER.info("[ChunkInterceptor] Loaded {} block state mappings from ViaBackwards", size);
-        } catch (Exception e) {
-            LOGGER.warn("[ChunkInterceptor] Could not load block mappings (blocks may render incorrectly): {}",
-                    e.getMessage());
         }
     }
 
-    public static void clearAll() {
-        STORE.clear();
+    private static void readLightArrays(ByteBuf buf, ExtendedChunkData data, boolean sky, long[] mask) {
+        int count = readVarInt(buf);
+        int read = 0;
+
+        for (int i = 0; i < WorldHeightHelper.getLightSectionCount() && read < count; ++i) {
+            if (!isBitSet(mask, i)) {
+                continue;
+            }
+
+            byte[] light = readByteArray(buf);
+            if (light.length == 2048) {
+                if (sky) {
+                    data.setSkyLight(i, light);
+                } else {
+                    data.setBlockLight(i, light);
+                }
+            }
+
+            ++read;
+        }
+
+        while (read < count) {
+            readByteArray(buf);
+            ++read;
+        }
+    }
+
+    private static boolean isBitSet(long[] mask, int bitIndex) {
+        int longIndex = bitIndex >> 6;
+        if (longIndex < 0 || longIndex >= mask.length) {
+            return false;
+        }
+
+        return (mask[longIndex] & (1L << (bitIndex & 63))) != 0L;
+    }
+
+    private static long[] readLongArray(ByteBuf buf) {
+        int length = readVarInt(buf);
+        long[] data = new long[length];
+
+        for (int i = 0; i < length; ++i) {
+            data[i] = buf.readLong();
+        }
+
+        return data;
+    }
+
+    private static byte[] readByteArray(ByteBuf buf) {
+        int length = readVarInt(buf);
+        byte[] data = new byte[length];
+        buf.readBytes(data);
+        return data;
     }
 
     private static int readVarInt(ByteBuf buf) {
-        int val = 0, pos = 0;
-        byte b;
+        int value = 0;
+        int position = 0;
+        byte currentByte;
+
         do {
-            b = buf.readByte();
-            val |= (b & 0x7F) << pos;
-            pos += 7;
-            if (pos >= 32)
+            currentByte = buf.readByte();
+            value |= (currentByte & 0x7F) << position;
+            position += 7;
+
+            if (position >= 32) {
                 throw new RuntimeException("VarInt too big");
-        } while ((b & 0x80) != 0);
-        return val;
+            }
+        } while ((currentByte & 0x80) != 0);
+
+        return value;
     }
 }

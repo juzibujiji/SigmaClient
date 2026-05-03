@@ -1,6 +1,7 @@
 package net.minecraft.network.play.server;
 
 import com.google.common.collect.Sets;
+import com.mentalfrostbyte.jello.util.game.network.RegistryDataCompatibility;
 import java.io.IOException;
 import java.util.Set;
 import net.minecraft.client.network.play.IClientPlayNetHandler;
@@ -75,7 +76,7 @@ public class SJoinGamePacket implements IPacket<IClientPlayNetHandler>
             this.field_240811_e_.add(RegistryKey.getOrCreateKey(Registry.WORLD_KEY, buf.readResourceLocation()));
         }
 
-        this.field_240812_f_ = buf.func_240628_a_(DynamicRegistries.Impl.registryCodec);
+        this.field_240812_f_ = RegistryDataCompatibility.readDynamicRegistries(buf);
         this.field_240813_g_ = buf.func_240628_a_(DimensionType.DIMENSION_TYPE_CODEC).get();
         this.dimension = RegistryKey.getOrCreateKey(Registry.WORLD_KEY, buf.readResourceLocation());
         this.hashedSeed = buf.readLong();

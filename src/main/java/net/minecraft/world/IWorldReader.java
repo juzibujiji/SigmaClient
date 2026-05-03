@@ -12,6 +12,7 @@ import net.minecraft.world.chunk.ChunkStatus;
 import net.minecraft.world.chunk.IChunk;
 import net.minecraft.world.gen.Heightmap;
 import net.minecraft.world.level.ColorResolver;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 
 import javax.annotation.Nullable;
 import java.util.stream.Stream;
@@ -170,7 +171,7 @@ public interface IWorldReader extends IBlockDisplayReader, ICollisionReader, Bio
     @Deprecated
 
     default boolean isAreaLoaded(int fromX, int fromY, int fromZ, int toX, int toY, int toZ) {
-        if (toY >= 0 && fromY < 256) {
+        if (toY >= WorldHeightHelper.getMinY() && fromY < WorldHeightHelper.getMaxY()) {
             fromX = fromX >> 4;
             fromZ = fromZ >> 4;
             toX = toX >> 4;

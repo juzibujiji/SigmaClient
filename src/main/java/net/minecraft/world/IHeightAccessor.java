@@ -1,6 +1,7 @@
 package net.minecraft.world;
 
 import net.minecraft.util.math.SectionPos;
+import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 
 /**
  * Height accessor interface modeled after 1.17's LevelHeightAccessor.
@@ -13,7 +14,7 @@ public interface IHeightAccessor {
      * @return The minimum Y coordinate that blocks can exist at (inclusive). Default: -64
      */
     default int getMinBuildHeight() {
-        return -64;
+        return WorldHeightHelper.getMinY();
     }
 
     /**

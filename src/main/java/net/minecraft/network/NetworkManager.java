@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventGlobalReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
+import com.mentalfrostbyte.jello.util.game.network.ServerConnectionErrorLogger;
 import com.viaversion.viabackwards.protocol.v1_19to1_18_2.Protocol1_19To1_18_2;
 import com.viaversion.viaversion.api.Via;
 import com.viaversion.viaversion.api.connection.UserConnection;
@@ -46,6 +47,7 @@ import io.netty.util.concurrent.GenericFutureListener;
 
 import java.net.InetAddress;
 import java.net.SocketAddress;
+import java.util.Iterator;
 import java.util.Queue;
 import javax.annotation.Nullable;
 import javax.crypto.Cipher;
@@ -157,10 +159,13 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
             if (this.channel.isOpen()) {
                 if (p_exceptionCaught_2_ instanceof TimeoutException) {
                     LOGGER.debug("Timeout", p_exceptionCaught_2_);
+                    ServerConnectionErrorLogger.logConnectionException("NetworkManager.Timeout", p_exceptionCaught_2_);
                     this.closeChannel(new TranslationTextComponent("disconnect.timeout"));
                 } else {
                     ITextComponent itextcomponent = new TranslationTextComponent("disconnect.genericReason",
                             "Internal Exception: " + p_exceptionCaught_2_);
+                    ServerConnectionErrorLogger.logConnectionException("NetworkManager.Exception", p_exceptionCaught_2_);
+                    ServerConnectionErrorLogger.logDisconnect("NetworkManager.Exception", new TranslationTextComponent("disconnect.lost"), itextcomponent);
 
                     if (flag) {
                         LOGGER.debug("Failed to sent packet", p_exceptionCaught_2_);
@@ -238,25 +243,21 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
             return;
         }
         IPacket<?> packet = event.packet;
-        UserConnection var4;
-        if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
-            if (packet instanceof CHeldItemChangePacket) {
-                UserConnection userConnection = Via.getManager().getConnectionManager().getConnections().iterator()
-                        .next();
-                PacketWrapper wrapper = PacketWrapper.create(ServerboundPackets1_19.SET_CARRIED_ITEM, userConnection);
+        if (shouldUseManual1_19PacketFix()) {
+            UserConnection viaConnection = getViaUserConnection();
+            if (packet instanceof CHeldItemChangePacket && viaConnection != null) {
+                PacketWrapper wrapper = PacketWrapper.create(ServerboundPackets1_19.SET_CARRIED_ITEM, viaConnection);
                 wrapper.write(Types.SHORT, (short) ((CHeldItemChangePacket) packet).getSlotId());
                 wrapper.sendToServer(Protocol1_19To1_18_2.class);
                 return;
-            } else if (packet instanceof CPlayerTryUseItemPacket) {
-                var4 = Via.getManager().getConnectionManager().getConnections().iterator().next();
-                PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM, var4);
+            } else if (packet instanceof CPlayerTryUseItemPacket && viaConnection != null) {
+                PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM, viaConnection);
                 var5.write(Types.VAR_INT, ((CPlayerTryUseItemPacket) packet).getHand().ordinal());
                 var5.write(Types.VAR_INT, AddCount1_19());
                 var5.sendToServer(Protocol1_19To1_18_2.class);
                 return;
-            } else if (packet instanceof CPlayerTryUseItemOnBlockPacket) {
-                UserConnection var14 = Via.getManager().getConnectionManager().getConnections().iterator().next();
-                PacketWrapper var16 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM_ON, var14);
+            } else if (packet instanceof CPlayerTryUseItemOnBlockPacket && viaConnection != null) {
+                PacketWrapper var16 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM_ON, viaConnection);
                 // hand
                 var16.write(Types.VAR_INT, ((CPlayerTryUseItemOnBlockPacket) packet).getHand().ordinal());
                 // position
@@ -281,10 +282,9 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
                 var16.write(Types.VAR_INT, AddCount1_19());
                 var16.sendToServer(Protocol1_19To1_18_2.class);
                 return;
-            } else if (packet instanceof CPlayerDiggingPacket) {
+            } else if (packet instanceof CPlayerDiggingPacket && viaConnection != null) {
                 if (((CPlayerDiggingPacket) packet).getAction() == CPlayerDiggingPacket.Action.START_DESTROY_BLOCK) {
-                    UserConnection var6 = Via.getManager().getConnectionManager().getConnections().iterator().next();
-                    PacketWrapper var7 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, var6);
+                    PacketWrapper var7 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, viaConnection);
                     var7.write(Types.VAR_INT, CPlayerDiggingPacket.Action.START_DESTROY_BLOCK.ordinal());
                     var7.write(Types.BLOCK_POSITION1_14,
                             new BlockPosition(((CPlayerDiggingPacket) packet).getPosition().getX(),
@@ -296,8 +296,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
                     return;
                 } else if (((CPlayerDiggingPacket) packet)
                         .getAction() == CPlayerDiggingPacket.Action.STOP_DESTROY_BLOCK) {
-                    var4 = Via.getManager().getConnectionManager().getConnections().iterator().next();
-                    PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, var4);
+                    PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, viaConnection);
                     var5.write(Types.VAR_INT, CPlayerDiggingPacket.Action.STOP_DESTROY_BLOCK.ordinal());
                     var5.write(Types.BLOCK_POSITION1_14,
                             new BlockPosition(((CPlayerDiggingPacket) packet).getPosition().getX(),
@@ -381,26 +380,22 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
     public void sendNoEventPacket(IPacket<?> packetIn, @Nullable GenericFutureListener<? extends Future<? super Void>> p_201058_2_) {
         if (this.isChannelOpen()) {
             IPacket<?> packet = packetIn;
-            UserConnection var4;
-            if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
-                if (packet instanceof CHeldItemChangePacket) {
-                    UserConnection userConnection = Via.getManager().getConnectionManager().getConnections().iterator()
-                            .next();
+            if (shouldUseManual1_19PacketFix()) {
+                UserConnection viaConnection = getViaUserConnection();
+                if (packet instanceof CHeldItemChangePacket && viaConnection != null) {
                     PacketWrapper wrapper = PacketWrapper.create(ServerboundPackets1_19.SET_CARRIED_ITEM,
-                            userConnection);
+                            viaConnection);
                     wrapper.write(Types.SHORT, (short) ((CHeldItemChangePacket) packet).getSlotId());
                     wrapper.sendToServer(Protocol1_19To1_18_2.class);
                     return;
-                } else if (packet instanceof CPlayerTryUseItemPacket) {
-                    var4 = Via.getManager().getConnectionManager().getConnections().iterator().next();
-                    PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM, var4);
+                } else if (packet instanceof CPlayerTryUseItemPacket && viaConnection != null) {
+                    PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM, viaConnection);
                     var5.write(Types.VAR_INT, ((CPlayerTryUseItemPacket) packet).getHand().ordinal());
                     var5.write(Types.VAR_INT, AddCount1_19());
                     var5.sendToServer(Protocol1_19To1_18_2.class);
                     return;
-                } else if (packet instanceof CPlayerTryUseItemOnBlockPacket) {
-                    UserConnection var14 = Via.getManager().getConnectionManager().getConnections().iterator().next();
-                    PacketWrapper var16 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM_ON, var14);
+                } else if (packet instanceof CPlayerTryUseItemOnBlockPacket && viaConnection != null) {
+                    PacketWrapper var16 = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM_ON, viaConnection);
                     // hand
                     var16.write(Types.VAR_INT, ((CPlayerTryUseItemOnBlockPacket) packet).getHand().ordinal());
                     // position
@@ -425,12 +420,10 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
                     var16.write(Types.VAR_INT, AddCount1_19());
                     var16.sendToServer(Protocol1_19To1_18_2.class);
                     return;
-                } else if (packet instanceof CPlayerDiggingPacket) {
+                } else if (packet instanceof CPlayerDiggingPacket && viaConnection != null) {
                     if (((CPlayerDiggingPacket) packet)
                             .getAction() == CPlayerDiggingPacket.Action.START_DESTROY_BLOCK) {
-                        UserConnection var6 = Via.getManager().getConnectionManager().getConnections().iterator()
-                                .next();
-                        PacketWrapper var7 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, var6);
+                        PacketWrapper var7 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, viaConnection);
                         var7.write(Types.VAR_INT, CPlayerDiggingPacket.Action.START_DESTROY_BLOCK.ordinal());
                         var7.write(Types.BLOCK_POSITION1_14,
                                 new BlockPosition(((CPlayerDiggingPacket) packet).getPosition().getX(),
@@ -442,8 +435,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
                         return;
                     } else if (((CPlayerDiggingPacket) packet)
                             .getAction() == CPlayerDiggingPacket.Action.STOP_DESTROY_BLOCK) {
-                        var4 = Via.getManager().getConnectionManager().getConnections().iterator().next();
-                        PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, var4);
+                        PacketWrapper var5 = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, viaConnection);
                         var5.write(Types.VAR_INT, CPlayerDiggingPacket.Action.STOP_DESTROY_BLOCK.ordinal());
                         var5.write(Types.BLOCK_POSITION1_14,
                                 new BlockPosition(((CPlayerDiggingPacket) packet).getPosition().getX(),
@@ -517,6 +509,25 @@ public class NetworkManager extends SimpleChannelInboundHandler<IPacket<?>> {
         } else {
             this.outboundPacketsQueue.add(new NetworkManager.QueuedPacket(packetIn, p_201058_2_));
         }
+    }
+
+    @Nullable
+    public UserConnection getViaUserConnection() {
+        if (this.channel != null) {
+            MCPVLBPipeline pipeline = this.channel.pipeline().get(MCPVLBPipeline.class);
+            if (pipeline != null) {
+                return pipeline.getUser();
+            }
+        }
+
+        Iterator<UserConnection> iterator = Via.getManager().getConnectionManager().getConnections().iterator();
+        return iterator.hasNext() ? iterator.next() : null;
+    }
+
+    private boolean shouldUseManual1_19PacketFix() {
+        ProtocolVersion targetVersion = ViaLoadingBase.getInstance().getTargetVersion();
+        return targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_19)
+                && targetVersion.olderThan(ProtocolVersion.v1_21_2);
     }
 
     /**

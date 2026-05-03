@@ -6,7 +6,10 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.module.impl.misc.AutoReconnect;
+import com.mentalfrostbyte.jello.util.game.network.ServerConnectionErrorLogger;
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
+import com.mentalfrostbyte.jello.util.game.world.ExtendedChunkData;
+import com.mentalfrostbyte.jello.util.game.world.ExtendedChunkDataStore;
 import com.mentalfrostbyte.jello.util.game.world.WorldHeightHelper;
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
@@ -369,6 +372,7 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
      * Clears the WorldClient instance associated with this NetHandlerPlayClient
      */
     public void cleanup() {
+        ExtendedChunkDataStore.clearAll();
         this.world = null;
     }
 
@@ -383,6 +387,7 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
      */
     public void handleJoinGame(SJoinGamePacket packetIn) {
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
+        ExtendedChunkDataStore.clearAll();
         this.client.playerController = new PlayerController(this.client, this);
 
         if (this.client.getCurrentServerData() != null) {
@@ -905,6 +910,7 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
      * reason for termination
      */
     public void onDisconnect(ITextComponent reason) {
+        ServerConnectionErrorLogger.logDisconnect("ClientPlayNetHandler", field_243491_b, reason);
         this.client.unloadWorld();
 
         if (this.guiScreenServer != null) {
@@ -2480,6 +2486,21 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
         int j1 = packetIn.getBlockLightResetMask();
         Iterator<byte[]> iterator1 = packetIn.getBlockLightData().iterator();
         this.setLightData(i, j, worldlightmanager, LightType.BLOCK, i1, j1, iterator1, packetIn.func_241784_j_());
+
+        if (WorldHeightHelper.isExtendedHeight()) {
+            ExtendedChunkData rawLight = ExtendedChunkDataStore.peek(i, j);
+            if (rawLight != null && !rawLight.hasSections() && rawLight.hasLight()) {
+                rawLight = ExtendedChunkDataStore.take(i, j);
+                if (rawLight != null) {
+                    rawLight.applyLight(worldlightmanager);
+
+                    for (int sectionY = WorldHeightHelper.getLightMinSection();
+                            sectionY < WorldHeightHelper.getLightMinSection() + WorldHeightHelper.getLightSectionCount(); ++sectionY) {
+                        this.world.markSurroundingsForRerender(i, sectionY, j);
+                    }
+                }
+            }
+        }
     }
 
     public void handleMerchantOffers(SMerchantOffersPacket packetIn) {
@@ -2514,9 +2535,9 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
 
     private void setLightData(int chunkX, int chunkZ, WorldLightManager lightManager, LightType type, int p_217284_5_,
             int p_217284_6_, Iterator<byte[]> p_217284_7_, boolean p_217284_8_) {
-        int lightSections = WorldHeightHelper.getSectionCount() + 2;
+        int lightSections = WorldHeightHelper.getTranslatedLightSectionCount();
         for (int i = 0; i < lightSections; ++i) {
-            int j = WorldHeightHelper.getMinSection() - 1 + i;
+            int j = WorldHeightHelper.getTranslatedLightMinSection() + i;
             boolean flag = (p_217284_5_ & 1 << i) != 0;
             boolean flag1 = (p_217284_6_ & 1 << i) != 0;
 

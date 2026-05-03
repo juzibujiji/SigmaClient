@@ -45,6 +45,11 @@ public class VanillaPack implements IResourcePack
             for (ResourcePackType resourcepacktype : ResourcePackType.values())
             {
                 URL url = VanillaPack.class.getResource("/" + resourcepacktype.getDirectoryName() + "/.mcassetsroot");
+                if (url == null)
+                {
+                    LOGGER.warn("Couldn't find vanilla resource root for {}", resourcepacktype.getDirectoryName());
+                    continue;
+                }
 
                 try
                 {
@@ -138,7 +143,8 @@ public class VanillaPack implements IResourcePack
 
                 try
                 {
-                    enumeration = baseClass.getClassLoader().getResources(type.getDirectoryName() + "/");
+                    ClassLoader classloader = baseClass != null ? baseClass.getClassLoader() : VanillaPack.class.getClassLoader();
+                    enumeration = classloader.getResources(type.getDirectoryName() + "/");
                 }
                 catch (IOException ioexception2)
                 {
@@ -182,8 +188,12 @@ public class VanillaPack implements IResourcePack
             }
             else if ("jar".equals(uri1.getScheme()))
             {
-                Path path1 = FILE_SYSTEMS_BY_PACK_TYPE.get(type).getPath("/" + type.getDirectoryName());
-                collectResources(set, maxDepthIn, "minecraft", path1, pathIn, filterIn);
+                FileSystem filesystem = FILE_SYSTEMS_BY_PACK_TYPE.get(type);
+                if (filesystem != null)
+                {
+                    Path path1 = filesystem.getPath("/" + type.getDirectoryName());
+                    collectResources(set, maxDepthIn, "minecraft", path1, pathIn, filterIn);
+                }
             }
             else
             {

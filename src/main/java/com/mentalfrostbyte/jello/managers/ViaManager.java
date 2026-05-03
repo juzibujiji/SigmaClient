@@ -9,6 +9,7 @@ import com.mentalfrostbyte.jello.event.impl.game.render.EventRenderEntity;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventBlockCollision;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
+import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventStopUseItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
@@ -23,6 +24,7 @@ import com.mentalfrostbyte.jello.util.game.player.PlayerUtil;
 import com.mentalfrostbyte.jello.util.game.player.ServerUtil;
 import com.mojang.datafixers.util.Pair;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import de.florianmichael.viamcp.fixes.ClientTickFix;
 import net.minecraft.block.Block;
 import net.minecraft.block.GrassPathBlock;
 import net.minecraft.client.gui.screen.ChatScreen;
@@ -171,6 +173,13 @@ public class ViaManager extends Manager implements MinecraftUtil {
                     }
                 }
             }
+        }
+    }
+
+    @EventTarget
+    public void onTickEnd(EventRunTicks event) {
+        if (!event.isPre()) {
+            ClientTickFix.tick();
         }
     }
 

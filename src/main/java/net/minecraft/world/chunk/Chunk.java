@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.shorts.ShortList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -624,22 +625,42 @@ public class Chunk implements IChunk {
                     this.sections.length, sectionOffset);
         }
 
-        for (int i = 0; i < this.sections.length; ++i) {
-            ChunkSection chunksection = this.sections[i];
-
-            // Bitmask convention: bit i = section array index i
-            // When extended height: bit 0 = Y=-64, bit 4 = Y=0, etc.
-            // When legacy: bit 0 = Y=0 (no offset)
-            if (i < Integer.SIZE && (availableSections & (1 << i)) != 0) {
-                if (chunksection == EMPTY_SECTION) {
-                    chunksection = new ChunkSection(WorldHeightHelper.sectionToBlockY(i));
-                    this.sections[i] = chunksection;
+        if (WorldHeightHelper.isExtendedHeight()) {
+            for (int sectionY = 0; sectionY < WorldHeightHelper.getTranslatedSectionCount(); ++sectionY) {
+                int sectionIndex = WorldHeightHelper.translatedSectionToIndex(sectionY);
+                if (!WorldHeightHelper.isSectionIndexInBounds(sectionIndex)) {
+                    continue;
                 }
 
-                chunksection.read(packetBufferIn);
-                flag1 = true;
-            } else if (flag && chunksection != EMPTY_SECTION) {
-                this.sections[i] = EMPTY_SECTION;
+                ChunkSection chunksection = this.sections[sectionIndex];
+
+                if ((availableSections & (1 << sectionY)) != 0) {
+                    if (chunksection == EMPTY_SECTION) {
+                        chunksection = new ChunkSection(sectionY << 4);
+                        this.sections[sectionIndex] = chunksection;
+                    }
+
+                    chunksection.read(packetBufferIn);
+                    flag1 = true;
+                } else if (flag && chunksection != EMPTY_SECTION) {
+                    this.sections[sectionIndex] = EMPTY_SECTION;
+                }
+            }
+        } else {
+            for (int i = 0; i < this.sections.length; ++i) {
+                ChunkSection chunksection = this.sections[i];
+
+                if (i < Integer.SIZE && (availableSections & (1 << i)) != 0) {
+                    if (chunksection == EMPTY_SECTION) {
+                        chunksection = new ChunkSection(WorldHeightHelper.sectionToBlockY(i));
+                        this.sections[i] = chunksection;
+                    }
+
+                    chunksection.read(packetBufferIn);
+                    flag1 = true;
+                } else if (flag && chunksection != EMPTY_SECTION) {
+                    this.sections[i] = EMPTY_SECTION;
+                }
             }
         }
 
@@ -653,6 +674,10 @@ public class Chunk implements IChunk {
             if (nbtIn.contains(s, 12)) {
                 this.setHeightmap(heightmap$type, nbtIn.getLongArray(s));
             }
+        }
+
+        if (WorldHeightHelper.isExtendedHeight()) {
+            Heightmap.updateChunkHeightmaps(this, EnumSet.copyOf(this.heightMap.keySet()));
         }
 
         for (TileEntity tileentity : this.tileEntities.values()) {
@@ -692,7 +717,7 @@ public class Chunk implements IChunk {
         return StreamSupport
                 .stream(BlockPos
                         .getAllInBoxMutable(this.pos.getXStart(), WorldHeightHelper.getMinY(), this.pos.getZStart(),
-                                this.pos.getXEnd(), WorldHeightHelper.getMaxY(), this.pos.getZEnd())
+                                this.pos.getXEnd(), WorldHeightHelper.getMaxY() - 1, this.pos.getZEnd())
                         .spliterator(), false)
                 .filter((pos) -> {
                     return this.getBlockState(pos).getLightValue() != 0;

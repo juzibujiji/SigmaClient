@@ -155,19 +155,19 @@
         <dependency>
             <groupId>com.viaversion</groupId>
             <artifactId>viaversion</artifactId>
-            <version>5.7.1-SNAPSHOT</version>
+            <version>5.9.1-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>com.viaversion</groupId>
             <artifactId>viabackwards</artifactId>
-            <version>5.7.1-SNAPSHOT</version>
+            <version>5.9.1-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>com.viaversion</groupId>
             <artifactId>viarewind</artifactId>
-            <version>4.0.14-SNAPSHOT</version>
+            <version>4.1.1-SNAPSHOT</version>
         </dependency>
 
         <dependency>

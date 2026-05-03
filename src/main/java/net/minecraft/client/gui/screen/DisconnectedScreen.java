@@ -2,6 +2,7 @@ package net.minecraft.client.gui.screen;
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.module.impl.misc.AutoReconnect;
+import com.mentalfrostbyte.jello.util.game.network.ServerConnectionErrorLogger;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.IBidiRenderer;
@@ -20,6 +21,7 @@ public class DisconnectedScreen extends Screen {
         super(p_i242056_2_);
         this.nextScreen = p_i242056_1_;
         this.message = p_i242056_3_;
+        ServerConnectionErrorLogger.logDisconnect("DisconnectedScreen", p_i242056_2_, p_i242056_3_);
     }
 
     public boolean shouldCloseOnEsc() {

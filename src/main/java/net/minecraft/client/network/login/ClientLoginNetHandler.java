@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
+import com.mentalfrostbyte.jello.util.game.network.ServerConnectionErrorLogger;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.DialogTexts;
 import net.minecraft.client.gui.screen.DisconnectedScreen;
@@ -141,6 +142,7 @@ public class ClientLoginNetHandler implements IClientLoginNetHandler
      */
     public void onDisconnect(ITextComponent reason)
     {
+        ServerConnectionErrorLogger.logDisconnect("ClientLoginNetHandler", DialogTexts.CONNECTION_FAILED, reason);
         this.mc.displayGuiScreen(new DisconnectedScreen(this.previousGuiScreen, DialogTexts.CONNECTION_FAILED, reason));
     }
 
