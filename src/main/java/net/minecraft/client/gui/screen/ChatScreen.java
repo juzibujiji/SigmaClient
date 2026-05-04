@@ -1,5 +1,6 @@
 package net.minecraft.client.gui.screen;
 
+import com.mentalfrostbyte.jello.util.game.render.ChatChangeXY;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.CommandSuggestionHelper;
@@ -30,6 +31,12 @@ public class ChatScreen extends Screen
     private String defaultInputFieldText = "";
     private CommandSuggestionHelper commandSuggestionHelper;
 
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        ChatChangeXY.in.release();
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
     public ChatScreen(String defaultText)
     {
         super(NarratorChatListener.EMPTY);
@@ -38,6 +45,7 @@ public class ChatScreen extends Screen
 
     protected void init()
     {
+        ChatChangeXY.in.init();
         this.minecraft.keyboardListener.enableRepeatEvents(true);
         this.sentHistoryCursor = this.minecraft.ingameGUI.getChatGUI().getSentMessages().size();
         this.inputField = new TextFieldWidget(this.font, 4, this.height - 12, this.width - 4, 12, new TranslationTextComponent("chat.editBox"))
@@ -175,6 +183,7 @@ public class ChatScreen extends Screen
 
     public boolean mouseClicked(double mouseX, double mouseY, int button)
     {
+        ChatChangeXY.in.click(mouseX, mouseY);
         if (this.commandSuggestionHelper.onClick((double)((int)mouseX), (double)((int)mouseY), button))
         {
             return true;
@@ -254,6 +263,7 @@ public class ChatScreen extends Screen
      */
     public void render(MatrixStack matrices, int mouseX, int mouseY, float delta)
     {
+        ChatChangeXY.in.render(mouseX, mouseY);
         this.setListener(this.inputField);
         this.inputField.setFocused2(true);
         fill(matrices, 2, this.height - 14, this.width - 2, this.height - 2, (int)(minecraft.gameSettings.accessibilityTextBackgroundOpacity * 255) << 24);

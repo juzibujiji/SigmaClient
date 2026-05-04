@@ -26,6 +26,8 @@ import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.util.game.player.rotation.util.RotationUtils;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
+import com.mentalfrostbyte.jello.util.system.math.counter.TimerUtil;
+import com.mentalfrostbyte.jello.util.system.math.counter.TimerUtils;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import net.minecraft.entity.Entity;
@@ -82,6 +84,8 @@ public class KillAura extends Module {
     private long lastAttackTime = 0;
     private boolean lastAttackWasMoving = false;
 
+    private final TimerUtils perfectHitTimer = new TimerUtils();
+
     public KillAura() {
         super(ModuleCategory.COMBAT, "KillAura", "Automatically attacks entities");
         this.registerSetting(new ModeSetting("Mode", "Mode", 0, "Single", "Switch", "Multi", "Multi2"));
@@ -122,6 +126,7 @@ public class KillAura extends Module {
         this.registerSetting(new BooleanSetting("Monsters", "Hit monsters", false));
         this.registerSetting(new BooleanSetting("Invisible", "Hit invisible entites", true));
         this.registerSetting(new BooleanSetting("Raytrace", "Helps the aura become more legit", true));
+        this.registerSetting(new BooleanSetting("Perfect Hit", "Hit entities at the perfect moment", false));
         this.registerSetting(new BooleanSetting("Cooldown", "Use attack cooldown (1.9+)", false));
         this.registerSetting(new NumberSetting<>("Cooldown Delay", "Delay value", 1f, 0f, 1f, 0.05f));
         this.registerSetting(new BooleanSetting("No swing", "Hit without swinging", false));
@@ -772,6 +777,12 @@ public class KillAura extends Module {
                             canAttack = false;
                     }
 
+                    if(this.getBooleanValueFromSettingName("Perfect Hit")) {
+                        if (canAttack) {
+                            canAttack = (entity.hurtResistantTime <= 2 || perfectHitTimer.hasTimeElapsed(900));
+                        }
+                    }
+
                     if (canAttack) {
                         // Existing attack code
                         if (autoBlock.isBlocking()) {
@@ -800,6 +811,9 @@ public class KillAura extends Module {
 
                         // Rest of existing attack code
                         this.attackTimer = 0;
+
+                        perfectHitTimer.reset();
+
                         isActive = true;
 
                         if (this.getStringSettingValueByName("Mode").equals("Multi2")) {
