@@ -128,13 +128,18 @@ public class TargetHUD extends RenderModule {
         return health;
     }
 
-    /*public boolean isHover(final double mx, final double my) {
+    public boolean isHover(final double mx, final double my) {
         final double x = this.x.getCurrentValue();
         final double y = this.y.getCurrentValue();
         final double width = 60.0;
         final double height = 40.0;
-        return ClickUtils.isClickable(x - width, y, x + width, y + height, mx, my);
+        return isClickable(x - width, y, x + width, y + height, mx, my);
     }
+
+    public static boolean isClickable(double x, double y, double dx, double dy, double mx, double my){
+        return mx >= x && mx <= dx && my >= y && my <= dy;
+    }
+    /*
 
     @EventTarget
     public void onRenderEvent(final RenderEvent event) {
