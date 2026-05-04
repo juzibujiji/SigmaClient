@@ -31,6 +31,7 @@ import com.mentalfrostbyte.jello.util.system.math.counter.TimerUtils;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.SwordItem;
 import net.minecraft.network.play.server.SEntityStatusPacket;
 import net.minecraft.util.Hand;
@@ -121,12 +122,12 @@ public class KillAura extends Module {
         this.registerSetting(new BooleanSetting("Interact autoblock", "Send interact packet when blocking", true));
         this.registerSetting(
                 this.hitEvent = new BooleanSetting("HitEvent", "Change the hit event (vanilla autoblock?legit)", true));
+        this.registerSetting(new BooleanSetting("Perfect Hit", "Hit entities at the perfect moment", false));
         this.registerSetting(new BooleanSetting("Players", "Hit players", true));
         this.registerSetting(new BooleanSetting("Animals", "Hit animals", false));
         this.registerSetting(new BooleanSetting("Monsters", "Hit monsters", false));
         this.registerSetting(new BooleanSetting("Invisible", "Hit invisible entites", true));
         this.registerSetting(new BooleanSetting("Raytrace", "Helps the aura become more legit", true));
-        this.registerSetting(new BooleanSetting("Perfect Hit", "Hit entities at the perfect moment", false));
         this.registerSetting(new BooleanSetting("Cooldown", "Use attack cooldown (1.9+)", false));
         this.registerSetting(new NumberSetting<>("Cooldown Delay", "Delay value", 1f, 0f, 1f, 0.05f));
         this.registerSetting(new BooleanSetting("No swing", "Hit without swinging", false));
@@ -749,7 +750,8 @@ public class KillAura extends Module {
     private void attack() {
         if (this.attackTimer >= autoBlock.getCpsTiming(0)) {
             if (targetData != null && targetData.getEntity() != null) {
-                Entity entity = targetData.getEntity();
+                //Entity entity = targetData.getEntity();
+                LivingEntity entity = (LivingEntity) targetData.getEntity();
                 if (mc.player.getDistanceToEntityBox(entity) <= this.getNumberValueBySettingName("Range")) {
                     boolean canAttack = true;
                     if (this.getBooleanValueFromSettingName("Raytrace")) {
@@ -779,7 +781,7 @@ public class KillAura extends Module {
 
                     if(this.getBooleanValueFromSettingName("Perfect Hit")) {
                         if (canAttack) {
-                            canAttack = (entity.hurtResistantTime <= 2 || perfectHitTimer.hasTimeElapsed(900));
+                            canAttack = (entity.hurtTime <= 2 || perfectHitTimer.hasTimeElapsed(900));
                         }
                     }
 

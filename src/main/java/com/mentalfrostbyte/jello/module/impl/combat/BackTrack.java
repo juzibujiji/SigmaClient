@@ -357,7 +357,7 @@ public class BackTrack extends Module {
                 || packet instanceof SChangeBlockPacket //方块
                 || packet instanceof SCooldownPacket //冷却条?
                 || packet instanceof SPlayEntityEffectPacket //效果
-                || packet instanceof SEntityStatusPacket
+                || packet instanceof SEntityStatusPacket && ((SEntityStatusPacket) packet).getOpCode() != 2//实体状态 2为受伤
                 || entitymetadatapacket.getCurrentValue() && packet instanceof SEntityMetadataPacket && ((SEntityMetadataPacket) packet).getEntityId() == Objects.requireNonNull(mc.player).getEntityId() //玩家数据包 不延迟可能报模拟 原因:这个包会设置玩家的移动相关似乎是疾跑
                 || entitymetadatapacket.getCurrentValue() && packet instanceof SEntityPropertiesPacket && ((SEntityPropertiesPacket) packet).getEntityId() == Objects.requireNonNull(mc.player).getEntityId() //玩家属性包 不延迟可能报模拟 原因:这个包会设置玩家的移动相关似乎是疾跑
                 ;
