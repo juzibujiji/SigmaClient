@@ -268,7 +268,7 @@ public final class OpenYsmAnimationSet {
                     controllerAnimation.getControllerName(), controllerAnimation.getStateName());
         }
 
-        Clip main = selectMainState(snapshot);
+        Clip main = controllerResult.hasMainLayerAnimation() ? null : selectMainState(snapshot);
         if (main != null) {
             active.mainStateClip = main;
             active.setTime(main, snapshot.ageInTicks / 20.0F);

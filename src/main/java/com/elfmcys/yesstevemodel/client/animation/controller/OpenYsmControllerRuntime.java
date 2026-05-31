@@ -56,7 +56,8 @@ public final class OpenYsmControllerRuntime {
 
             String previousState = instance.getCurrentState();
             for (ControllerTransition transition : state.getTransitions()) {
-                boolean result = evaluateCondition(transition.getExpression(), snapshot, definition.getName(), transition.getTargetState());
+                boolean result = evaluateCondition(transition.getExpression(), snapshot, modelId,
+                        definition.getName(), transition.getTargetState());
                 debugTransition(snapshot, modelId, definition, previousState, transition, result);
                 if (result && definition.getStates().containsKey(transition.getTargetState())) {
                     instance.transitionTo(transition.getTargetState(), snapshot.ageInTicks, state.getBlendTransitionSeconds());
@@ -71,7 +72,8 @@ public final class OpenYsmControllerRuntime {
             float elapsed = instance.elapsedSeconds(snapshot.ageInTicks);
             List<String> activeNames = new ArrayList<>();
             for (ControllerAnimationRef animationRef : state.getAnimations()) {
-                float weight = evaluateWeight(animationRef.getWeightExpression(), snapshot, definition.getName(), animationRef.getAnimationName());
+                float weight = evaluateWeight(animationRef.getWeightExpression(), snapshot, modelId,
+                        definition.getName(), animationRef.getAnimationName());
                 OpenYsmAnimationSet.Clip clip = findClip(clips, animationRef.getAnimationName());
                 if (clip == null) {
                     debugSkip(snapshot, modelId, definition, state, animationRef, "clip not found");
@@ -107,31 +109,33 @@ public final class OpenYsmControllerRuntime {
         return String.valueOf(playerId) + "|" + modelId;
     }
 
-    private static boolean evaluateCondition(String expression, PlayerStateSnapshot snapshot, String controllerName, String targetState) {
+    private static boolean evaluateCondition(String expression, PlayerStateSnapshot snapshot, String modelId,
+                                             String controllerName, String targetState) {
         if (expression == null || expression.trim().isEmpty()) {
             return false;
         }
-        EvaluationResult result = evaluateMolang(expression, snapshot, controllerName, "transition", targetState);
+        EvaluationResult result = evaluateMolang(expression, snapshot, modelId, controllerName, "transition", targetState);
         if (!result.valid) {
             return false;
         }
         return result.value != 0.0F;
     }
 
-    private static float evaluateWeight(String expression, PlayerStateSnapshot snapshot, String controllerName, String animationName) {
+    private static float evaluateWeight(String expression, PlayerStateSnapshot snapshot, String modelId,
+                                        String controllerName, String animationName) {
         EvaluationResult result = evaluateMolang(expression == null || expression.trim().isEmpty() ? "1" : expression,
-                snapshot, controllerName, "weight", animationName);
+                snapshot, modelId, controllerName, "weight", animationName);
         if (!result.valid) {
             return 0.0F;
         }
         return Math.max(0.0F, result.value);
     }
 
-    private static EvaluationResult evaluateMolang(String expression, PlayerStateSnapshot snapshot, String controllerName,
-                                                   String expressionKind, String owner) {
+    private static EvaluationResult evaluateMolang(String expression, PlayerStateSnapshot snapshot, String modelId,
+                                                   String controllerName, String expressionKind, String owner) {
         try {
             MolangExpression parsed = MolangParser.parse(expression);
-            MolangContext context = MolangContext.controller(snapshot, "", controllerName);
+            MolangContext context = MolangContext.controller(snapshot, modelId, controllerName);
             return EvaluationResult.valid((float) MolangEvaluator.evaluate(parsed, context).asDouble());
         } catch (MolangParser.ParseException exception) {
             debugExpressionFailure(snapshot, controllerName, expression, expressionKind, owner, exception.getMessage());
