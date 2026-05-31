@@ -1,0 +1,4 @@
+﻿OpenYSM upstream: https://github.com/OpenYSM/OpenYSM
+Imported commit: abf6a6a17e4d39b25df7d7a9b697ef1fb91de92b
+Source version: 2.6.5-forge+mc1.20.1
+Target: SigmaClient 1.16.4 client source tree
