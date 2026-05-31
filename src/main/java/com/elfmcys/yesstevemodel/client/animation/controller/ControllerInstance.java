@@ -6,6 +6,7 @@ public final class ControllerInstance {
     private float stateStartedAtTicks;
     private float transitionStartedAtTicks;
     private float blendTransitionSeconds;
+    private float previousStateElapsedSeconds;
 
     public ControllerInstance(String initialState, float nowTicks) {
         this.currentState = initialState == null ? "" : initialState;
@@ -13,6 +14,7 @@ public final class ControllerInstance {
         this.stateStartedAtTicks = nowTicks;
         this.transitionStartedAtTicks = nowTicks;
         this.blendTransitionSeconds = 0.0F;
+        this.previousStateElapsedSeconds = 0.0F;
     }
 
     public String getCurrentState() {
@@ -25,6 +27,10 @@ public final class ControllerInstance {
 
     public float getStateStartedAtTicks() {
         return this.stateStartedAtTicks;
+    }
+
+    public float getPreviousStateElapsedSeconds() {
+        return this.previousStateElapsedSeconds;
     }
 
     public float elapsedSeconds(float nowTicks) {
@@ -44,10 +50,19 @@ public final class ControllerInstance {
             return;
         }
         this.previousState = this.currentState;
+        this.previousStateElapsedSeconds = elapsedSeconds(nowTicks);
         this.currentState = nextState;
         this.stateStartedAtTicks = nowTicks;
         this.transitionStartedAtTicks = nowTicks;
         this.blendTransitionSeconds = Math.max(0.0F, blendTransitionSeconds);
+    }
+
+    public void finishBlendIfComplete(float nowTicks) {
+        if (blendProgress(nowTicks) >= 1.0F) {
+            this.previousState = "";
+            this.previousStateElapsedSeconds = 0.0F;
+            this.blendTransitionSeconds = 0.0F;
+        }
     }
 
     public void reset(String state, float nowTicks) {
@@ -56,5 +71,6 @@ public final class ControllerInstance {
         this.stateStartedAtTicks = nowTicks;
         this.transitionStartedAtTicks = nowTicks;
         this.blendTransitionSeconds = 0.0F;
+        this.previousStateElapsedSeconds = 0.0F;
     }
 }

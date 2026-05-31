@@ -1,8 +1,10 @@
 package com.elfmcys.yesstevemodel.client.animation.controller;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.client.animation.LoopMode;
 import com.elfmcys.yesstevemodel.client.animation.OpenYsmAnimationSet;
 import com.elfmcys.yesstevemodel.client.animation.PlayerStateSnapshot;
+import com.elfmcys.yesstevemodel.client.animation.molang.MolangBindings;
 import com.elfmcys.yesstevemodel.client.animation.molang.MolangContext;
 import com.elfmcys.yesstevemodel.client.animation.molang.MolangEvaluator;
 import com.elfmcys.yesstevemodel.client.animation.molang.MolangExpression;
@@ -55,9 +57,10 @@ public final class OpenYsmControllerRuntime {
             }
 
             String previousState = instance.getCurrentState();
+            AnimationFinishSummary finishSummary = finishSummary(state, instance.elapsedSeconds(snapshot.ageInTicks), clips);
             for (ControllerTransition transition : state.getTransitions()) {
                 boolean result = evaluateCondition(transition.getExpression(), snapshot, modelId,
-                        definition.getName(), transition.getTargetState());
+                        definition.getName(), transition.getTargetState(), finishSummary);
                 debugTransition(snapshot, modelId, definition, previousState, transition, result);
                 if (result && definition.getStates().containsKey(transition.getTargetState())) {
                     instance.transitionTo(transition.getTargetState(), snapshot.ageInTicks, state.getBlendTransitionSeconds());
@@ -70,10 +73,41 @@ public final class OpenYsmControllerRuntime {
                 continue;
             }
             float elapsed = instance.elapsedSeconds(snapshot.ageInTicks);
+            float currentBlendWeight = 1.0F;
+            float previousBlendWeight = 0.0F;
+            ControllerStateDefinition blendedPreviousState = null;
+            if (!instance.getPreviousState().isEmpty()) {
+                float blendProgress = instance.blendProgress(snapshot.ageInTicks);
+                if (blendProgress < 1.0F) {
+                    blendedPreviousState = definition.getState(instance.getPreviousState());
+                    previousBlendWeight = 1.0F - blendProgress;
+                    currentBlendWeight = blendProgress;
+                } else {
+                    instance.finishBlendIfComplete(snapshot.ageInTicks);
+                }
+            }
             List<String> activeNames = new ArrayList<>();
-            for (ControllerAnimationRef animationRef : state.getAnimations()) {
+            AnimationFinishSummary outputFinishSummary = finishSummary(state, elapsed, clips);
+            if (blendedPreviousState != null && previousBlendWeight > 0.0F) {
+                appendStateAnimations(active, activeNames, clips, snapshot, modelId, definition, blendedPreviousState,
+                        instance.getPreviousStateElapsedSeconds(), previousBlendWeight, finishSummary(blendedPreviousState,
+                                instance.getPreviousStateElapsedSeconds(), clips));
+            }
+            appendStateAnimations(active, activeNames, clips, snapshot, modelId, definition, state, elapsed,
+                    currentBlendWeight, outputFinishSummary);
+            debugActive(snapshot, modelId, definition, previousState, instance.getCurrentState(), activeNames);
+        }
+        return active.isEmpty() ? Result.EMPTY : new Result(active);
+    }
+
+    private static void appendStateAnimations(List<ActiveControllerAnimation> active, List<String> activeNames,
+                                              Map<String, OpenYsmAnimationSet.Clip> clips, PlayerStateSnapshot snapshot,
+                                              String modelId, ControllerDefinition definition,
+                                              ControllerStateDefinition state, float elapsed, float layerWeight,
+                                              AnimationFinishSummary finishSummary) {
+        for (ControllerAnimationRef animationRef : state.getAnimations()) {
                 float weight = evaluateWeight(animationRef.getWeightExpression(), snapshot, modelId,
-                        definition.getName(), animationRef.getAnimationName());
+                        definition.getName(), animationRef.getAnimationName(), finishSummary) * layerWeight;
                 OpenYsmAnimationSet.Clip clip = findClip(clips, animationRef.getAnimationName());
                 if (clip == null) {
                     debugSkip(snapshot, modelId, definition, state, animationRef, "clip not found");
@@ -85,10 +119,7 @@ public final class OpenYsmControllerRuntime {
                 }
                 active.add(new ActiveControllerAnimation(definition.getName(), state.getName(), definition.getLayer(), clip, elapsed, weight));
                 activeNames.add(clip.name + "@" + weight);
-            }
-            debugActive(snapshot, modelId, definition, previousState, instance.getCurrentState(), activeNames);
         }
-        return active.isEmpty() ? Result.EMPTY : new Result(active);
     }
 
     private static OpenYsmAnimationSet.Clip findClip(Map<String, OpenYsmAnimationSet.Clip> clips, String animationName) {
@@ -110,11 +141,13 @@ public final class OpenYsmControllerRuntime {
     }
 
     private static boolean evaluateCondition(String expression, PlayerStateSnapshot snapshot, String modelId,
-                                             String controllerName, String targetState) {
+                                             String controllerName, String targetState,
+                                             AnimationFinishSummary finishSummary) {
         if (expression == null || expression.trim().isEmpty()) {
             return false;
         }
-        EvaluationResult result = evaluateMolang(expression, snapshot, modelId, controllerName, "transition", targetState);
+        EvaluationResult result = evaluateMolang(expression, snapshot, modelId, controllerName, "transition", targetState,
+                finishSummary);
         if (!result.valid) {
             return false;
         }
@@ -122,9 +155,10 @@ public final class OpenYsmControllerRuntime {
     }
 
     private static float evaluateWeight(String expression, PlayerStateSnapshot snapshot, String modelId,
-                                        String controllerName, String animationName) {
+                                        String controllerName, String animationName,
+                                        AnimationFinishSummary finishSummary) {
         EvaluationResult result = evaluateMolang(expression == null || expression.trim().isEmpty() ? "1" : expression,
-                snapshot, modelId, controllerName, "weight", animationName);
+                snapshot, modelId, controllerName, "weight", animationName, finishSummary);
         if (!result.valid) {
             return 0.0F;
         }
@@ -132,10 +166,12 @@ public final class OpenYsmControllerRuntime {
     }
 
     private static EvaluationResult evaluateMolang(String expression, PlayerStateSnapshot snapshot, String modelId,
-                                                   String controllerName, String expressionKind, String owner) {
+                                                   String controllerName, String expressionKind, String owner,
+                                                   AnimationFinishSummary finishSummary) {
         try {
             MolangExpression parsed = MolangParser.parse(expression);
-            MolangContext context = MolangContext.controller(snapshot, modelId, controllerName);
+            MolangContext context = MolangContext.controller(snapshot, modelId, controllerName, MolangBindings.EMPTY,
+                    finishSummary.allFinished, finishSummary.anyFinished);
             return EvaluationResult.valid((float) MolangEvaluator.evaluate(parsed, context).asDouble());
         } catch (MolangParser.ParseException exception) {
             debugExpressionFailure(snapshot, controllerName, expression, expressionKind, owner, exception.getMessage());
@@ -183,6 +219,44 @@ public final class OpenYsmControllerRuntime {
 
     private static boolean isDebugEnabled() {
         return Boolean.getBoolean("yes_steve_model.debugAnimationState");
+    }
+
+    private static AnimationFinishSummary finishSummary(ControllerStateDefinition state, float elapsed,
+                                                        Map<String, OpenYsmAnimationSet.Clip> clips) {
+        boolean anyValid = false;
+        boolean anyFinished = false;
+        boolean allFinished = true;
+        for (ControllerAnimationRef animationRef : state.getAnimations()) {
+            OpenYsmAnimationSet.Clip clip = findClip(clips, animationRef.getAnimationName());
+            if (clip == null) {
+                continue;
+            }
+            anyValid = true;
+            boolean finished = isFinished(clip, elapsed);
+            anyFinished = anyFinished || finished;
+            allFinished = allFinished && finished;
+        }
+        return new AnimationFinishSummary(anyValid && allFinished, anyFinished);
+    }
+
+    private static boolean isFinished(OpenYsmAnimationSet.Clip clip, float elapsed) {
+        if (clip.length <= 0.0F) {
+            return false;
+        }
+        if (clip.loopMode == LoopMode.LOOP) {
+            return false;
+        }
+        return elapsed >= clip.length;
+    }
+
+    private static final class AnimationFinishSummary {
+        private final boolean allFinished;
+        private final boolean anyFinished;
+
+        private AnimationFinishSummary(boolean allFinished, boolean anyFinished) {
+            this.allFinished = allFinished;
+            this.anyFinished = anyFinished;
+        }
     }
 
     private static final class EvaluationResult {
