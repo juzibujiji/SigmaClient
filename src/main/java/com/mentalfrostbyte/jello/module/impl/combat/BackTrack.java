@@ -31,15 +31,31 @@ import java.util.Objects;
 import java.util.concurrent.LinkedBlockingDeque;
 
 //问题有点多有时间我会修复的 完成度70%
+//这个只适合在GrimAC使用 其他AC(AntiCheat)不敢保证
 public class BackTrack extends Module {
     //reach
     private final static BooleanSetting maxreach = new BooleanSetting("UseMaxReach", "Use BackTrack End Max Reach", true);
     private final static NumberSetting<Float> maxreachvalue = new NumberSetting<>("MaxReach", "BackTrack End Max Reach", 6.0f, 3.0f, 8.0f, 0.1f);
     private final static BooleanSetting maxreachslowrelease = new BooleanSetting("MaxReachSlowRelease", "BackTrack Max Reach SlowRelease", true);
+
+    //以下两个都应该满足 才能开始循环发包
+    //真实位置超过设定位置
+    //Tracking位置不超过设定位置
+    //当开启这个后 可能和其他控制reach发包的不适用 比如maxreachslowrelease
+    private final static BooleanSetting followtarget = new BooleanSetting("FollowTarget SlowRelease", "ReleasePacket If ", false);
+    //目标超过你多少格就开始释放
+    //香草为6格 比如 我们设置6格 Real位置超过这个Reach就开始循环发包
+    private final static NumberSetting<Float> followTargetStartReach = new NumberSetting<>("FollowStartRealReach", "To Target Real Reach Start ReleasePacket", 5.0f, 1.0f, 8.0f, 0.1f);
+    //让你能打人的距离 非真实位置 而是 Tracking
+    //这个作用在于发包后你仍然能攻击到实体的距离 即必须让攻击的实体在范围内
+    //其实我们可以直接用killaura reach
+    private final static NumberSetting<Float> followTargetKeepAttackReach = new NumberSetting<>("FollowKeepAttackReach", "To Target BackTracking Reach.", 2.8f, 1.0f, 6.0f, 0.1f);
+
+
     //targetTotargetreach:这里可以写玩家自己到目标的真实位置 大于某个值就循环发包 大概就是玩家到目标真实位置的值在定值而且在释放包时杀戮应该一直能打到backtrack实体 我们跟着backtrack目标实体打人
     //但是太难写了先随便凑合着用
-    private final static BooleanSetting targetTotargetreach = new BooleanSetting("TargetToTargetReach", "FastSlowRelease TargetToTargetRealReach To VanillaReach", true);
-    private final static NumberSetting<Float> targetTotargetreachvalue = new NumberSetting<>("TargetToTargetReachValue", "TargetToTargetReachValue", 6.0f, 3.0f, 8.0f, 0.1f);
+    /*private final static BooleanSetting targetTotargetreach = new BooleanSetting("TargetToTargetReach", "FastSlowRelease TargetToTargetRealReach To VanillaReach", true);
+    private final static NumberSetting<Float> targetTotargetreachvalue = new NumberSetting<>("TargetToTargetReachValue", "TargetToTargetReachValue", 6.0f, 3.0f, 8.0f, 0.1f);*/
 
     private final static BooleanSetting minreach = new BooleanSetting("UseMinReach", "Use BackTrack Start Min Reach", false);
     private final static NumberSetting<Float> minreachvalue = new NumberSetting<>("MinReachValue", "BackTrack Start Min Reach", 0.5f, 0.0f, 3.0f, 0.1f);
@@ -67,7 +83,7 @@ public class BackTrack extends Module {
 
     public BackTrack() {
         super(ModuleCategory.COMBAT, "BackTrack", "Track and render entity real positions");
-        registerSetting(maxreach,maxreachvalue,maxreachslowrelease,targetTotargetreach,targetTotargetreachvalue,minreach,minreachvalue,pingtick, maxtickslowrelease, entitymetadatapacket, esprender, espboxexpand, espwidth,rendertargetesp,renderfriendesp,renderotheresp, /*targetfillColor,*/ targetwireColor,  /*fillColor,*/ wireColor,reachdebug);
+        registerSetting(maxreach,maxreachvalue,maxreachslowrelease,followtarget,followTargetStartReach,followTargetKeepAttackReach,/*targetTotargetreach,targetTotargetreachvalue,*/minreach,minreachvalue,pingtick, maxtickslowrelease, entitymetadatapacket, esprender, espboxexpand, espwidth,rendertargetesp,renderfriendesp,renderotheresp, /*targetfillColor,*/ targetwireColor,  /*fillColor,*/ wireColor,reachdebug);
     }
 
     @Override
@@ -135,11 +151,11 @@ public class BackTrack extends Module {
             return;
         }
 
-        if (targetTotargetreach.getCurrentValue()) {
+        /*if (targetTotargetreach.getCurrentValue()) {
             if (getTEtoTEbacktrackDistance(KillAura.targetEntity) > targetTotargetreachvalue.getCurrentValue() && !packets.isEmpty()) {
                 releaseTickSPacket();
             }
-        }
+        }*/
 
         //启用最大距离
         if (maxreach.getCurrentValue()) {
@@ -177,6 +193,11 @@ public class BackTrack extends Module {
             }
         }
 
+        if (followtarget.getCurrentValue()) {
+            releasefollowSPacket();
+        }
+
+        //我这是不是应该用 判断packetlist里的c01更好?
         if (ticks >= pingtick.getCurrentValue()) {
             if (maxtickslowrelease.getCurrentValue()) {
                 releaseTickSPacket();
@@ -259,7 +280,7 @@ public class BackTrack extends Module {
                 throw new RuntimeException(e);
             }
             if (packet instanceof CChatMessagePacket && ((CChatMessagePacket) packet).message.equals("BackTrack Slow Release Tick")) {
-                continue;
+                continue;//跳过这个包
             }
             EventReceivePacket event = new EventReceivePacket(packet);
             EventBus.call(event);
@@ -279,6 +300,59 @@ public class BackTrack extends Module {
         realEntityPositions.clear();
     }
 
+    Vector3d targetpos = null;
+    private void releasefollowSPacket() {
+        while (!packets.isEmpty() && getbacktrackDistance(KillAura.targetEntity) > followTargetStartReach.getCurrentValue()) {
+            IPacket<?> packet;
+
+            targetpos = KillAura.targetEntity.getPositionVector();
+
+            if (packets.peek() instanceof SEntityPacket entityPacket) {
+                if (entityPacket.getEntity(mc.world) == KillAura.targetEntity) {
+                    targetpos = new Vector3d(targetpos.x + entityPacket.posX / 4096.0D, targetpos.y + entityPacket.posY / 4096.0D, targetpos.z + entityPacket.posZ / 4096.0D);
+                }
+            } else if (packets.peek() instanceof SEntityTeleportPacket teleportPacket) {
+                if (teleportPacket.getEntityId() == KillAura.targetEntity.getEntityId()) {
+                    targetpos = new Vector3d(teleportPacket.getX(), teleportPacket.getY(), teleportPacket.getZ());
+                }
+            }
+
+            if (mc.player.getDistanceToEntityBox(new BoundingBox(
+                    targetpos.x - KillAura.targetEntity.getWidth() / 2,
+                    targetpos.y,
+                    targetpos.z - KillAura.targetEntity.getWidth() / 2,
+                    targetpos.x + KillAura.targetEntity.getWidth() / 2,
+                    targetpos.y + KillAura.targetEntity.getHeight(),
+                    targetpos.z + KillAura.targetEntity.getWidth() / 2
+            )) > followTargetKeepAttackReach.getCurrentValue()) {
+                targetpos = KillAura.targetEntity.getPositionVector();
+                break;
+            }
+
+            try {
+                packet = packets.take();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            if (packet instanceof CChatMessagePacket && ((CChatMessagePacket) packet).message.equals("BackTrack Slow Release Tick")) {
+                break;//跳过这个包
+            }
+            EventReceivePacket event = new EventReceivePacket(packet);
+            EventBus.call(event);
+            if (!event.cancelled) {
+                //已经设置血量过了不设置了
+                if (event.packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) {
+                    RemoteClientPlayerEntity entity = new RemoteClientPlayerEntity(mc.world, mc.player.getGameProfile());
+                    entity.setHealth(mc.player.getHealth());
+                    NetworkManager.processPacket(event.packet, Objects.requireNonNull(mc.getConnection()).getNetworkManager().packetListener);
+                    mc.player.setHealth(entity.getHealth());
+                } else {
+                    NetworkManager.processPacket(event.packet, Objects.requireNonNull(mc.getConnection()).getNetworkManager().packetListener);
+                }
+            }
+        }
+    }
+
     private void releaseTickSPacket() {
         while (!packets.isEmpty()) {
             IPacket<?> packet;
@@ -288,7 +362,7 @@ public class BackTrack extends Module {
                 throw new RuntimeException(e);
             }
             if (packet instanceof CChatMessagePacket && ((CChatMessagePacket) packet).message.equals("BackTrack Slow Release Tick")) {
-                break;
+                break;//停止
             }
             EventReceivePacket event = new EventReceivePacket(packet);
             EventBus.call(event);
@@ -326,7 +400,7 @@ public class BackTrack extends Module {
         return mc.player.getDistanceToEntityBox(getentity);
     }
 
-    private float getTEtoTEbacktrackDistance(Entity getentity) {
+    /*private float getTEtoTEbacktrackDistance(Entity getentity) {
         Vector3d realPos = realEntityPositions.get(getentity.getEntityId());
         if (realPos != null) {
             Entity entity = mc.world.getEntityByID(getentity.getEntityId());
@@ -344,7 +418,7 @@ public class BackTrack extends Module {
             ));
         }
         return getentity.getDistanceToEntityBox(getentity);
-    }
+    }*/
 
     private boolean NeedCancelSPacket(IPacket<?> packet) {
         return packet instanceof SExplosionPacket //爆炸与击退
