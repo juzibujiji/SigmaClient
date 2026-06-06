@@ -3,6 +3,9 @@ package com.elfmcys.yesstevemodel.client;
 import com.elfmcys.yesstevemodel.OpenYsmArchiveUtil;
 import com.elfmcys.yesstevemodel.OpenYsmModelEntry;
 import com.elfmcys.yesstevemodel.client.animation.OpenYsmAnimationSet;
+import com.elfmcys.yesstevemodel.geckolib4.cache.object.BakedGeoModel;
+import com.elfmcys.yesstevemodel.geckolib4.cache.object.GeoBone;
+import com.elfmcys.yesstevemodel.geckolib4.cache.object.GeoCube;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
 import com.elfmcys.yesstevemodel.OpenYsmTextureOption;
 import com.elfmcys.yesstevemodel.YesSteveModel;
@@ -34,6 +37,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -92,16 +96,20 @@ public final class OpenYsmModelLoader {
 
             Map<String, OpenYsmBone> bakedBones = new LinkedHashMap<>();
             List<OpenYsmBone> roots = new ArrayList<>();
+            List<GeoBone> geoRoots = new ArrayList<>();
             for (BoneDef def : definitions.values()) {
-                bakeBone(def, definitions, bakedBones, roots, entry.getId());
+                bakeBone(def, definitions, bakedBones, roots, geoRoots, entry.getId());
             }
 
             JsonObject properties = ysm.has("properties") && ysm.get("properties").isJsonObject() ? ysm.getAsJsonObject("properties") : new JsonObject();
             OpenYsmAnimationSet animations = buildJsonAnimationSet(ysm, player, source, entry.getId(), bakedBones);
-            return new OpenYsmBakedPlayerModel(entry.getId(), textureLocation, ImmutableList.copyOf(roots), bakedBones,
+            OpenYsmBakedPlayerModel bakedModel = new OpenYsmBakedPlayerModel(entry.getId(), textureLocation, ImmutableList.copyOf(roots), bakedBones,
+                    new BakedGeoModel(geoRoots),
                     animations,
                     sanitizeScale(getFloat(properties, "width_scale", 1.0F), entry.getId(), "width_scale"),
                     sanitizeScale(getFloat(properties, "height_scale", 1.0F), entry.getId(), "height_scale"));
+            OpenYsmDebugLogger.logModelLoad(bakedModel);
+            return bakedModel;
         }
     }
 
@@ -279,16 +287,21 @@ public final class OpenYsmModelLoader {
 
         Map<String, OpenYsmBone> bakedBones = new LinkedHashMap<>();
         List<OpenYsmBone> roots = new ArrayList<>();
+        List<GeoBone> geoRoots = new ArrayList<>();
         if (rawModel.mainEntity.mainModel != null) {
             for (RawYsmModel.RawBone bone : rawModel.mainEntity.mainModel.bones) {
-                bakeYsmBone(bone, rawModel.mainEntity.mainModel.bones, bakedBones, roots, rawModel, entry.getId());
+                bakeYsmBone(bone, rawModel.mainEntity.mainModel.bones, bakedBones, roots, geoRoots, rawModel, entry.getId());
             }
         }
 
         float widthScale = sanitizeScale(rawModel.properties.widthScale, entry.getId(), "binary_width_scale");
         float heightScale = sanitizeScale(rawModel.properties.heightScale, entry.getId(), "binary_height_scale");
         OpenYsmAnimationSet animations = buildRawAnimationSet(rawModel, entry.getId(), bakedBones);
-        return new OpenYsmBakedPlayerModel(entry.getId(), textureLocation, ImmutableList.copyOf(roots), bakedBones, animations, widthScale, heightScale);
+        OpenYsmBakedPlayerModel bakedModel = new OpenYsmBakedPlayerModel(entry.getId(), textureLocation, ImmutableList.copyOf(roots), bakedBones,
+                new BakedGeoModel(geoRoots), animations, widthScale, heightScale);
+        bakedModel.setDebugInfo(buildRawDebugInfo(entry, rawModel, selectedTexture, animations));
+        OpenYsmDebugLogger.logModelLoad(bakedModel);
+        return bakedModel;
     }
 
     private static List<OpenYsmTextureOption> listYsmTextures(OpenYsmModelEntry entry) throws IOException {
@@ -314,7 +327,7 @@ public final class OpenYsmModelLoader {
 
     private static OpenYsmBone bakeYsmBone(RawYsmModel.RawBone bone, List<RawYsmModel.RawBone> allBones,
                                            Map<String, OpenYsmBone> bakedBones, List<OpenYsmBone> roots,
-                                           RawYsmModel rawModel, String modelId) {
+                                           List<GeoBone> geoRoots, RawYsmModel rawModel, String modelId) {
         OpenYsmBone existing = bakedBones.get(bone.name);
         if (existing != null) {
             return existing;
@@ -336,7 +349,7 @@ public final class OpenYsmModelLoader {
         if (!StringUtils.isBlank(bone.parentName)) {
             RawYsmModel.RawBone parentBone = findBoneByName(allBones, bone.parentName);
             if (parentBone != null) {
-                parent = bakeYsmBone(parentBone, allBones, bakedBones, roots, rawModel, modelId);
+                parent = bakeYsmBone(parentBone, allBones, bakedBones, roots, geoRoots, rawModel, modelId);
                 parentPivot = toMinecraftPivot(sanitizePivot(parentBone.pivot, modelId, parentBone.name));
             }
         }
@@ -345,6 +358,10 @@ public final class OpenYsmModelLoader {
         renderer.rotateAngleX = rx;
         renderer.rotateAngleY = ry;
         renderer.rotateAngleZ = rz;
+
+        GeoBone geoBone = new GeoBone(bone.name);
+        geoBone.setInitialPose(renderer.rotationPointX, renderer.rotationPointY, renderer.rotationPointZ,
+                rx, ry, rz, !renderer.showModel);
 
         int cubeIndex = 0;
         List<RawYsmModel.RawCube> cubes = bone.cubes == null ? java.util.Collections.emptyList() : bone.cubes;
@@ -437,20 +454,135 @@ public final class OpenYsmModelLoader {
                     continue;
                 }
                 renderer.addCustomQuad(new OpenYsmModelRenderer.CustomQuad(normal, positions, u, v));
+                geoBone.addCube(GeoCube.customQuad(normal, positions, u, v));
             }
             cubeIndex++;
         }
 
         OpenYsmBone wrapper = new OpenYsmBone(bone.name, renderer, rx, ry, rz);
+        wrapper.setGeoBone(geoBone);
         bakedBones.put(bone.name, wrapper);
 
         if (parent != null) {
             parent.getRenderer().addChild(renderer);
+            if (parent.getGeoBone() != null) {
+                parent.getGeoBone().addChild(geoBone);
+            } else {
+                geoRoots.add(geoBone);
+            }
         } else {
             roots.add(wrapper);
+            geoRoots.add(geoBone);
         }
 
         return wrapper;
+    }
+
+    private static OpenYsmModelDebugInfo buildRawDebugInfo(OpenYsmModelEntry entry, RawYsmModel rawModel,
+                                                           RawYsmModel.RawTexture selectedTexture,
+                                                           OpenYsmAnimationSet animations) {
+        Map<String, List<OpenYsmModelDebugInfo.ClipTouch>> touchedBy = new LinkedHashMap<>();
+        for (OpenYsmAnimationSet.Clip clip : animations.getClips().values()) {
+            OpenYsmModelDebugInfo.ClipTouch touch = new OpenYsmModelDebugInfo.ClipTouch(
+                    clip.name, clip.group, clip.sourceType, clip.originFile,
+                    clip.isMainState, clip.isHandCondition, clip.isExtraAction, clip.isControllerReferenced);
+            for (String boneName : clip.touchedBones) {
+                touchedBy.computeIfAbsent(boneName, ignored -> new ArrayList<>()).add(touch);
+            }
+        }
+
+        Map<String, OpenYsmModelDebugInfo.BoneInfo> bones = new LinkedHashMap<>();
+        List<RawYsmModel.RawBone> rawBones = rawModel.mainEntity.mainModel == null
+                ? Collections.emptyList()
+                : rawModel.mainEntity.mainModel.bones;
+        for (RawYsmModel.RawBone rawBone : rawBones) {
+            List<OpenYsmModelDebugInfo.CubeInfo> cubes = new ArrayList<>();
+            for (int i = 0; i < rawBone.cubes.size(); i++) {
+                RawYsmModel.RawCube cube = rawBone.cubes.get(i);
+                cubes.add(new OpenYsmModelDebugInfo.CubeInfo(i, cube == null || cube.faces == null ? 0 : cube.faces.size()));
+            }
+            List<OpenYsmModelDebugInfo.ClipTouch> touches = touchedBy.getOrDefault(rawBone.name, Collections.emptyList());
+            bones.put(rawBone.name, new OpenYsmModelDebugInfo.BoneInfo(
+                    rawBone.name,
+                    rawBone.parentName,
+                    buildParentChain(rawBone, rawBones),
+                    isFeatureCandidate(rawBone.name, touches),
+                    cubes,
+                    touches));
+        }
+
+        List<String> controllerNames = new ArrayList<>(rawModel.mainEntity.animationControllers.keySet());
+        List<String> functionNames = new ArrayList<>(rawModel.functionFiles.keySet());
+        List<String> extraButtonIds = new ArrayList<>();
+        for (RawYsmModel.ExtraAnimationButton button : rawModel.properties.extraAnimationButtons) {
+            if (button != null && button.id != null && !button.id.isEmpty()) {
+                extraButtonIds.add(button.id);
+            }
+        }
+        List<String> extraClassifyIds = new ArrayList<>();
+        for (RawYsmModel.ExtraAnimationClassify classify : rawModel.properties.extraAnimationClassifies) {
+            if (classify != null && classify.id != null && !classify.id.isEmpty()) {
+                extraClassifyIds.add(classify.id);
+            }
+        }
+
+        String sourcePath = entry.getPath() == null ? "" : entry.getPath().toAbsolutePath().normalize().toString();
+        String sourceFileName = entry.getPath() == null || entry.getPath().getFileName() == null
+                ? ""
+                : entry.getPath().getFileName().toString();
+        String rawMetadataSummary = "name=" + rawModel.metadata.name
+                + ", tips=" + rawModel.metadata.tips
+                + ", previewAnimation=" + rawModel.properties.previewAnimation
+                + ", backgroundImages=" + rawModel.properties.backgroundImages.size()
+                + ", extraAnimations=" + rawModel.properties.extraAnimations.keySet();
+
+        return new OpenYsmModelDebugInfo(
+                entry.getId(),
+                sourceFileName,
+                sourcePath,
+                String.valueOf(entry.getSourceType()),
+                selectedTexture == null ? "" : selectedTexture.name,
+                rawModel.metadata.name,
+                rawModel.mainEntity.mainModel == null ? "" : rawModel.mainEntity.mainModel.identifier,
+                rawModel.mainEntity.armModel == null ? "" : rawModel.mainEntity.armModel.identifier,
+                rawModel.properties.previewAnimation,
+                rawMetadataSummary,
+                controllerNames,
+                functionNames,
+                extraButtonIds,
+                extraClassifyIds,
+                bones);
+    }
+
+    private static String buildParentChain(RawYsmModel.RawBone rawBone, List<RawYsmModel.RawBone> rawBones) {
+        List<String> chain = new ArrayList<>();
+        RawYsmModel.RawBone current = rawBone;
+        int guard = 0;
+        while (current != null && guard++ < rawBones.size() + 1) {
+            chain.add(0, current.name);
+            if (StringUtils.isBlank(current.parentName)) {
+                break;
+            }
+            current = findBoneByName(rawBones, current.parentName);
+        }
+        return String.join(" -> ", chain);
+    }
+
+    private static boolean isFeatureCandidate(String boneName, List<OpenYsmModelDebugInfo.ClipTouch> touches) {
+        String lowerName = boneName == null ? "" : boneName.toLowerCase(Locale.ROOT);
+        if (lowerName.contains("background") || lowerName.contains("beijing")
+                || lowerName.contains("kuang") || lowerName.contains("glow_ban")) {
+            return true;
+        }
+        for (OpenYsmModelDebugInfo.ClipTouch touch : touches) {
+            if (touch.getSourceType() != com.elfmcys.yesstevemodel.client.animation.AnimationSourceType.MAIN) {
+                return true;
+            }
+            if (!touch.isMainState() && !touch.isHandCondition()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Clamp a raw rotation degree to [-360,360] and warn on NaN/Infinity. */
@@ -644,7 +776,7 @@ public final class OpenYsmModelLoader {
 
     private static OpenYsmBone bakeBone(BoneDef def, Map<String, BoneDef> definitions,
                                         Map<String, OpenYsmBone> bakedBones, List<OpenYsmBone> roots,
-                                        String modelId) {
+                                        List<GeoBone> geoRoots, String modelId) {
         OpenYsmBone existing = bakedBones.get(def.name);
         if (existing != null) {
             return existing;
@@ -658,7 +790,7 @@ public final class OpenYsmModelLoader {
         if (!StringUtils.isBlank(def.parentName)) {
             BoneDef parentDef = definitions.get(def.parentName);
             if (parentDef != null) {
-                parent = bakeBone(parentDef, definitions, bakedBones, roots, modelId);
+                parent = bakeBone(parentDef, definitions, bakedBones, roots, geoRoots, modelId);
                 parentPivot = toMinecraftPivot(parentDef.pivot);
             }
         }
@@ -671,27 +803,37 @@ public final class OpenYsmModelLoader {
         renderer.rotateAngleY = ry;
         renderer.rotateAngleZ = rz;
 
+        GeoBone geoBone = new GeoBone(def.name);
+        geoBone.setInitialPose(renderer.rotationPointX, renderer.rotationPointY, renderer.rotationPointZ,
+                rx, ry, rz, !renderer.showModel);
+
         for (int i = 0; i < def.cubes.size(); i++) {
-            addCube(renderer, def.cubes.get(i), pivot, modelId, def.name, i, def.textureWidth, def.textureHeight);
+            CubeDef cube = def.cubes.get(i);
+            if (!isCubeSane(cube, pivot, modelId, def.name, i, def.textureWidth, def.textureHeight)) {
+                continue;
+            }
+            addCube(renderer, cube, pivot);
+            addGeoCube(geoBone, cube, pivot, def.textureWidth, def.textureHeight);
         }
 
         OpenYsmBone bone = new OpenYsmBone(def.name, renderer, rx, ry, rz);
+        bone.setGeoBone(geoBone);
         bakedBones.put(def.name, bone);
         if (parent != null) {
             parent.getRenderer().addChild(renderer);
+            if (parent.getGeoBone() != null) {
+                parent.getGeoBone().addChild(geoBone);
+            } else {
+                geoRoots.add(geoBone);
+            }
         } else {
             roots.add(bone);
+            geoRoots.add(geoBone);
         }
         return bone;
     }
 
-    private static void addCube(ModelRenderer renderer, CubeDef cube, float[] pivot,
-                                String modelId, String boneName, int cubeIndex,
-                                int textureWidth, int textureHeight) {
-        if (!isCubeSane(cube, pivot, modelId, boneName, cubeIndex, textureWidth, textureHeight)) {
-            return;
-        }
-
+    private static void addCube(ModelRenderer renderer, CubeDef cube, float[] pivot) {
         float x = cube.origin[0] - pivot[0];
         float y = 24.0F - (cube.origin[1] + cube.size[1]) - pivot[1];
         float z = cube.origin[2] - pivot[2];
@@ -706,6 +848,20 @@ public final class OpenYsmModelLoader {
             }
         } finally {
             renderer.mirror = previousMirror;
+        }
+    }
+
+    private static void addGeoCube(GeoBone geoBone, CubeDef cube, float[] pivot,
+                                   int textureWidth, int textureHeight) {
+        float x = cube.origin[0] - pivot[0];
+        float y = 24.0F - (cube.origin[1] + cube.size[1]) - pivot[1];
+        float z = cube.origin[2] - pivot[2];
+        if (cube.legacyUv != null) {
+            geoBone.addCube(GeoCube.boxFromLegacyUv(cube.legacyUv[0], cube.legacyUv[1], x, y, z,
+                    cube.size[0], cube.size[1], cube.size[2], cube.inflate, cube.mirror, textureWidth, textureHeight));
+        } else {
+            geoBone.addCube(GeoCube.boxFromFaceUv(cube.uv, x, y, z,
+                    cube.size[0], cube.size[1], cube.size[2], cube.inflate, cube.mirror, textureWidth, textureHeight));
         }
     }
 

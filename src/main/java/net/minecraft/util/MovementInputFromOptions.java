@@ -2,6 +2,7 @@ package net.minecraft.util;
 
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveInput;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveButton;
+import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import net.minecraft.client.GameSettings;
 import team.sdhq.eventBus.EventBus;
 
@@ -13,6 +14,11 @@ public class MovementInputFromOptions extends MovementInput {
     }
 
     public void tickMovement(boolean forcedDown) {
+        if (PacketFixFor1_21Plus.shouldUseGrimVanillaMovement()) {
+            tickVanillaMovement(forcedDown);
+            return;
+        }
+
         moveForward = 0.0f;
         moveStrafe = 0.0f;
 
@@ -25,6 +31,11 @@ public class MovementInputFromOptions extends MovementInput {
                 this.gameSettings.keyBindSneak.isKeyDown()
         );
         EventBus.call(eventMoveButton);
+
+        this.forwardKeyDown = eventMoveButton.forward;
+        this.backKeyDown = eventMoveButton.back;
+        this.leftKeyDown = eventMoveButton.left;
+        this.rightKeyDown = eventMoveButton.right;
 
         if (eventMoveButton.forward) {
             ++this.moveForward;
@@ -54,9 +65,45 @@ public class MovementInputFromOptions extends MovementInput {
         this.jump = eventMoveInput.jumping;
         this.sneaking = eventMoveInput.sneaking;
 
+        PacketFixFor1_21Plus.normalizeRaw1_21_5MovementInput(this);
+
         if (forcedDown) {
             this.moveStrafe *= eventMoveInput.sneakFactor;
             this.moveForward *= eventMoveInput.sneakFactor;
+        }
+    }
+
+    private void tickVanillaMovement(boolean forcedDown) {
+        this.moveForward = 0.0F;
+        this.moveStrafe = 0.0F;
+        this.forwardKeyDown = this.gameSettings.keyBindForward.isKeyDown();
+        this.backKeyDown = this.gameSettings.keyBindBack.isKeyDown();
+        this.leftKeyDown = this.gameSettings.keyBindLeft.isKeyDown();
+        this.rightKeyDown = this.gameSettings.keyBindRight.isKeyDown();
+
+        if (this.forwardKeyDown) {
+            ++this.moveForward;
+        }
+
+        if (this.backKeyDown) {
+            --this.moveForward;
+        }
+
+        if (this.leftKeyDown) {
+            ++this.moveStrafe;
+        }
+
+        if (this.rightKeyDown) {
+            --this.moveStrafe;
+        }
+
+        this.jump = this.gameSettings.keyBindJump.isKeyDown();
+        this.sneaking = this.gameSettings.keyBindSneak.isKeyDown();
+        PacketFixFor1_21Plus.normalizeRaw1_21_5MovementInput(this);
+
+        if (forcedDown) {
+            this.moveStrafe *= 0.3F;
+            this.moveForward *= 0.3F;
         }
     }
 }

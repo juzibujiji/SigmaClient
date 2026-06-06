@@ -1,5 +1,6 @@
 package net.minecraft.network.play;
 
+import com.elfmcys.yesstevemodel.network.OpenYsmNetwork;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Doubles;
 import com.google.common.primitives.Floats;
@@ -1880,6 +1881,11 @@ public class ServerPlayNetHandler implements IServerPlayNetHandler
      */
     public void processCustomPayload(CCustomPayloadPacket packetIn)
     {
+        PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.player.getServerWorld());
+        if (OpenYsmNetwork.handleServerPayload(packetIn, this.player))
+        {
+            return;
+        }
     }
 
     public void func_217263_a(CSetDifficultyPacket p_217263_1_)

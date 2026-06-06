@@ -67,6 +67,10 @@ public final class OpenYsmPlayerAnimationState {
         STATES.entrySet().removeIf(entry -> modelId.equals(entry.getValue().modelId));
     }
 
+    public static void clearAll() {
+        STATES.clear();
+    }
+
     public static final class State {
         private final String modelId;
         private final String animationName;

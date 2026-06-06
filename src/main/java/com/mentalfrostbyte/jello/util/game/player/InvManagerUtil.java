@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.util.game.player;
 
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
+import de.florianmichael.viamcp.fixes.compat.InteractionSemantics;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.block.*;
 import net.minecraft.enchantment.Enchantment;
@@ -281,6 +282,10 @@ public class InvManagerUtil {
     }
 
     public static ItemStack clickSlot(int windowId, int slotId, int usedButton, ClickType mode, PlayerEntity entity, boolean fixed) {
+        if (!InteractionSemantics.isInventoryActionSupported(slotId, usedButton, mode)) {
+            return ItemStack.EMPTY;
+        }
+
         ItemStack clickedItem = null;
         if (slotId >= 0) {
             clickedItem = entity.openContainer.getSlot(slotId).getStack().copy();

@@ -25,7 +25,9 @@ public final class OpenYsmNetwork {
 
     public static void sendPlayExtraAnimation(String modelId, String animationName) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null || minecraft.getConnection() == null || !isSafeIdentifier(modelId) || !isSafeIdentifier(animationName)) {
+        if (!YesSteveModel.isEnabled()
+                || minecraft == null || minecraft.getConnection() == null
+                || !isSafeIdentifier(modelId) || !isSafeIdentifier(animationName)) {
             return;
         }
         PacketBuffer buffer = new PacketBuffer(Unpooled.buffer());
@@ -35,7 +37,8 @@ public final class OpenYsmNetwork {
 
     public static void sendStopExtraAnimation(String modelId) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null || minecraft.getConnection() == null || !isSafeIdentifier(modelId)) {
+        if (!YesSteveModel.isEnabled()
+                || minecraft == null || minecraft.getConnection() == null || !isSafeIdentifier(modelId)) {
             return;
         }
         PacketBuffer buffer = new PacketBuffer(Unpooled.buffer());
@@ -53,6 +56,9 @@ public final class OpenYsmNetwork {
         try {
             Minecraft minecraft = Minecraft.getInstance();
             if (minecraft == null || minecraft.world == null) {
+                return true;
+            }
+            if (!YesSteveModel.isEnabled()) {
                 return true;
             }
             if (S2C_PLAY_EXTRA.equals(channel)) {

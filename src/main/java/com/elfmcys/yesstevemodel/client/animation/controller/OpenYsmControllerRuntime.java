@@ -32,6 +32,10 @@ public final class OpenYsmControllerRuntime {
         INSTANCES.keySet().removeIf(key -> key.endsWith(suffix));
     }
 
+    public static void clearAll() {
+        INSTANCES.clear();
+    }
+
     public static Result tick(String modelId, Collection<ControllerDefinition> definitions,
                               Map<String, OpenYsmAnimationSet.Clip> clips, PlayerStateSnapshot snapshot) {
         if (snapshot == null || modelId == null || modelId.isEmpty() || definitions == null || definitions.isEmpty()) {

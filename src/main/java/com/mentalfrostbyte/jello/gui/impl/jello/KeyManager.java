@@ -3,10 +3,12 @@ package com.mentalfrostbyte.jello.gui.impl.jello;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.buttons.keybind.Bound;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.buttons.keybind.KeybindTypes;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.holders.ClickGuiHolder;
 import com.mentalfrostbyte.jello.module.Module;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.YsmGUI;
 import com.mentalfrostbyte.jello.util.system.FileUtil;
 import net.minecraft.client.gui.screen.Screen;
 import team.sdhq.eventBus.EventBus;
@@ -83,6 +85,8 @@ public class KeyManager {
                 }
             }
         }
+
+        this.ensureDefaultYsmBind();
     }
 
     public List<Bound> getBindedObjects(int key) {
@@ -97,6 +101,13 @@ public class KeyManager {
             return boundObjects;
         } else {
             return null;
+        }
+    }
+
+    private void ensureDefaultYsmBind() {
+        Module ysmGui = Client.getInstance().moduleManager.getModuleByClass(YsmGUI.class);
+        if (ysmGui != null && this.method13729(ysmGui) == -1) {
+            this.boundables.add(new Bound(89, ysmGui));
         }
     }
 }

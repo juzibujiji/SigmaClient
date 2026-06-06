@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.client;
 
+import com.elfmcys.yesstevemodel.geckolib4.cache.object.GeoBone;
 import net.minecraft.client.renderer.model.ModelRenderer;
 
 public final class OpenYsmBone {
@@ -18,6 +19,7 @@ public final class OpenYsmBone {
     private float scaleZ = 1.0F;
 
     private boolean defaultHidden;
+    private GeoBone geoBone;
 
     public OpenYsmBone(String name, ModelRenderer renderer, float baseRotationX, float baseRotationY, float baseRotationZ) {
         this.name = name;
@@ -55,6 +57,15 @@ public final class OpenYsmBone {
         return this.scaleX != 1.0F || this.scaleY != 1.0F || this.scaleZ != 1.0F;
     }
 
+    public GeoBone getGeoBone() {
+        return this.geoBone;
+    }
+
+    public void setGeoBone(GeoBone geoBone) {
+        this.geoBone = geoBone;
+        this.syncGeoBonePose();
+    }
+
     public void setScale(float sx, float sy, float sz) {
         this.scaleX = sx;
         this.scaleY = sy;
@@ -62,10 +73,16 @@ public final class OpenYsmBone {
         if (this.renderer instanceof OpenYsmModelRenderer) {
             ((OpenYsmModelRenderer) this.renderer).setScale(sx, sy, sz);
         }
+        if (this.geoBone != null) {
+            this.geoBone.setScale(sx, sy, sz);
+        }
     }
 
     public void setVisible(boolean visible) {
         this.renderer.showModel = visible;
+        if (this.geoBone != null) {
+            this.geoBone.setHidden(!visible);
+        }
     }
 
     public boolean isVisible() {
@@ -80,6 +97,9 @@ public final class OpenYsmBone {
         this.defaultHidden = defaultHidden;
         if (defaultHidden) {
             this.renderer.showModel = false;
+        }
+        if (this.geoBone != null) {
+            this.geoBone.setHidden(!this.renderer.showModel);
         }
     }
 
@@ -105,23 +125,44 @@ public final class OpenYsmBone {
             ((OpenYsmModelRenderer) this.renderer).setScale(1.0F, 1.0F, 1.0F);
         }
         this.renderer.showModel = this.defaultHidden ? false : this.baseVisible;
+        this.syncGeoBonePose();
     }
 
     public void addRotation(float x, float y, float z) {
         this.renderer.rotateAngleX += x;
         this.renderer.rotateAngleY += y;
         this.renderer.rotateAngleZ += z;
+        if (this.geoBone != null) {
+            this.geoBone.addRotation(x, y, z);
+        }
     }
 
     public void setRotation(float x, float y, float z) {
         this.renderer.rotateAngleX = x;
         this.renderer.rotateAngleY = y;
         this.renderer.rotateAngleZ = z;
+        if (this.geoBone != null) {
+            this.geoBone.setRotation(x, y, z);
+        }
     }
 
     public void addPosition(float x, float y, float z) {
         this.renderer.rotationPointX += x;
         this.renderer.rotationPointY += y;
         this.renderer.rotationPointZ += z;
+        if (this.geoBone != null) {
+            this.geoBone.addPosition(x, y, z);
+        }
+    }
+
+    private void syncGeoBonePose() {
+        if (this.geoBone == null) {
+            return;
+        }
+
+        this.geoBone.setPosition(this.renderer.rotationPointX, this.renderer.rotationPointY, this.renderer.rotationPointZ);
+        this.geoBone.setRotation(this.renderer.rotateAngleX, this.renderer.rotateAngleY, this.renderer.rotateAngleZ);
+        this.geoBone.setScale(this.scaleX, this.scaleY, this.scaleZ);
+        this.geoBone.setHidden(!this.renderer.showModel);
     }
 }

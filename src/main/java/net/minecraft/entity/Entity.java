@@ -7,6 +7,7 @@ import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveFlying;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveRideable;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventStep;
 import com.mentalfrostbyte.jello.util.game.world.BoundingBox;
+import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import it.unimi.dsi.fastutil.objects.Object2DoubleArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2DoubleMap;
 
@@ -1279,7 +1280,7 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public void moveRelative(float friction, Vector3d relative) {
-        if (this instanceof ClientPlayerEntity) {
+        if (this instanceof ClientPlayerEntity && !PacketFixFor1_21Plus.shouldUseGrimVanillaMovement()) {
             EventMoveFlying event = new EventMoveFlying(this.rotationYaw, (float) relative.x, (float) relative.z,
                     friction);
             EventBus.call(event);

@@ -2,6 +2,9 @@ package net.minecraft.client.multiplayer;
 
 import com.mentalfrostbyte.jello.util.game.player.InvManagerUtil;
 import com.mojang.datafixers.util.Pair;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
+import de.florianmichael.viamcp.fixes.compat.InteractionSemantics;
+import de.florianmichael.viamcp.fixes.compat.LocalInteractionState;
 import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -161,6 +164,12 @@ public class PlayerController
         }
         else
         {
+            if (InteractionSemantics.extinguishFireBeforeBreak(this.mc.world, loc)) {
+                this.sendDiggingPacket(CPlayerDiggingPacket.Action.START_DESTROY_BLOCK, loc, face);
+                this.blockHitDelay = 5;
+                return true;
+            }
+
             if (this.currentGameType.isCreative())
             {
                 BlockState blockstate = this.mc.world.getBlockState(loc);
@@ -215,7 +224,9 @@ public class PlayerController
             this.isHittingBlock = false;
             this.curBlockDamageMP = 0.0F;
             this.mc.world.sendBlockBreakProgress(this.mc.player.getEntityId(), this.currentBlock, -1);
-            this.mc.player.resetCooldown();
+            if (InteractionProtocol.usesAttackAndItemCooldowns()) {
+                this.mc.player.resetCooldown();
+            }
         }
     }
 
@@ -328,6 +339,11 @@ public class PlayerController
 
     public ActionResultType func_217292_a(ClientPlayerEntity p_217292_1_, ClientWorld p_217292_2_, Hand p_217292_3_, BlockRayTraceResult p_217292_4_)
     {
+        if (!InteractionSemantics.isSupportedHand(p_217292_3_)) {
+            return ActionResultType.PASS;
+        }
+
+        p_217292_4_ = InteractionSemantics.adjustBlockHit(p_217292_2_, p_217292_4_);
         this.syncCurrentPlayItem();
         BlockPos blockpos = p_217292_4_.getPos();
 
@@ -341,7 +357,7 @@ public class PlayerController
 
             if (this.currentGameType == GameType.SPECTATOR)
             {
-                this.connection.sendPacket(new CPlayerTryUseItemOnBlockPacket(p_217292_3_, p_217292_4_));
+                this.sendUseItemOnBlockPacket(p_217292_1_, p_217292_3_, p_217292_4_);
                 return ActionResultType.SUCCESS;
             }
             else
@@ -355,17 +371,18 @@ public class PlayerController
 
                     if (actionresulttype.isSuccessOrConsume())
                     {
-                        this.connection.sendPacket(new CPlayerTryUseItemOnBlockPacket(p_217292_3_, p_217292_4_));
+                        this.sendUseItemOnBlockPacket(p_217292_1_, p_217292_3_, p_217292_4_);
                         return actionresulttype;
                     }
                 }
 
-                this.connection.sendPacket(new CPlayerTryUseItemOnBlockPacket(p_217292_3_, p_217292_4_));
+                this.sendUseItemOnBlockPacket(p_217292_1_, p_217292_3_, p_217292_4_);
 
-                if (!itemstack.isEmpty() && !p_217292_1_.getCooldownTracker().hasCooldown(itemstack.getItem()))
+                if (!itemstack.isEmpty() && (!InteractionSemantics.canUseItemCooldown(itemstack) || !p_217292_1_.getCooldownTracker().hasCooldown(itemstack.getItem())))
                 {
                     ItemUseContext itemusecontext = new ItemUseContext(p_217292_1_, p_217292_3_, p_217292_4_);
                     ActionResultType actionresulttype1;
+                    int originalCount = itemstack.getCount();
 
                     if (this.currentGameType.isCreative())
                     {
@@ -378,7 +395,7 @@ public class PlayerController
                         actionresulttype1 = itemstack.onItemUse(itemusecontext);
                     }
 
-                    return actionresulttype1;
+                    return InteractionSemantics.legacyPlacementResult(actionresulttype1, itemstack, originalCount);
                 }
                 else
                 {
@@ -390,6 +407,11 @@ public class PlayerController
 
     public ActionResultType processRightClick(PlayerEntity player, World worldIn, Hand hand)
     {
+        if (!InteractionSemantics.isSupportedHand(hand))
+        {
+            return ActionResultType.PASS;
+        }
+
         if (this.currentGameType == GameType.SPECTATOR)
         {
             return ActionResultType.PASS;
@@ -397,10 +419,10 @@ public class PlayerController
         else
         {
             this.syncCurrentPlayItem();
-            this.connection.sendPacket(new CPlayerTryUseItemPacket(hand));
+            this.sendUseItemPacket(player, hand);
             ItemStack itemstack = player.getHeldItem(hand);
 
-            if (player.getCooldownTracker().hasCooldown(itemstack.getItem()))
+            if (InteractionSemantics.canUseItemCooldown(itemstack) && player.getCooldownTracker().hasCooldown(itemstack.getItem()))
             {
                 return ActionResultType.PASS;
             }
@@ -418,6 +440,23 @@ public class PlayerController
                 return actionresult.getType();
             }
         }
+    }
+
+    private void sendUseItemOnBlockPacket(ClientPlayerEntity player, Hand hand, BlockRayTraceResult hit)
+    {
+        InteractionSemantics.sendPreUseMovement(this.connection, player);
+        LocalInteractionState.rememberUsedItem(player, hand);
+        this.connection.sendPacket(new CPlayerTryUseItemOnBlockPacket(hand, hit));
+    }
+
+    private void sendUseItemPacket(PlayerEntity player, Hand hand)
+    {
+        if (player instanceof ClientPlayerEntity clientPlayer) {
+            InteractionSemantics.sendPreUseMovement(this.connection, clientPlayer);
+        }
+
+        LocalInteractionState.rememberUsedItem(player, hand);
+        this.connection.sendPacket(new CPlayerTryUseItemPacket(hand));
     }
 
     public ClientPlayerEntity createPlayer(ClientWorld worldIn, StatisticsManager statsManager, ClientRecipeBook recipes)
@@ -441,7 +480,9 @@ public class PlayerController
         if (this.currentGameType != GameType.SPECTATOR)
         {
             playerIn.attackTargetEntityWithCurrentItem(targetEntity);
-            playerIn.resetCooldown();
+            if (InteractionProtocol.usesAttackAndItemCooldowns()) {
+                playerIn.resetCooldown();
+            }
         }
     }
 
@@ -450,6 +491,10 @@ public class PlayerController
      */
     public ActionResultType interactWithEntity(PlayerEntity player, Entity target, Hand hand)
     {
+        if (!InteractionSemantics.isSupportedHand(hand)) {
+            return ActionResultType.PASS;
+        }
+
         this.syncCurrentPlayItem();
         this.connection.sendPacket(new CUseEntityPacket(target, hand, player.isSneaking()));
         return this.currentGameType == GameType.SPECTATOR ? ActionResultType.PASS : player.interactOn(target, hand);
@@ -460,6 +505,10 @@ public class PlayerController
      */
     public ActionResultType interactWithEntity(PlayerEntity player, Entity target, EntityRayTraceResult ray, Hand hand)
     {
+        if (!InteractionSemantics.isSupportedHand(hand)) {
+            return ActionResultType.PASS;
+        }
+
         this.syncCurrentPlayItem();
         Vector3d vector3d = ray.getHitVec().subtract(target.getPosX(), target.getPosY(), target.getPosZ());
         this.connection.sendPacket(new CUseEntityPacket(target, hand, vector3d, player.isSneaking()));
@@ -471,6 +520,10 @@ public class PlayerController
      */
     public ItemStack windowClick(int windowId, int slotId, int mouseButton, ClickType type, PlayerEntity player)
     {
+        if (!InteractionSemantics.isInventoryActionSupported(slotId, mouseButton, type)) {
+            return ItemStack.EMPTY;
+        }
+
         short short1 = player.openContainer.getNextTransactionID(player.inventory);
         ItemStack itemstack = player.openContainer.slotClick(slotId, mouseButton, type, player);
         this.connection.sendPacket(new CClickWindowPacket(windowId, slotId, mouseButton, type, itemstack, short1));
@@ -496,6 +549,10 @@ public class PlayerController
      */
     public void sendSlotPacket(ItemStack itemStackIn, int slotId)
     {
+        if (!InteractionSemantics.isInventoryActionSupported(slotId, 0, ClickType.PICKUP)) {
+            return;
+        }
+
         if (this.currentGameType.isCreative())
         {
             this.connection.sendPacket(new CCreativeInventoryActionPacket(slotId, itemStackIn));
@@ -555,6 +612,11 @@ public class PlayerController
     public ActionResultType processRightClickBlock(ClientPlayerEntity p_217292_1_, ClientWorld p_217292_2_, BlockPos pos, Direction face, Vector3d hitvec, Hand p_217292_3_)
     {
         BlockRayTraceResult p_217292_4_ = new BlockRayTraceResult(hitvec, face, pos, false);
+        if (!InteractionSemantics.isSupportedHand(p_217292_3_)) {
+            return ActionResultType.PASS;
+        }
+
+        p_217292_4_ = InteractionSemantics.adjustBlockHit(p_217292_2_, p_217292_4_);
         this.syncCurrentPlayItem();
         BlockPos blockpos = p_217292_4_.getPos();
 
@@ -568,7 +630,7 @@ public class PlayerController
 
             if (this.currentGameType == GameType.SPECTATOR)
             {
-                this.connection.sendPacket(new CPlayerTryUseItemOnBlockPacket(p_217292_3_, p_217292_4_));
+                this.sendUseItemOnBlockPacket(p_217292_1_, p_217292_3_, p_217292_4_);
                 return ActionResultType.SUCCESS;
             }
             else
@@ -582,17 +644,18 @@ public class PlayerController
 
                     if (actionresulttype.isSuccessOrConsume())
                     {
-                        this.connection.sendPacket(new CPlayerTryUseItemOnBlockPacket(p_217292_3_, p_217292_4_));
+                        this.sendUseItemOnBlockPacket(p_217292_1_, p_217292_3_, p_217292_4_);
                         return actionresulttype;
                     }
                 }
 
-                this.connection.sendPacket(new CPlayerTryUseItemOnBlockPacket(p_217292_3_, p_217292_4_));
+                this.sendUseItemOnBlockPacket(p_217292_1_, p_217292_3_, p_217292_4_);
 
-                if (!itemstack.isEmpty() && !p_217292_1_.getCooldownTracker().hasCooldown(itemstack.getItem()))
+                if (!itemstack.isEmpty() && (!InteractionSemantics.canUseItemCooldown(itemstack) || !p_217292_1_.getCooldownTracker().hasCooldown(itemstack.getItem())))
                 {
                     ItemUseContext itemusecontext = new ItemUseContext(p_217292_1_, p_217292_3_, p_217292_4_);
                     ActionResultType actionresulttype1;
+                    int originalCount = itemstack.getCount();
 
                     if (this.currentGameType.isCreative())
                     {
@@ -605,7 +668,7 @@ public class PlayerController
                         actionresulttype1 = itemstack.onItemUse(itemusecontext);
                     }
 
-                    return actionresulttype1;
+                    return InteractionSemantics.legacyPlacementResult(actionresulttype1, itemstack, originalCount);
                 }
                 else
                 {
@@ -648,6 +711,10 @@ public class PlayerController
 
     public void pickItem(int index)
     {
+        if (!InteractionProtocol.supportsPickItemPacket()) {
+            return;
+        }
+
         this.connection.sendPacket(new CPickItemPacket(index));
     }
 

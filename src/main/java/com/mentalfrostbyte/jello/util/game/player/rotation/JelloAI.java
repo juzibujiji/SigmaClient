@@ -31,6 +31,24 @@ public class JelloAI {
     public static final float HIT_REWARD = 1.0f;
     public static final float MISS_PENALTY = -0.2f;
 
+    // Rotation speed constants and limits
+    public static final float BASE_MAX_YAW_CHANGE = 30.0f;
+    public static final float BASE_MAX_PITCH_CHANGE = 15.0f;
+    private static float currentMaxYawChange = BASE_MAX_YAW_CHANGE;
+    private static float currentMaxPitchChange = BASE_MAX_PITCH_CHANGE;
+
+    // Static cached arrays to reduce GC pressure
+    private static final float[] cachedInputs = new float[NeuralNetwork.INPUT_SIZE];
+    private static final float[] cachedNormalized = new float[2];
+    private static final float[] cachedIdealRotation = new float[2];
+
+    // Human-like noise config
+    private static boolean enableNoise = true;
+
+    // Training throttling fields
+    private static int tickCounter = 0;
+    private static final int TRAINING_SAMPLE_INTERVAL = 5;
+
     /**
      * Initialize the AI system
      */
@@ -41,8 +59,6 @@ public class JelloAI {
         trainingManager.initialize();
         trainingManager.startTrainingThread();
     }
-
-    // Remove duplicate faceBlock method - there are two implementations
 
     /**
      * Update rotations based on target
@@ -67,40 +83,34 @@ public class JelloAI {
 
     /**
      * Apply server-side rotations without changing client-side camera
+     * Incorporates GCD sensitivity correction and dynamic clamping.
      */
     public static void applyServerRotation() {
         if (mc.player == null) return;
 
-        // Store original rotations
-        float originalYaw = mc.player.rotationYaw;
-        float originalPitch = mc.player.rotationPitch;
-
-        // Apply calculated rotations - but limit the change per tick to avoid server kicks
         float serverYaw = rotationManager.getCurrentYaw();
         float serverPitch = rotationManager.getCurrentPitch();
 
-        // Limit rotation change per tick to avoid server anti-cheat
-        float maxYawChange = 30.0f; // Maximum degrees per tick
-        float maxPitchChange = 15.0f; // Maximum degrees per tick
-
         float yawDiff = MathHelper.wrapDegrees(serverYaw - mc.player.prevRotationYaw);
-        if (Math.abs(yawDiff) > maxYawChange) {
-            serverYaw = mc.player.prevRotationYaw + (maxYawChange * Math.signum(yawDiff));
-        }
-
         float pitchDiff = serverPitch - mc.player.prevRotationPitch;
-        if (Math.abs(pitchDiff) > maxPitchChange) {
-            serverPitch = mc.player.prevRotationPitch + (maxPitchChange * Math.signum(pitchDiff));
-        }
 
-        // Apply limited rotations
-        mc.player.rotationYaw = serverYaw;
-        mc.player.rotationPitch = serverPitch;
+        // 1. Clamp rotation change per tick to avoid server anti-cheat
+        yawDiff = MathHelper.clamp(yawDiff, -currentMaxYawChange, currentMaxYawChange);
+        pitchDiff = MathHelper.clamp(pitchDiff, -currentMaxPitchChange, currentMaxPitchChange);
 
+        // 2. Apply GCD sensitivity step correction (real mouse step emulation)
+        float sensitivity = (float) mc.gameSettings.mouseSensitivity;
+        float f = sensitivity * 0.6F + 0.2F;
+        float f1 = f * f * f * 8.0F;
+        float f2 = f1 * 0.15F;
 
+        float gcdYaw = Math.round(yawDiff / f2) * f2;
+        float gcdPitch = Math.round(pitchDiff / f2) * f2;
+
+        // Apply corrected rotations
+        mc.player.rotationYaw = mc.player.prevRotationYaw + gcdYaw;
+        mc.player.rotationPitch = mc.player.prevRotationPitch + gcdPitch;
     }
-
-    // Remove duplicate methods and keep only one version of each method
 
     /**
      * Get rotations to a specific position
@@ -108,16 +118,16 @@ public class JelloAI {
     public static float[] getRotationsToPosition(double x, double y, double z) {
         if (mc.player == null) return new float[2];
 
-        // Calculate inputs for the neural network
-        float[] inputs = getPositionInputs(x, y, z);
+        // Fill inputs using the static cached array
+        fillPositionInputs(x, y, z, cachedInputs);
 
-        // Use predictRotations instead of direct predict
-        float[] rotations = neuralNetwork.predict(inputs);
+        // Predict rotations
+        float[] rotations = neuralNetwork.predict(cachedInputs);
         if (rotations == null || rotations.length < 2) {
-            return new float[2]; // Return zeros if prediction failed
+            return new float[2];
         }
 
-        // Convert normalized rotations to game angles - FIXED conversion for [-1,1] range
+        // Convert normalized rotations to game angles
         float yawDegrees = MathHelper.wrapDegrees(rotations[0] * 180f);
         float pitchDegrees = MathHelper.clamp(rotations[1] * 90f, -90f, 90f);
 
@@ -130,28 +140,46 @@ public class JelloAI {
     public static void faceBlock(BlockPos pos) {
         if (pos == null || mc.player == null) return;
 
-        // Calculate inputs for the neural network
-        float[] inputs = getBlockInputs(pos);
+        // 1. Dynamic speed scaling based on distance
+        double diffX = pos.getX() + 0.5 - mc.player.getPosX();
+        double diffY = pos.getY() + 0.5 - (mc.player.getPosY() + mc.player.getEyeHeight());
+        double diffZ = pos.getZ() + 0.5 - mc.player.getPosZ();
+        double distance = Math.sqrt(diffX * diffX + diffY * diffY + diffZ * diffZ);
+        float speedScale = getSpeedScale(distance);
+        currentMaxYawChange = BASE_MAX_YAW_CHANGE * speedScale;
+        currentMaxPitchChange = BASE_MAX_PITCH_CHANGE * speedScale;
 
-        // Use predictRotations instead of direct predict
-        float[] rotations = neuralNetwork.predict(inputs);
+        // 2. Fill inputs in the static cached array
+        fillBlockInputs(pos, cachedInputs);
+
+        // Predict target rotations
+        float[] rotations = neuralNetwork.predict(cachedInputs);
         if (rotations == null || rotations.length < 2) {
-            return; // Exit if prediction failed
+            return;
         }
 
-        // Convert normalized rotations to game angles - FIXED conversion for [-1,1] range
         float yawDegrees = MathHelper.wrapDegrees(rotations[0] * 180f);
         float pitchDegrees = MathHelper.clamp(rotations[1] * 90f, -90f, 90f);
 
-        // Calculate "ideal" rotations for training
-        float[] idealRotations = calculateIdealBlockRotations(pos);
-        float[] expectedOutputs = normalizeRotations(idealRotations[0], idealRotations[1]);
+        // 3. Noise injection
+        if (enableNoise) {
+            float noiseYaw = (float) ((Math.random() - 0.5) * 1.5);
+            float noisePitch = (float) ((Math.random() - 0.5) * 1.0);
+            yawDegrees = MathHelper.wrapDegrees(yawDegrees + noiseYaw);
+            pitchDegrees = MathHelper.clamp(pitchDegrees + noisePitch, -90f, 90f);
+        }
 
-        // Add to training samples
-        trainingManager.addTrainingSample(inputs, expectedOutputs, 1.0f);
-
-        // Set target rotation
+        // 4. Set target rotation
         rotationManager.setTargetRotation(yawDegrees, pitchDegrees);
+
+        // 5. Training Throttling: only submit samples every N ticks
+        if (tickCounter % TRAINING_SAMPLE_INTERVAL == 0) {
+            calculateIdealBlockRotations(pos, cachedIdealRotation);
+            normalizeRotations(cachedIdealRotation[0], cachedIdealRotation[1], cachedNormalized);
+
+            // Pass cloned arrays to ensure training thread gets immutable snapshot
+            trainingManager.addTrainingSample(cachedInputs.clone(), cachedNormalized.clone(), 1.0f);
+        }
     }
 
     /**
@@ -160,37 +188,65 @@ public class JelloAI {
     public static void faceEntity(Entity entity) {
         if (entity == null || mc.player == null) return;
 
-        // Calculate inputs for the neural network
-        float[] inputs = getEntityInputs(entity);
+        // 1. Dynamic speed scaling based on distance
+        double diffX = entity.getPosX() - mc.player.getPosX();
+        double diffY = entity.getPosY() + entity.getEyeHeight() - (mc.player.getPosY() + mc.player.getEyeHeight());
+        double diffZ = entity.getPosZ() - mc.player.getPosZ();
+        double distance = Math.sqrt(diffX * diffX + diffY * diffY + diffZ * diffZ);
+        float speedScale = getSpeedScale(distance);
+        currentMaxYawChange = BASE_MAX_YAW_CHANGE * speedScale;
+        currentMaxPitchChange = BASE_MAX_PITCH_CHANGE * speedScale;
 
-        // Use predictRotations instead of direct predict
-        float[] rotations = neuralNetwork.predict(inputs);
+        // 2. Fill inputs in the static cached array
+        fillEntityInputs(entity, cachedInputs);
+
+        // Predict target rotations
+        float[] rotations = neuralNetwork.predict(cachedInputs);
         if (rotations == null || rotations.length < 2) {
-            return; // Exit if prediction failed
+            return;
         }
 
-        // Convert normalized rotations to game angles - FIXED conversion for [-1,1] range
         float yawDegrees = MathHelper.wrapDegrees(rotations[0] * 180f);
         float pitchDegrees = MathHelper.clamp(rotations[1] * 90f, -90f, 90f);
 
-        // Calculate "ideal" rotations for training
-        float[] idealRotations = calculateIdealRotations(entity);
-        float[] expectedOutputs = normalizeRotations(idealRotations[0], idealRotations[1]);
+        // 3. Noise injection
+        if (enableNoise) {
+            float noiseYaw = (float) ((Math.random() - 0.5) * 1.5);
+            float noisePitch = (float) ((Math.random() - 0.5) * 1.0);
+            yawDegrees = MathHelper.wrapDegrees(yawDegrees + noiseYaw);
+            pitchDegrees = MathHelper.clamp(pitchDegrees + noisePitch, -90f, 90f);
+        }
 
-        // Add to training samples every tick for supervised learning
-        trainingManager.addTrainingSample(inputs, expectedOutputs, 1.0f);
-
-        // Set target rotation
+        // 4. Set target rotation
         rotationManager.setTargetRotation(yawDegrees, pitchDegrees);
+
+        // 5. Training Throttling: only submit samples every N ticks
+        if (tickCounter % TRAINING_SAMPLE_INTERVAL == 0) {
+            calculateIdealRotations(entity, cachedIdealRotation);
+            normalizeRotations(cachedIdealRotation[0], cachedIdealRotation[1], cachedNormalized);
+
+            // Pass cloned arrays to ensure training thread gets immutable snapshot
+            trainingManager.addTrainingSample(cachedInputs.clone(), cachedNormalized.clone(), 1.0f);
+        }
     }
 
-    // Helper methods
-    // In getEntityInputs method
-    private static float[] getEntityInputs(Entity entity) {
-        if (entity == null || mc.player == null) return new float[NeuralNetwork.INPUT_SIZE];
+    // Helper method to compute distance-based speed scale
+    private static float getSpeedScale(double distance) {
+        if (distance <= 3.0) {
+            return 1.0f;
+        } else if (distance >= 15.0) {
+            return 0.35f;
+        } else {
+            return (float) (1.0 - (distance - 3.0) / (15.0 - 3.0) * 0.65);
+        }
+    }
 
-        // If we need to expand input size, update NeuralNetwork.INPUT_SIZE constant
-        float[] inputs = new float[NeuralNetwork.INPUT_SIZE];
+    // Input filling methods (non-allocating write pattern)
+    private static void fillEntityInputs(Entity entity, float[] out) {
+        if (entity == null || mc.player == null) {
+            java.util.Arrays.fill(out, 0);
+            return;
+        }
 
         // Relative position
         double playerX = mc.player.getPosX();
@@ -206,33 +262,25 @@ public class JelloAI {
         double diffZ = entityZ - playerZ;
 
         // Normalize inputs
-        inputs[0] = (float) (diffX / 20.0);
-        inputs[1] = (float) (diffY / 10.0);
-        inputs[2] = (float) (diffZ / 20.0);
+        out[0] = (float) (diffX / 20.0);
+        out[1] = (float) (diffY / 10.0);
+        out[2] = (float) (diffZ / 20.0);
 
         // Entity velocity (normalized)
-        inputs[3] = (float) (entity.getMotion().x / 2.0);
-        inputs[4] = (float) (entity.getMotion().y / 2.0);
-        inputs[5] = (float) (entity.getMotion().z / 2.0);
+        out[3] = (float) (entity.getMotion().x / 2.0);
+        out[4] = (float) (entity.getMotion().y / 2.0);
+        out[5] = (float) (entity.getMotion().z / 2.0);
 
         // Current rotations (normalized)
-        inputs[6] = mc.player.rotationYaw / 180.0f;
-        inputs[7] = mc.player.rotationPitch / 90.0f;
-
-        // Add player's own motion as inputs if INPUT_SIZE allows
-        // If NeuralNetwork.INPUT_SIZE is 10 or more:
-        if (inputs.length >= 10) {
-            inputs[8] = (float) (mc.player.getMotion().x / 0.3); // Normalized to typical max speed
-            inputs[9] = (float) (mc.player.getMotion().z / 0.3);
-        }
-
-        return inputs;
+        out[6] = mc.player.rotationYaw / 180.0f;
+        out[7] = mc.player.rotationPitch / 90.0f;
     }
 
-    private static float[] getBlockInputs(BlockPos pos) {
-        if (pos == null || mc.player == null) return new float[NeuralNetwork.INPUT_SIZE];
-
-        float[] inputs = new float[NeuralNetwork.INPUT_SIZE];
+    private static void fillBlockInputs(BlockPos pos, float[] out) {
+        if (pos == null || mc.player == null) {
+            java.util.Arrays.fill(out, 0);
+            return;
+        }
 
         // Relative position
         double playerX = mc.player.getPosX();
@@ -248,26 +296,25 @@ public class JelloAI {
         double diffZ = blockZ - playerZ;
 
         // Normalize inputs
-        inputs[0] = (float) (diffX / 20.0);
-        inputs[1] = (float) (diffY / 10.0);
-        inputs[2] = (float) (diffZ / 20.0);
+        out[0] = (float) (diffX / 20.0);
+        out[1] = (float) (diffY / 10.0);
+        out[2] = (float) (diffZ / 20.0);
 
         // No velocity for blocks
-        inputs[3] = 0;
-        inputs[4] = 0;
-        inputs[5] = 0;
+        out[3] = 0;
+        out[4] = 0;
+        out[5] = 0;
 
         // Current rotations (normalized)
-        inputs[6] = mc.player.rotationYaw / 180.0f;
-        inputs[7] = mc.player.rotationPitch / 90.0f;
-
-        return inputs;
+        out[6] = mc.player.rotationYaw / 180.0f;
+        out[7] = mc.player.rotationPitch / 90.0f;
     }
 
-    private static float[] getPositionInputs(double targetX, double targetY, double targetZ) {
-        if (mc.player == null) return new float[NeuralNetwork.INPUT_SIZE];
-
-        float[] inputs = new float[NeuralNetwork.INPUT_SIZE];
+    private static void fillPositionInputs(double targetX, double targetY, double targetZ, float[] out) {
+        if (mc.player == null) {
+            java.util.Arrays.fill(out, 0);
+            return;
+        }
 
         // Relative position
         double playerX = mc.player.getPosX();
@@ -279,76 +326,67 @@ public class JelloAI {
         double diffZ = targetZ - playerZ;
 
         // Normalize inputs
-        inputs[0] = (float) (diffX / 20.0);
-        inputs[1] = (float) (diffY / 10.0);
-        inputs[2] = (float) (diffZ / 20.0);
+        out[0] = (float) (diffX / 20.0);
+        out[1] = (float) (diffY / 10.0);
+        out[2] = (float) (diffZ / 20.0);
 
         // No velocity
-        inputs[3] = 0;
-        inputs[4] = 0;
-        inputs[5] = 0;
+        out[3] = 0;
+        out[4] = 0;
+        out[5] = 0;
 
         // Current rotations (normalized)
-        inputs[6] = mc.player.rotationYaw / 180.0f;
-        inputs[7] = mc.player.rotationPitch / 90.0f;
-
-        return inputs;
+        out[6] = mc.player.rotationYaw / 180.0f;
+        out[7] = mc.player.rotationPitch / 90.0f;
     }
 
-    // In calculateIdealRotations method
-    private static float[] calculateIdealRotations(Entity entity) {
+    // Unified ideal rotation calculation helper
+    private static void calculateIdealRotations(double tx, double ty, double tz, float[] out) {
+        if (mc.player == null) {
+            out[0] = 0;
+            out[1] = 0;
+            return;
+        }
         double playerX = mc.player.getPosX();
         double playerY = mc.player.getPosY() + mc.player.getEyeHeight();
         double playerZ = mc.player.getPosZ();
 
-        // FIXED: Use consistent eye height calculation
-        double entityX = entity.getPosX();
-        double entityY = entity.getPosY() + entity.getEyeHeight(); // Now matches getEntityInputs
-        double entityZ = entity.getPosZ();
-
-        double diffX = entityX - playerX;
-        double diffY = entityY - playerY;
-        double diffZ = entityZ - playerZ;
+        double diffX = tx - playerX;
+        double diffY = ty - playerY;
+        double diffZ = tz - playerZ;
 
         double dist = Math.sqrt(diffX * diffX + diffZ * diffZ);
         float idealYaw = (float) (Math.atan2(diffZ, diffX) * 180.0D / Math.PI) - 90.0F;
-        // Wrap yaw to ensure it's in the -180 to 180 range
         idealYaw = MathHelper.wrapDegrees(idealYaw);
         float idealPitch = (float) -(Math.atan2(diffY, dist) * 180.0D / Math.PI);
 
-        return new float[] {idealYaw, idealPitch};
+        out[0] = idealYaw;
+        out[1] = idealPitch;
     }
 
-    private static float[] calculateIdealBlockRotations(BlockPos pos) {
-        double playerX = mc.player.getPosX();
-        double playerY = mc.player.getPosY() + mc.player.getEyeHeight();
-        double playerZ = mc.player.getPosZ();
+    private static void calculateIdealRotations(Entity entity, float[] out) {
+        calculateIdealRotations(entity.getPosX(), entity.getPosY() + entity.getEyeHeight(), entity.getPosZ(), out);
+    }
 
-        double blockX = pos.getX() + 0.5;
-        double blockY = pos.getY() + 0.5;
-        double blockZ = pos.getZ() + 0.5;
-
-        double diffX = blockX - playerX;
-        double diffY = blockY - playerY;
-        double diffZ = blockZ - playerZ;
-
-        double dist = Math.sqrt(diffX * diffX + diffZ * diffZ);
-        float idealYaw = (float) (Math.atan2(diffZ, diffX) * 180.0D / Math.PI) - 90.0F;
-        // Wrap yaw to ensure it's in the -180 to 180 range
-        idealYaw = MathHelper.wrapDegrees(idealYaw);
-        float idealPitch = (float) -(Math.atan2(diffY, dist) * 180.0D / Math.PI);
-
-        return new float[] {idealYaw, idealPitch};
+    private static void calculateIdealBlockRotations(BlockPos pos, float[] out) {
+        calculateIdealRotations(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, out);
     }
 
     /**
-     * Normalize rotations for neural network input
+     * Normalize rotations and write to target output array to avoid allocation
+     */
+    public static void normalizeRotations(float yaw, float pitch, float[] out) {
+        out[0] = yaw / 180.0f;
+        out[1] = pitch / 90.0f;
+    }
+
+    /**
+     * Normalize rotations for neural network input (allocating version)
      */
     public static float[] normalizeRotations(float yaw, float pitch) {
-        // FIXED: Normalize to [-1,1] range for tanh activation
         return new float[] {
-                yaw / 180.0f,    // maps [-180,180] → [-1,1]
-                pitch / 90.0f    // maps [-90,90] → [-1,1]
+                yaw / 180.0f,
+                pitch / 90.0f
         };
     }
 
@@ -362,11 +400,8 @@ public class JelloAI {
         float currentYaw = instance.rotationManager.getCurrentYaw();
         float currentPitch = instance.rotationManager.getCurrentPitch();
 
-        // FIXED: Normalize rotations to [-1,1] for tanh
-        float[] normalizedRotations = normalizeRotations(currentYaw, currentPitch);
-
-        // Record hit with normalized rotations
-        instance.reinforcementManager.recordHit(entity, wasMoving, normalizedRotations[0], normalizedRotations[1]);
+        // Record hit with raw rotations (ReinforcementManager will normalize them)
+        instance.reinforcementManager.recordHit(entity, wasMoving, currentYaw, currentPitch);
     }
 
     /**
@@ -375,31 +410,30 @@ public class JelloAI {
     public static void recordMiss(Entity entity) {
         if (instance == null || entity == null || mc.player == null) return;
 
-        // Calculate ideal rotations
-        float[] idealRotations = calculateIdealRotations(entity);
+        // Calculate ideal rotations using cache
+        calculateIdealRotations(entity, cachedIdealRotation);
 
-        // Ensure yaw is wrapped properly
-        idealRotations[0] = MathHelper.wrapDegrees(idealRotations[0]);
+        // Normalize rotations using cache
+        normalizeRotations(cachedIdealRotation[0], cachedIdealRotation[1], cachedNormalized);
 
-        // FIXED: Normalize rotations to [-1,1] for tanh
-        float[] normalizedRotations = normalizeRotations(idealRotations[0], idealRotations[1]);
+        // Fill inputs using cache
+        fillEntityInputs(entity, cachedInputs);
 
-        // Get inputs for this entity
-        float[] inputs = getEntityInputs(entity);
-
-        // Create expected outputs with normalized rotations
+        // Create expected outputs
         float[] expectedOutputs = new float[NeuralNetwork.OUTPUT_SIZE];
-        expectedOutputs[0] = normalizedRotations[0];  // yaw in [-1,1]
-        expectedOutputs[1] = normalizedRotations[1];  // pitch in [-1,1]
+        expectedOutputs[0] = cachedNormalized[0];
+        expectedOutputs[1] = cachedNormalized[1];
 
-        // Record miss with normalized rotations
-        instance.reinforcementManager.recordMiss(entity, inputs, expectedOutputs);
+        // Pass copies to reinforcementManager to avoid background modification issues
+        instance.reinforcementManager.recordMiss(entity, cachedInputs.clone(), expectedOutputs);
     }
 
     /**
      * Update method to be called every tick
      */
     public static void onTick() {
+        tickCounter++;
+
         if (mc.objectMouseOver != null && mc.objectMouseOver.getType() == RayTraceResult.Type.ENTITY) {
             Entity target = ((EntityRayTraceResult)mc.objectMouseOver).getEntity();
             if (target != null) {

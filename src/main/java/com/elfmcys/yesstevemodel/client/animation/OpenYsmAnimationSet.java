@@ -5,6 +5,7 @@ import com.elfmcys.yesstevemodel.capability.OpenYsmPlayerAnimationState;
 import com.elfmcys.yesstevemodel.client.OpenYsmBone;
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerAnimationRef;
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerDefinition;
+import com.elfmcys.yesstevemodel.client.animation.controller.ControllerLayer;
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerStateDefinition;
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerTransition;
 import com.elfmcys.yesstevemodel.client.animation.controller.OpenYsmControllerRuntime;
@@ -260,23 +261,27 @@ public final class OpenYsmAnimationSet {
             return active;
         }
 
+        float elapsedSeconds = snapshot.ageInTicks / 20.0F;
         OpenYsmControllerRuntime.Result controllerResult = OpenYsmControllerRuntime.tick(this.modelId,
                 this.controllerDefinitions.values(), this.clips, snapshot);
+        Set<String> activeClipNames = new LinkedHashSet<>();
         for (OpenYsmControllerRuntime.ActiveControllerAnimation controllerAnimation : controllerResult.getActiveAnimations()) {
             active.addControllerClip(controllerAnimation.getClip(), controllerAnimation.getLayer(),
                     controllerAnimation.getTimeSeconds(), controllerAnimation.getWeight(),
                     controllerAnimation.getControllerName(), controllerAnimation.getStateName());
+            activeClipNames.add(controllerAnimation.getClip().name);
         }
+        addBuiltinAlwaysOnClips(active, activeClipNames, elapsedSeconds);
 
         Clip main = controllerResult.hasMainLayerAnimation() ? null : selectMainState(snapshot);
         if (main != null) {
             active.mainStateClip = main;
-            active.setTime(main, snapshot.ageInTicks / 20.0F);
+            active.setTime(main, elapsedSeconds);
         }
 
         for (Clip hand : selectHandClips(snapshot)) {
             active.handClips.add(hand);
-            active.setTime(hand, snapshot.ageInTicks / 20.0F);
+            active.setTime(hand, elapsedSeconds);
         }
 
         if (extraState != null && this.modelId.equals(extraState.getModelId())) {
@@ -301,7 +306,7 @@ public final class OpenYsmAnimationSet {
             if (preview != null) {
                 active.previewClip = Optional.of(preview);
                 active.actionSource = ActionSource.PREVIEW;
-                active.setTime(preview, snapshot.ageInTicks / 20.0F);
+                active.setTime(preview, elapsedSeconds);
             }
         }
 
@@ -313,6 +318,35 @@ public final class OpenYsmAnimationSet {
         }
 
         return active;
+    }
+
+    private void addBuiltinAlwaysOnClips(ActiveAnimationSet active, Set<String> activeClipNames, float elapsedSeconds) {
+        if (!addBuiltinAlwaysOnClip(active, activeClipNames, "pre_parallel0", ControllerLayer.PRE_MAIN,
+                elapsedSeconds, "builtin.pre_parallel_0")) {
+            addBuiltinAlwaysOnClip(active, activeClipNames, "Hair_Physics", ControllerLayer.PRE_MAIN,
+                    elapsedSeconds, "builtin.pre_parallel_0");
+        }
+
+        for (int i = 1; i <= 7; i++) {
+            addBuiltinAlwaysOnClip(active, activeClipNames, "pre_parallel" + i, ControllerLayer.PRE_MAIN,
+                    elapsedSeconds, "builtin.pre_parallel_" + i);
+        }
+        for (int i = 0; i <= 7; i++) {
+            addBuiltinAlwaysOnClip(active, activeClipNames, "parallel" + i, ControllerLayer.PARALLEL,
+                    elapsedSeconds, "builtin.parallel_" + i);
+        }
+    }
+
+    private boolean addBuiltinAlwaysOnClip(ActiveAnimationSet active, Set<String> activeClipNames, String clipName,
+                                           ControllerLayer layer, float elapsedSeconds, String controllerName) {
+        Clip clip = findClipByName(clipName);
+        if (clip == null || activeClipNames.contains(clip.name)) {
+            return false;
+        }
+
+        active.addControllerClip(clip, layer, elapsedSeconds, 1.0F, controllerName, "default");
+        activeClipNames.add(clip.name);
+        return true;
     }
 
     public void apply(Map<String, OpenYsmBone> bones, ActiveAnimationSet active, float partialTicks) {
@@ -648,6 +682,19 @@ public final class OpenYsmAnimationSet {
     private Clip findArmClip(String name) {
         Clip clip = this.clips.get(name);
         return clip != null && clip.sourceType == AnimationSourceType.ARM ? clip : null;
+    }
+
+    private Clip findClipByName(String name) {
+        Clip clip = this.clips.get(name);
+        if (clip != null) {
+            return clip;
+        }
+        for (Clip value : this.clips.values()) {
+            if (value.name.equalsIgnoreCase(name)) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private void addHandClip(List<Clip> selected, Clip clip) {

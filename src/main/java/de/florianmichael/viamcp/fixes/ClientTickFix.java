@@ -1,8 +1,9 @@
 package de.florianmichael.viamcp.fixes;
 
 import com.viaversion.viabackwards.protocol.v1_21_2to1_21.Protocol1_21_2To1_21;
-import com.viaversion.viaversion.api.Via;
 import com.viaversion.viaversion.api.connection.UserConnection;
+import com.viaversion.viaversion.api.protocol.Protocol;
+import com.viaversion.viaversion.api.protocol.packet.ServerboundPacketType;
 import com.viaversion.viaversion.api.protocol.packet.PacketWrapper;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import com.viaversion.viaversion.protocols.v1_21_2to1_21_4.Protocol1_21_2To1_21_4;
@@ -13,7 +14,6 @@ import com.viaversion.viaversion.protocols.v1_21_5to1_21_6.Protocol1_21_5To1_21_
 import com.viaversion.viaversion.protocols.v1_21_5to1_21_6.packet.ServerboundPackets1_21_6;
 import com.viaversion.viaversion.protocols.v1_21to1_21_2.packet.ServerboundPackets1_21_2;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
-import java.util.Iterator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.play.ClientPlayNetHandler;
 import net.minecraft.network.NetworkManager;
@@ -77,46 +77,70 @@ public class ClientTickFix {
             }
         }
 
-        Iterator<UserConnection> it = Via.getManager()
-                .getConnectionManager().getConnections().iterator();
-        return it.hasNext() ? it.next() : null;
+        return null;
     }
 
     private static void sendClientTickEnd(UserConnection connection, ProtocolVersion targetVersion) throws Exception {
         if (targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_21_6)) {
-            PacketWrapper packet = PacketWrapper.create(
-                    ServerboundPackets1_21_6.CLIENT_TICK_END, null, connection);
-            logClientTickEnd(targetVersion, "1_21_6", Protocol1_21_5To1_21_6.class.getSimpleName());
-            packet.sendToServer(Protocol1_21_5To1_21_6.class);
+            if (sendClientTickEnd(connection, targetVersion, ServerboundPackets1_21_6.CLIENT_TICK_END,
+                    Protocol1_21_5To1_21_6.class, "1_21_6")) {
+                return;
+            }
+
+            logSkippedClientTickEnd(targetVersion);
             return;
         }
 
         if (targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_21_5)) {
-            PacketWrapper packet = PacketWrapper.create(
-                    ServerboundPackets1_21_5.CLIENT_TICK_END, null, connection);
-            logClientTickEnd(targetVersion, "1_21_5", Protocol1_21_4To1_21_5.class.getSimpleName());
-            packet.sendToServer(Protocol1_21_4To1_21_5.class);
+            if (sendClientTickEnd(connection, targetVersion, ServerboundPackets1_21_5.CLIENT_TICK_END,
+                    Protocol1_21_4To1_21_5.class, "1_21_5")) {
+                return;
+            }
+
+            logSkippedClientTickEnd(targetVersion);
             return;
         }
 
         if (targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_21_4)) {
-            PacketWrapper packet = PacketWrapper.create(
-                    ServerboundPackets1_21_4.CLIENT_TICK_END, null, connection);
-            logClientTickEnd(targetVersion, "1_21_4", Protocol1_21_2To1_21_4.class.getSimpleName());
-            packet.sendToServer(Protocol1_21_2To1_21_4.class);
+            if (sendClientTickEnd(connection, targetVersion, ServerboundPackets1_21_4.CLIENT_TICK_END,
+                    Protocol1_21_2To1_21_4.class, "1_21_4")) {
+                return;
+            }
+
+            logSkippedClientTickEnd(targetVersion);
             return;
         }
 
-        PacketWrapper packet = PacketWrapper.create(
-                ServerboundPackets1_21_2.CLIENT_TICK_END, null, connection);
-        logClientTickEnd(targetVersion, "1_21_2", Protocol1_21_2To1_21.class.getSimpleName());
-        packet.sendToServer(Protocol1_21_2To1_21.class);
+        if (!sendClientTickEnd(connection, targetVersion, ServerboundPackets1_21_2.CLIENT_TICK_END,
+                Protocol1_21_2To1_21.class, "1_21_2")) {
+            logSkippedClientTickEnd(targetVersion);
+        }
+    }
+
+    private static boolean sendClientTickEnd(UserConnection connection, ProtocolVersion targetVersion,
+            ServerboundPacketType packetType, Class<? extends Protocol> protocolClass, String packetFamily)
+            throws Exception {
+        if (!PacketFixFor1_21Plus.hasProtocol(connection, protocolClass)) {
+            return false;
+        }
+
+        PacketWrapper packet = PacketWrapper.create(packetType, null, connection);
+        logClientTickEnd(targetVersion, packetFamily, protocolClass.getSimpleName());
+        packet.scheduleSendToServer(protocolClass);
+        return true;
     }
 
     private static void logClientTickEnd(ProtocolVersion targetVersion, String packetFamily, String protocolName) {
         if (Boolean.getBoolean(DEBUG_PROPERTY) && (++debugTickCounter % 20 == 1)) {
             LOGGER.info("[ClientTickFix] CLIENT_TICK_END target={} packetFamily={} viaProtocol={}",
                     targetVersion, packetFamily, protocolName);
+        }
+    }
+
+    private static void logSkippedClientTickEnd(ProtocolVersion targetVersion) {
+        if (Boolean.getBoolean(DEBUG_PROPERTY) && (++debugTickCounter % 20 == 1)) {
+            LOGGER.info("[ClientTickFix] Skipping CLIENT_TICK_END for target={} because no matching clientside Via protocol is active",
+                    targetVersion);
         }
     }
 

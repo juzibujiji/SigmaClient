@@ -1,6 +1,7 @@
 package net.minecraft.inventory.container;
 
 import com.mojang.datafixers.util.Pair;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.MobEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -85,9 +86,24 @@ public class PlayerContainer extends RecipeBookContainer<CraftingInventory>
 
         this.addSlot(new Slot(playerInventory, 40, 77, 62)
         {
+            public boolean isItemValid(ItemStack stack)
+            {
+                return InteractionProtocol.supportsOffhand();
+            }
+
+            public boolean canTakeStack(PlayerEntity playerIn)
+            {
+                return InteractionProtocol.supportsOffhand() && super.canTakeStack(playerIn);
+            }
+
             public Pair<ResourceLocation, ResourceLocation> getBackground()
             {
                 return Pair.of(PlayerContainer.LOCATION_BLOCKS_TEXTURE, PlayerContainer.EMPTY_ARMOR_SLOT_SHIELD);
+            }
+
+            public boolean isEnabled()
+            {
+                return InteractionProtocol.supportsOffhand();
             }
         });
     }

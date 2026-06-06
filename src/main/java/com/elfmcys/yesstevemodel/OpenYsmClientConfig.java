@@ -1,9 +1,18 @@
 package com.elfmcys.yesstevemodel;
 
 public final class OpenYsmClientConfig {
+    private boolean enabled = true;
     private boolean renderPlayers;
     private String selectedModelId = "misc/2_steve";
     private String selectedTextureId = "";
+
+    public boolean isEnabled() {
+        return this.enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
 
     public boolean isRenderPlayers() {
         return this.renderPlayers;

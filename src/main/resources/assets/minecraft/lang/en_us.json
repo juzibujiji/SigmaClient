@@ -656,6 +656,7 @@
   "key.use": "Use Item/Place Block",
   "key.pickItem": "Pick Block",
   "key.command": "Open Command",
+  "key.sigmaCommand": "Open Sigma Command",
   "key.socialInteractions": "Social Interactions Screen",
   "key.screenshot": "Take Screenshot",
   "key.togglePerspective": "Toggle Perspective",

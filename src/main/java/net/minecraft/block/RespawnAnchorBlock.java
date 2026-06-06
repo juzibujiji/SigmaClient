@@ -2,6 +2,7 @@ package net.minecraft.block;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import java.util.Optional;
 import java.util.Random;
 import net.minecraft.entity.Entity;
@@ -77,7 +78,9 @@ public class RespawnAnchorBlock extends Block
                 this.triggerExplosion(state, worldIn, pos);
             }
 
-            return ActionResultType.func_233537_a_(worldIn.isRemote);
+            return InteractionProtocol.atOrOlderThan1_21_9()
+                    ? ActionResultType.SUCCESS
+                    : ActionResultType.func_233537_a_(worldIn.isRemote);
         }
         else
         {

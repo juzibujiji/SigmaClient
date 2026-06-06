@@ -62,4 +62,14 @@ public class CCustomPayloadPacket implements IPacket<IServerPlayNetHandler>
             this.data.release();
         }
     }
+
+    public ResourceLocation getChannelName()
+    {
+        return this.channel;
+    }
+
+    public PacketBuffer getBufferData()
+    {
+        return new PacketBuffer(this.data.copy());
+    }
 }

@@ -189,6 +189,11 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     public void pushOutOfBlocks(double x, double y, double z) {
+        if (PacketFixFor1_21Plus.shouldUseGrimVanillaMovement()) {
+            super.pushOutOfBlocks(x, y, z);
+            return;
+        }
+
         EventPushBlock eventPushBlock = new EventPushBlock();
         EventBus.call(eventPushBlock);
         if (!eventPushBlock.cancelled) {
@@ -214,21 +219,26 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
      * Called to update the entity's position/logic.
      */
     public void tick() {
-        EventUpdate updateEvent = new EventUpdate();
-        EventBus.call(updateEvent);
+        if (!PacketFixFor1_21Plus.shouldUseGrimVanillaMovement()) {
+            EventUpdate updateEvent = new EventUpdate();
+            EventBus.call(updateEvent);
 
-        if (updateEvent.cancelled) {
-            return;
+            if (updateEvent.cancelled) {
+                return;
+            }
         }
 
         if (this.world.isBlockLoaded(new BlockPos(this.getPosX(), 0.0D, this.getPosZ()))) {
             super.tick();
+            boolean sentPlayerInput = PacketFixFor1_21Plus.sendPlayerInputPacket(this);
 
             if (this.isPassenger()) {
                 this.connection.sendPacket(
                         new CPlayerPacket.RotationPacket(this.rotationYaw, this.rotationPitch, this.onGround));
-                this.connection.sendPacket(new CInputPacket(this.moveStrafing, this.moveForward,
-                        this.movementInput.jump, this.movementInput.sneaking));
+                if (!sentPlayerInput) {
+                    this.connection.sendPacket(new CInputPacket(this.moveStrafing, this.moveForward,
+                            this.movementInput.jump, this.movementInput.sneaking));
+                }
                 Entity entity = this.getLowestRidingEntity();
 
                 if (entity != this && entity.canPassengerSteer()) {
@@ -267,25 +277,34 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
     private void sendMovementPackets() {
         AxisAlignedBB bounds = this.getBoundingBox();
-        EventMotion event = new EventMotion(this.getPosX(), bounds.minY, this.getPosZ(), this.rotationYaw,
-                this.rotationPitch, this.onGround);
-        EventBus.call(event);
-        if (event.cancelled)
-            return;
+        boolean vanillaMovement = PacketFixFor1_21Plus.shouldUseGrimVanillaMovement();
+        EventMotion event = null;
+        double x = this.getPosX();
+        double y = bounds.minY;
+        double z = this.getPosZ();
+        float yaw = this.rotationYaw;
+        float pitch = this.rotationPitch;
+        boolean onGround = this.onGround;
+
+        if (!vanillaMovement) {
+            event = new EventMotion(x, y, z, yaw, pitch, onGround);
+            EventBus.call(event);
+            if (event.cancelled)
+                return;
+
+            x = event.getX();
+            y = event.getY();
+            z = event.getZ();
+            yaw = event.getYaw();
+            pitch = event.getPitch();
+            onGround = event.isOnGround();
+        }
+
         this.sendSprintingPacket();
 
         this.sendSneakingPacket();
 
         if (this.isCurrentViewEntity()) {
-            double x = event.getX();
-            double y = event.getY();
-            double z = event.getZ();
-
-            float pitch = event.getPitch();
-            float yaw = event.getYaw();
-
-            boolean onGround = event.isOnGround();
-
             double deltaX = x - this.lastReportedPosX;
             double deltaY = y - this.lastReportedPosY;
             double deltaZ = z - this.lastReportedPosZ;
@@ -319,34 +338,39 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             } else if (this.prevOnGround != onGround || isLegacy) {
                 this.connection.sendPacket(new CPlayerPacket(onGround));
             }
-            EventBus.call(new EventMovePacketAfter());
+
+            if (!vanillaMovement) {
+                EventBus.call(new EventMovePacketAfter());
+            }
 
             if (posMoved) {
-                this.lastReportedPosX = event.getX();
-                this.lastReportedPosY = event.getY();
-                this.lastReportedPosZ = event.getZ();
+                this.lastReportedPosX = x;
+                this.lastReportedPosY = y;
+                this.lastReportedPosZ = z;
                 this.positionUpdateTicks = 0;
             }
 
             if (rotMoved) {
-                this.lastReportedYaw = event.getYaw();
-                this.lastReportedPitch = event.getPitch();
+                this.lastReportedYaw = yaw;
+                this.lastReportedPitch = pitch;
             }
 
             this.prevOnGround = onGround;
             this.autoJumpEnabled = this.mc.gameSettings.autoJump;
         }
 
-        for (Runnable runnable : event.getRunnableList()) {
-            runnable.run();
-        }
+        if (!vanillaMovement) {
+            for (Runnable runnable : event.getRunnableList()) {
+                runnable.run();
+            }
 
-        event.postUpdate();
-        EventBus.call(event);
+            event.postUpdate();
+            EventBus.call(event);
+        }
     }
 
     private void sendSneakingPacket() {
-        boolean flag3 = this.isSneaking();
+        boolean flag3 = PacketFixFor1_21Plus.reportedSneaking(this);
 
         if (flag3 != this.clientSneakState) {
             CEntityActionPacket.Action centityactionpacket$action1 = flag3 ? CEntityActionPacket.Action.PRESS_SHIFT_KEY
@@ -776,15 +800,22 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         this.isCrouching = !this.abilities.isFlying && !this.isSwimming() && this.isPoseClear(Pose.CROUCHING)
                 && (this.isSneaking() || !this.isSleeping() && !this.isPoseClear(Pose.STANDING));
         this.movementInput.tickMovement(this.isForcedDown());
+        boolean vanillaMovement = PacketFixFor1_21Plus.shouldUseGrimVanillaMovement();
 
         if (this.isHandActive() && !this.isPassenger()) {
-            EventSlowDown event = new EventSlowDown(0.2F);
-            EventBus.call(event);
-
-            if (!event.cancelled) {
-                this.movementInput.moveStrafe = this.movementInput.moveStrafe * event.getSlowDown();
-                this.movementInput.moveForward = this.movementInput.moveForward * event.getSlowDown();
+            if (vanillaMovement) {
+                this.movementInput.moveStrafe *= 0.2F;
+                this.movementInput.moveForward *= 0.2F;
                 this.sprintToggleTimer = 0;
+            } else {
+                EventSlowDown event = new EventSlowDown(0.2F);
+                EventBus.call(event);
+
+                if (!event.cancelled) {
+                    this.movementInput.moveStrafe = this.movementInput.moveStrafe * event.getSlowDown();
+                    this.movementInput.moveForward = this.movementInput.moveForward * event.getSlowDown();
+                    this.sprintToggleTimer = 0;
+                }
             }
         }
 
@@ -809,12 +840,15 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
         boolean flag4 = (float) this.getFoodStats().getFoodLevel() > 6.0F || this.abilities.allowFlying;
 
-        EventSprint eventSprint = new EventSprint();
-        EventBus.call(eventSprint);
+        EventSprint eventSprint = null;
+        if (!vanillaMovement) {
+            eventSprint = new EventSprint();
+            EventBus.call(eventSprint);
+        }
 
         float moveForward = this.movementInput.moveForward;
 
-        if (eventSprint.cancelled) {
+        if (!vanillaMovement && eventSprint.cancelled) {
             moveForward = this.movementInput.moveForward;
             this.movementInput.moveForward = 0;
         }
@@ -849,7 +883,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
         boolean flag7 = false;
 
-        if (eventSprint.cancelled) {
+        if (!vanillaMovement && eventSprint.cancelled) {
             this.movementInput.moveForward = moveForward;
         }
 
@@ -1032,6 +1066,14 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     }
 
     public void move(MoverType typeIn, Vector3d pos) {
+        if (PacketFixFor1_21Plus.shouldUseGrimVanillaMovement()) {
+            double d0 = this.getPosX();
+            double d1 = this.getPosZ();
+            super.move(typeIn, pos);
+            this.updateAutoJump((float) (this.getPosX() - d0), (float) (this.getPosZ() - d1));
+            return;
+        }
+
         EventMove eventMove = new EventMove(pos);
         try {
             EventBus.call(eventMove);

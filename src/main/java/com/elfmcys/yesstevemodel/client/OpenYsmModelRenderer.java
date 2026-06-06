@@ -21,7 +21,9 @@ import java.util.List;
 public final class OpenYsmModelRenderer extends ModelRenderer {
     private static final float MAX_ABS_VERTEX_PIXELS = 8192.0F;
     private static final float MAX_ABS_UV = 128.0F;
+    private static final int MAX_CUSTOM_QUAD_WARNINGS = 8;
     private final List<CustomQuad> customQuads = new ArrayList<>();
+    private int customQuadWarningCount;
     private float scaleX = 1.0F;
     private float scaleY = 1.0F;
     private float scaleZ = 1.0F;
@@ -44,6 +46,13 @@ public final class OpenYsmModelRenderer extends ModelRenderer {
     public void render(MatrixStack matrixStackIn, IVertexBuilder bufferIn, int packedLightIn, int packedOverlayIn,
                        float red, float green, float blue, float alpha) {
         if (!this.showModel) {
+            return;
+        }
+
+        // OpenYSM semantics: zero-scale means invisible. This is used by parallel animations
+        // to hide feature bones (e.g., parallel3 sets BeiJing.scale=[0,0,0] to hide立绘框).
+        // Must check BEFORE matrix operations to avoid singular normal matrices that produce NaN/Inf.
+        if (this.scaleX == 0.0F && this.scaleY == 0.0F && this.scaleZ == 0.0F) {
             return;
         }
 
@@ -107,12 +116,12 @@ public final class OpenYsmModelRenderer extends ModelRenderer {
             CustomQuad quad = this.customQuads.get(quadIndex);
             // Guard against degenerate data that would produce visual corruption.
             if (!hasCompleteQuadArrays(quad)) {
-                YesSteveModel.LOGGER.warn("[YSM][quad] bone='{}' quad={} incomplete quad arrays - skipping quad",
+                this.warnCustomQuad("[YSM][quad] bone='{}' quad={} incomplete quad arrays - skipping quad",
                         this.getId(), quadIndex);
                 continue;
             }
             if (!isFiniteVector(quad.normal) || isZeroVector(quad.normal)) {
-                YesSteveModel.LOGGER.warn("[YSM][quad] bone='{}' quad={} invalid normal - skipping quad",
+                this.warnCustomQuad("[YSM][quad] bone='{}' quad={} invalid normal - skipping quad",
                         this.getId(), quadIndex);
                 continue;
             }
@@ -123,7 +132,7 @@ public final class OpenYsmModelRenderer extends ModelRenderer {
             float ny = normalVec.getY();
             float nz = normalVec.getZ();
             if (!isFinite(nx) || !isFinite(ny) || !isFinite(nz)) {
-                YesSteveModel.LOGGER.warn("[YSM][quad] bone='{}' quad={} transformed normal is invalid - skipping quad",
+                this.warnCustomQuad("[YSM][quad] bone='{}' quad={} transformed normal is invalid - skipping quad",
                         this.getId(), quadIndex);
                 continue;
             }
@@ -134,7 +143,7 @@ public final class OpenYsmModelRenderer extends ModelRenderer {
                 if (!isFiniteVector(pos) || exceedsAbs(pos, MAX_ABS_VERTEX_PIXELS)
                         || !isFinite(quad.u[i]) || !isFinite(quad.v[i])
                         || Math.abs(quad.u[i]) > MAX_ABS_UV || Math.abs(quad.v[i]) > MAX_ABS_UV) {
-                    YesSteveModel.LOGGER.warn(
+                    this.warnCustomQuad(
                             "[YSM][quad] bone='{}' quad={} vert={} invalid position/uv pos=({}, {}, {}) uv=({}, {}) - skipping quad",
                             this.getId(), quadIndex, i,
                             pos == null ? Float.NaN : pos.getX(),
@@ -163,7 +172,7 @@ public final class OpenYsmModelRenderer extends ModelRenderer {
                 vy[i] = posMatrix.getTransformY(px, py, pz, 1.0F);
                 vz[i] = posMatrix.getTransformZ(px, py, pz, 1.0F);
                 if (!isFinite(vx[i]) || !isFinite(vy[i]) || !isFinite(vz[i])) {
-                    YesSteveModel.LOGGER.warn("[YSM][quad] bone='{}' quad={} transformed vertex is invalid - skipping quad",
+                    this.warnCustomQuad("[YSM][quad] bone='{}' quad={} transformed vertex is invalid - skipping quad",
                             this.getId(), quadIndex);
                     skip = true;
                     break;
@@ -178,6 +187,16 @@ public final class OpenYsmModelRenderer extends ModelRenderer {
                         quad.u[i], quad.v[i], packedOverlayIn, packedLightIn, nx, ny, nz);
             }
         }
+    }
+
+    private void warnCustomQuad(String message, Object... args) {
+        if (this.customQuadWarningCount < MAX_CUSTOM_QUAD_WARNINGS) {
+            YesSteveModel.LOGGER.warn(message, args);
+        } else if (this.customQuadWarningCount == MAX_CUSTOM_QUAD_WARNINGS) {
+            YesSteveModel.LOGGER.warn("[YSM][quad] bone='{}' reached {} invalid custom quad warnings; suppressing further warnings for this renderer",
+                    this.getId(), MAX_CUSTOM_QUAD_WARNINGS);
+        }
+        this.customQuadWarningCount++;
     }
 
     private static boolean isFiniteVector(Vector3f v) {

@@ -10,6 +10,7 @@ import com.mentalfrostbyte.jello.module.impl.player.AutoSprint;
 import com.mojang.authlib.GameProfile;
 import com.mojang.datafixers.util.Either;
 import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.block.BedBlock;
 import net.minecraft.block.Block;
@@ -483,7 +484,7 @@ public abstract class PlayerEntity extends LivingEntity {
         super.livingTick();
         this.jumpMovementFactor = 0.02F;
 
-        if (!PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics() && this.isSprinting()) {
+        if (this.isSprinting()) {
             this.jumpMovementFactor = (float) ((double) this.jumpMovementFactor + 0.005999999865889549D);
         }
 
@@ -1031,7 +1032,9 @@ public abstract class PlayerEntity extends LivingEntity {
     protected Vector3d maybeBackOffFromEdge(Vector3d vec, MoverType mover) {
         // MODIFICATION START: Send on edge `SafeWalkEvent`
         EventSafeWalk event = new EventSafeWalk(true);
-        EventBus.call(event);
+        if (!PacketFixFor1_21Plus.shouldUseGrimVanillaMovement()) {
+            EventBus.call(event);
+        }
         // MODIFICATION END
         // MODIFICATION START (ENDS AFTER NEXT LINE): Add `event.getSituation() == Situation.PLAYER`
         float f = this.stepHeight;
@@ -2082,6 +2085,10 @@ public abstract class PlayerEntity extends LivingEntity {
     }
 
     public float getCooldownPeriod() {
+        if (!InteractionProtocol.usesAttackAndItemCooldowns()) {
+            return 1.0F;
+        }
+
         return (float) (1.0D / this.getAttributeValue(Attributes.ATTACK_SPEED) * 20.0D);
     }
 
@@ -2089,10 +2096,18 @@ public abstract class PlayerEntity extends LivingEntity {
      * Returns the percentage of attack power available based on the cooldown (zero to one).
      */
     public float getCooledAttackStrength(float adjustTicks) {
+        if (!InteractionProtocol.usesAttackAndItemCooldowns()) {
+            return 1.0F;
+        }
+
         return MathHelper.clamp(((float) this.ticksSinceLastSwing + adjustTicks) / this.getCooldownPeriod(), 0.0F, 1.0F);
     }
 
     public void resetCooldown() {
+        if (!InteractionProtocol.usesAttackAndItemCooldowns()) {
+            return;
+        }
+
         this.ticksSinceLastSwing = 0;
     }
 

@@ -1,6 +1,15 @@
 package net.minecraft.client.renderer.entity;
 
+import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmBakedPlayerModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmGl4PlayerModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmPlayerModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmBone;
+import com.elfmcys.yesstevemodel.client.OpenYsmRendererMode;
+import com.elfmcys.yesstevemodel.client.OpenYsmRendererSelector;
 import com.mojang.blaze3d.matrix.MatrixStack;
+import com.mojang.blaze3d.vertex.IVertexBuilder;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.player.AbstractClientPlayerEntity;
 import net.minecraft.client.renderer.IRenderTypeBuffer;
 import net.minecraft.client.renderer.RenderType;
@@ -38,6 +47,12 @@ import net.minecraft.util.text.StringTextComponent;
 
 public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>>
 {
+    private final boolean useSmallArms;
+    private OpenYsmPlayerModel openYsmModel;
+    private String openYsmModelId;
+    private OpenYsmGl4PlayerModel openYsmGl4Model;
+    private String openYsmGl4ModelId;
+
     public PlayerRenderer(EntityRendererManager renderManager)
     {
         this(renderManager, false);
@@ -46,6 +61,7 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
     public PlayerRenderer(EntityRendererManager renderManager, boolean useSmallArms)
     {
         super(renderManager, new PlayerModel<>(0.0F, useSmallArms), 0.5F);
+        this.useSmallArms = useSmallArms;
         this.addLayer(new BipedArmorLayer<>(this, new BipedModel(0.5F), new BipedModel(1.0F)));
         this.addLayer(new HeldItemLayer<>(this));
         this.addLayer(new ArrowLayer<>(this));
@@ -60,8 +76,100 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
 
     public void render(AbstractClientPlayerEntity entityIn, float entityYaw, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int packedLightIn)
     {
+        OpenYsmRendererMode rendererMode = OpenYsmRendererSelector.getMode();
+        if (rendererMode.usesGl4Renderer())
+        {
+            OpenYsmGl4PlayerModel ysmModel = this.getOpenYsmGl4Model(entityIn);
+            if (ysmModel != null)
+            {
+                PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
+                ResourceLocation previousTexture = this.getLocationTextureCustom();
+                this.entityModel = ysmModel;
+                this.setLocationTextureCustom(ysmModel.getTexture());
+                try
+                {
+                    this.setModelVisibilities(entityIn);
+                    super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+                }
+                finally
+                {
+                    this.entityModel = previousModel;
+                    this.setLocationTextureCustom(previousTexture);
+                }
+                return;
+            }
+        }
+        else if (rendererMode.usesYsm())
+        {
+            OpenYsmPlayerModel ysmModel = this.getOpenYsmModel(entityIn);
+            if (ysmModel != null)
+            {
+                PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
+                ResourceLocation previousTexture = this.getLocationTextureCustom();
+                this.entityModel = ysmModel;
+                this.setLocationTextureCustom(ysmModel.getTexture());
+                try
+                {
+                    this.setModelVisibilities(entityIn);
+                    super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+                }
+                finally
+                {
+                    this.entityModel = previousModel;
+                    this.setLocationTextureCustom(previousTexture);
+                }
+                return;
+            }
+        }
+
         this.setModelVisibilities(entityIn);
         super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+    }
+
+    private OpenYsmPlayerModel getOpenYsmModel(AbstractClientPlayerEntity entityIn)
+    {
+        if (!YesSteveModel.getClientConfig().isRenderPlayers() || entityIn.isSpectator())
+        {
+            return null;
+        }
+
+        OpenYsmBakedPlayerModel bakedModel = YesSteveModel.getSelectedPlayerModel(Minecraft.getInstance().getResourceManager());
+        if (bakedModel == null)
+        {
+            return null;
+        }
+
+        String modelKey = bakedModel.getId() + "|" + bakedModel.getTexture();
+        if (this.openYsmModel == null || !modelKey.equals(this.openYsmModelId))
+        {
+            this.openYsmModel = new OpenYsmPlayerModel(bakedModel, this.useSmallArms);
+            this.openYsmModelId = modelKey;
+        }
+
+        return this.openYsmModel;
+    }
+
+    private OpenYsmGl4PlayerModel getOpenYsmGl4Model(AbstractClientPlayerEntity entityIn)
+    {
+        if (!YesSteveModel.getClientConfig().isRenderPlayers() || entityIn.isSpectator())
+        {
+            return null;
+        }
+
+        OpenYsmBakedPlayerModel bakedModel = YesSteveModel.getSelectedPlayerModel(Minecraft.getInstance().getResourceManager());
+        if (bakedModel == null || bakedModel.getGeoModel() == null)
+        {
+            return null;
+        }
+
+        String modelKey = bakedModel.getId() + "|" + bakedModel.getTexture();
+        if (this.openYsmGl4Model == null || !modelKey.equals(this.openYsmGl4ModelId))
+        {
+            this.openYsmGl4Model = new OpenYsmGl4PlayerModel(bakedModel, this.useSmallArms);
+            this.openYsmGl4ModelId = modelKey;
+        }
+
+        return this.openYsmGl4Model;
     }
 
     public Vector3d getRenderOffset(AbstractClientPlayerEntity entityIn, float partialTicks)
@@ -201,16 +309,110 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
 
     private void renderItem(MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int combinedLightIn, AbstractClientPlayerEntity playerIn, ModelRenderer rendererArmIn, ModelRenderer rendererArmwearIn)
     {
+        boolean rightArm = rendererArmIn == this.entityModel.bipedRightArm;
+        OpenYsmRendererMode rendererMode = OpenYsmRendererSelector.getMode();
+        if (rendererMode.usesGl4Renderer())
+        {
+            OpenYsmGl4PlayerModel ysmPlayerModel = this.getOpenYsmGl4Model(playerIn);
+            if (ysmPlayerModel != null)
+            {
+                PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
+                ResourceLocation previousTexture = this.getLocationTextureCustom();
+                this.entityModel = ysmPlayerModel;
+                this.setLocationTextureCustom(ysmPlayerModel.getTexture());
+                try
+                {
+                    this.setModelVisibilities(playerIn);
+                    ysmPlayerModel.swingProgress = 0.0F;
+                    ysmPlayerModel.isSneak = false;
+                    ysmPlayerModel.swimAnimation = 0.0F;
+                    ysmPlayerModel.setRotationAngles(playerIn, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
+
+                    IVertexBuilder customBuffer = bufferIn.getBuffer(ysmPlayerModel.getRenderType(ysmPlayerModel.getTexture()));
+                    if (ysmPlayerModel.renderBone(rightArm ? "RightArm" : "LeftArm", rightArm ? "MRightArm" : "MLeftArm",
+                            matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY,
+                            1.0F, 1.0F, 1.0F, 1.0F))
+                    {
+                        return;
+                    }
+                }
+                finally
+                {
+                    this.entityModel = previousModel;
+                    this.setLocationTextureCustom(previousTexture);
+                }
+            }
+        }
+        else if (rendererMode.usesYsm())
+        {
+            OpenYsmPlayerModel ysmPlayerModel = this.getOpenYsmModel(playerIn);
+            if (ysmPlayerModel != null)
+            {
+                PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
+                ResourceLocation previousTexture = this.getLocationTextureCustom();
+                this.entityModel = ysmPlayerModel;
+                this.setLocationTextureCustom(ysmPlayerModel.getTexture());
+                try
+                {
+                    this.setModelVisibilities(playerIn);
+                    ysmPlayerModel.swingProgress = 0.0F;
+                    ysmPlayerModel.isSneak = false;
+                    ysmPlayerModel.swimAnimation = 0.0F;
+                    ysmPlayerModel.setRotationAngles(playerIn, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
+
+                    OpenYsmBone bone = this.getArmBone(ysmPlayerModel.getBakedModel(), rightArm);
+                    if (bone != null)
+                    {
+                        float prevX = bone.getRenderer().rotateAngleX;
+                        float prevY = bone.getRenderer().rotateAngleY;
+                        float prevZ = bone.getRenderer().rotateAngleZ;
+                        bone.getRenderer().rotateAngleX = 0.0F;
+                        bone.getRenderer().rotateAngleY = 0.0F;
+                        bone.getRenderer().rotateAngleZ = 0.0F;
+
+                        try
+                        {
+                            IVertexBuilder customBuffer = bufferIn.getBuffer(ysmPlayerModel.getRenderType(ysmPlayerModel.getTexture()));
+                            bone.getRenderer().render(matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+                        }
+                        finally
+                        {
+                            bone.getRenderer().rotateAngleX = prevX;
+                            bone.getRenderer().rotateAngleY = prevY;
+                            bone.getRenderer().rotateAngleZ = prevZ;
+                        }
+                        return;
+                    }
+                }
+                finally
+                {
+                    this.entityModel = previousModel;
+                    this.setLocationTextureCustom(previousTexture);
+                }
+            }
+        }
+
         PlayerModel<AbstractClientPlayerEntity> playermodel = this.getEntityModel();
         this.setModelVisibilities(playerIn);
         playermodel.swingProgress = 0.0F;
         playermodel.isSneak = false;
         playermodel.swimAnimation = 0.0F;
         playermodel.setRotationAngles(playerIn, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
+
         rendererArmIn.rotateAngleX = 0.0F;
         rendererArmIn.render(matrixStackIn, bufferIn.getBuffer(RenderType.getEntitySolid(playerIn.getLocationSkin())), combinedLightIn, OverlayTexture.NO_OVERLAY);
         rendererArmwearIn.rotateAngleX = 0.0F;
         rendererArmwearIn.render(matrixStackIn, bufferIn.getBuffer(RenderType.getEntityTranslucent(playerIn.getLocationSkin())), combinedLightIn, OverlayTexture.NO_OVERLAY);
+    }
+
+    private OpenYsmBone getArmBone(OpenYsmBakedPlayerModel bakedModel, boolean rightArm)
+    {
+        OpenYsmBone armBone = bakedModel.getBones().get(rightArm ? "RightArm" : "LeftArm");
+        if (armBone != null)
+        {
+            return armBone;
+        }
+        return bakedModel.getBones().get(rightArm ? "MRightArm" : "MLeftArm");
     }
 
     protected void applyRotations(AbstractClientPlayerEntity entityLiving, MatrixStack matrixStackIn, float ageInTicks, float rotationYaw, float partialTicks)

@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,9 +41,16 @@ public abstract class LanguageMap
         Builder<String, String> builder = ImmutableMap.builder();
         BiConsumer<String, String> biconsumer = builder::put;
 
-        try (InputStream inputstream = LanguageMap.class.getResourceAsStream("/assets/minecraft/lang/en_us.json"))
+        try (InputStream inputstream = openDefaultLanguageStream())
         {
-            func_240593_a_(inputstream, biconsumer);
+            if (inputstream != null)
+            {
+                func_240593_a_(inputstream, biconsumer);
+            }
+            else
+            {
+                LOGGER.error("Couldn't find /assets/minecraft/lang/en_us.json");
+            }
         }
         catch (JsonParseException | IOException ioexception)
         {
@@ -72,6 +82,19 @@ public abstract class LanguageMap
                 };
             }
         };
+    }
+
+    private static InputStream openDefaultLanguageStream() throws IOException
+    {
+        InputStream inputstream = LanguageMap.class.getResourceAsStream("/assets/minecraft/lang/en_us.json");
+
+        if (inputstream != null)
+        {
+            return inputstream;
+        }
+
+        Path devPath = Paths.get("src", "main", "resources", "assets", "minecraft", "lang", "en_us.json");
+        return Files.isRegularFile(devPath) ? Files.newInputStream(devPath) : null;
     }
 
     public static void func_240593_a_(InputStream p_240593_0_, BiConsumer<String, String> p_240593_1_)

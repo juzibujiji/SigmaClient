@@ -2,6 +2,7 @@ package net.minecraft.client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Queues;
+import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import com.mentalfrostbyte.Client;
@@ -60,6 +61,7 @@ import javax.annotation.Nullable;
 
 import de.florianmichael.viamcp.ViaMCP;
 import de.florianmichael.viamcp.fixes.AttackOrder;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;
@@ -185,6 +187,7 @@ import net.minecraft.network.NetworkManager;
 import net.minecraft.network.ProtocolType;
 import net.minecraft.network.handshake.client.CHandshakePacket;
 import net.minecraft.network.login.client.CLoginStartPacket;
+import net.minecraft.network.play.client.CClientStatusPacket;
 import net.minecraft.network.play.client.CPlayerDiggingPacket;
 import net.minecraft.profiler.DataPoint;
 import net.minecraft.profiler.EmptyProfiler;
@@ -461,6 +464,8 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
                 this.mainWindow.getFramebufferHeight(), true, IS_RUNNING_ON_MAC);
         this.framebuffer.setFramebufferColor(0.0F, 0.0F, 0.0F, 0.0F);
         this.resourceManager = new SimpleReloadableResourceManager(ResourcePackType.CLIENT_RESOURCES);
+        YesSteveModel.bootstrap(this.gameDir.toPath());
+        this.resourceManager.addReloadListener(YesSteveModel.getReloadListener());
         this.resourcePackRepository.reloadPacksFromFinders();
         this.gameSettings.fillResourcePackList(this.resourcePackRepository);
         this.languageManager = new LanguageManager(this.gameSettings.language);
@@ -1763,6 +1768,10 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
             if (this.playerController.isRidingHorse()) {
                 this.player.sendHorseInventory();
             } else {
+                if (InteractionProtocol.needsOpenInventoryStatusPacket() && this.getConnection() != null) {
+                    this.getConnection().sendPacket(new CClientStatusPacket(CClientStatusPacket.State.OPEN_INVENTORY));
+                }
+
                 this.displayGuiScreen(new InventoryScreen(this.player));
             }
         }
@@ -1793,6 +1802,10 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
 
             if (this.currentScreen == null && this.loadingGui == null && this.gameSettings.keyBindCommand.isPressed()) {
                 this.openChatScreen("/");
+            }
+
+            if (this.currentScreen == null && this.loadingGui == null && this.gameSettings.keyBindSigmaCommand.isPressed()) {
+                this.openChatScreen(".");
             }
         }
 

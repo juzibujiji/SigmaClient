@@ -12,8 +12,10 @@ import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventPushBlock;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventJump;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveInput;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
+import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 import com.mojang.authlib.GameProfile;
@@ -29,27 +31,79 @@ import team.sdhq.eventBus.annotations.EventTarget;
 
 public class Freecam extends Module {
     public static PlayerEntity player;
-    public float field23824;
-    public float field23825;
-    public boolean field23826;
-    public boolean field23827;
-    public boolean field23828;
-    public boolean field23829;
-    public boolean field23830;
-    public boolean field23831;
-    private double field23815;
-    private double field23816;
-    private double field23817;
-    private double field23818;
-    private double field23819;
-    private double field23820;
-    private float field23821;
-    private float field23822;
-    private int field23823;
+
+    private double posX, posY, posZ;
+    private double prevPosX, prevPosY, prevPosZ;
+    private float yaw, pitch;
+    private int entityId;
+
+    private boolean forward, backward, left, right, jump, sneak;
+    private float moveForward, moveStrafe;
 
     public Freecam() {
         super(ModuleCategory.RENDER, "Freecam", "Move client side but not server side");
         this.registerSetting(new NumberSetting<Float>("Speed", "Speed value", 4.0F, 1.0F, 10.0F, 0.1F));
+        this.registerSetting(new BooleanSetting("AllowCameraInteract", "Allow interacting with blocks/entities from camera position", true));
+        this.registerSetting(new BooleanSetting("AllowRotationChange", "Allow rotation changes while in freecam", true));
+    }
+
+    @Override
+    public void onEnable() {
+        this.posX = mc.player.getPosX();
+        this.posY = mc.player.getPosY();
+        this.posZ = mc.player.getPosZ();
+        this.prevPosX = this.posX;
+        this.prevPosY = this.posY;
+        this.prevPosZ = this.posZ;
+        this.yaw = mc.player.rotationYaw;
+        this.pitch = mc.player.rotationPitch;
+
+        String name = mc.player.getName().getString();
+        GameProfile profile = new GameProfile(mc.player.getGameProfile().getId(), name);
+        player = new RemoteClientPlayerEntity(mc.world, profile);
+        player.inventory = mc.player.inventory;
+        player.setPositionAndRotation(this.posX, this.posY, this.posZ, this.yaw, this.pitch);
+        player.noClip = true;
+        player.entityCollisionReduction = mc.player.entityCollisionReduction;
+        player.rotationYawHead = this.yaw;
+        player.prevRotationYawHead = this.yaw;
+        player.renderYawOffset = this.yaw;
+        player.prevRenderYawOffset = this.yaw;
+        this.entityId = (int) (Math.random() * -10000.0);
+        mc.world.addEntity(this.entityId, player);
+
+        this.forward = mc.gameSettings.keyBindForward.isKeyDown();
+        this.backward = mc.gameSettings.keyBindBack.isKeyDown();
+        this.left = mc.gameSettings.keyBindLeft.isKeyDown();
+        this.right = mc.gameSettings.keyBindRight.isKeyDown();
+        this.jump = mc.gameSettings.keyBindJump.isKeyDown();
+        this.sneak = mc.gameSettings.keyBindSneak.isKeyDown();
+
+        this.moveForward = this.forward != this.backward ? (this.forward ? 1.0F : -1.0F) : 0.0F;
+        this.moveStrafe = this.left != this.right ? (this.left ? 1.0F : -1.0F) : 0.0F;
+
+        mc.gameSettings.keyBindForward.pressed = false;
+        mc.gameSettings.keyBindBack.pressed = false;
+        mc.gameSettings.keyBindLeft.pressed = false;
+        mc.gameSettings.keyBindRight.pressed = false;
+        mc.gameSettings.keyBindJump.pressed = false;
+        mc.gameSettings.keyBindSneak.pressed = false;
+    }
+
+    @Override
+    public void onDisable() {
+        mc.gameSettings.keyBindForward.pressed = this.forward;
+        mc.gameSettings.keyBindBack.pressed = this.backward;
+        mc.gameSettings.keyBindLeft.pressed = this.left;
+        mc.gameSettings.keyBindRight.pressed = this.right;
+        mc.gameSettings.keyBindJump.pressed = this.jump;
+        mc.gameSettings.keyBindSneak.pressed = this.sneak;
+        mc.world.removeEntityFromWorld(this.entityId);
+        mc.player.resetPositionToBB();
+        if (player != null) {
+            mc.player.entityCollisionReduction = player.entityCollisionReduction;
+        }
+        player = null;
     }
 
     @EventTarget
@@ -62,30 +116,33 @@ public class Freecam extends Module {
     }
 
     @EventTarget
-    public void method16640(EventRender2D var1) {
+    public void onRender2D(EventRender2D event) {
         if (this.isEnabled()) {
             if (player == null) {
                 this.onEnable();
             }
 
             mc.player.lastReportedPitch = mc.player.rotationPitch;
-            AxisAlignedBB var4 = mc.player.boundingBox;
-            player.setPosition((var4.minX + var4.maxX) / 2.0, var4.minY, (var4.minZ + var4.maxZ) / 2.0);
-            double var5 = this.field23818 + (this.field23815 - this.field23818) * (double) var1.partialTicks;
-            double var7 = this.field23819 + (this.field23816 - this.field23819) * (double) var1.partialTicks;
-            double var9 = this.field23820 + (this.field23817 - this.field23820) * (double) var1.partialTicks;
-            mc.player.positionVec.x = var5;
-            mc.player.lastTickPosX = var5;
-            mc.player.chasingPosX = var5;
-            mc.player.prevPosX = var5;
-            mc.player.positionVec.y = var7;
-            mc.player.lastTickPosY = var7;
-            mc.player.chasingPosY = var7;
-            mc.player.prevPosY = var7;
-            mc.player.positionVec.z = var9;
-            mc.player.lastTickPosZ = var9;
-            mc.player.chasingPosZ = var9;
-            mc.player.prevPosZ = var9;
+            AxisAlignedBB bb = mc.player.boundingBox;
+            player.setPosition((bb.minX + bb.maxX) / 2.0, bb.minY, (bb.minZ + bb.maxZ) / 2.0);
+
+            double interpolatedX = this.prevPosX + (this.posX - this.prevPosX) * (double) event.partialTicks;
+            double interpolatedY = this.prevPosY + (this.posY - this.prevPosY) * (double) event.partialTicks;
+            double interpolatedZ = this.prevPosZ + (this.posZ - this.prevPosZ) * (double) event.partialTicks;
+
+            mc.player.positionVec.x = interpolatedX;
+            mc.player.lastTickPosX = interpolatedX;
+            mc.player.chasingPosX = interpolatedX;
+            mc.player.prevPosX = interpolatedX;
+            mc.player.positionVec.y = interpolatedY;
+            mc.player.lastTickPosY = interpolatedY;
+            mc.player.chasingPosY = interpolatedY;
+            mc.player.prevPosY = interpolatedY;
+            mc.player.positionVec.z = interpolatedZ;
+            mc.player.lastTickPosZ = interpolatedZ;
+            mc.player.chasingPosZ = interpolatedZ;
+            mc.player.prevPosZ = interpolatedZ;
+
             if (MovementUtil.isMoving()) {
                 mc.player.cameraYaw = 0.099999994F;
             }
@@ -93,200 +150,141 @@ public class Freecam extends Module {
     }
 
     @EventTarget
-    public void method16641(EventRender3D var1) {
+    public void onRender3D(EventRender3D event) {
         if (this.isEnabled()) {
             player.resetPositionToBB();
             player.boundingBox = new AxisAlignedBB(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         }
     }
 
-    @Override
-    public void onEnable() {
-        this.field23815 = mc.player.getPosX();
-        this.field23816 = mc.player.getPosY();
-        this.field23817 = mc.player.getPosZ();
-        this.field23821 = mc.player.rotationYaw;
-        this.field23822 = mc.player.rotationPitch;
-        String var3 = mc.player.getName().getString();
-        GameProfile var4 = new GameProfile(mc.player.getGameProfile().getId(), var3);
-        player = new RemoteClientPlayerEntity(mc.world, var4);
-        player.inventory = mc.player.inventory;
-        player.setPositionAndRotation(this.field23815, this.field23816, this.field23817, this.field23821, this.field23822);
-        player.noClip = true;
-        player.entityCollisionReduction = mc.player.entityCollisionReduction;
-        player.rotationYawHead = this.field23821;
-        player.prevRotationYawHead = this.field23821;
-        player.renderYawOffset = this.field23821;
-        player.prevRenderYawOffset = this.field23821;
-        mc.world.addEntity(this.field23823 = (int) (Math.random() * -10000.0), player);
-        this.field23826 = mc.gameSettings.keyBindForward.isKeyDown();
-        this.field23827 = mc.gameSettings.keyBindBack.isKeyDown();
-        this.field23828 = mc.gameSettings.keyBindLeft.isKeyDown();
-        this.field23829 = mc.gameSettings.keyBindRight.isKeyDown();
-        this.field23825 = this.field23826 != this.field23827 ? (float) (!this.field23826 ? -1 : 1) : 0.0F;
-        this.field23824 = this.field23828 != this.field23829 ? (float) (!this.field23828 ? -1 : 1) : 0.0F;
-        this.field23830 = mc.gameSettings.keyBindJump.isKeyDown();
-        this.field23831 = mc.gameSettings.keyBindSneak.isKeyDown();
-        mc.gameSettings.keyBindForward.pressed = false;
-        mc.gameSettings.keyBindBack.pressed = false;
-        mc.gameSettings.keyBindLeft.pressed = false;
-        mc.gameSettings.keyBindRight.pressed = false;
-        mc.gameSettings.keyBindJump.pressed = false;
-        mc.gameSettings.keyBindSneak.pressed = false;
-    }
-
-    @Override
-    public void onDisable() {
-        mc.gameSettings.keyBindForward.pressed = this.field23826;
-        mc.gameSettings.keyBindBack.pressed = this.field23827;
-        mc.gameSettings.keyBindLeft.pressed = this.field23828;
-        mc.gameSettings.keyBindRight.pressed = this.field23829;
-        mc.gameSettings.keyBindJump.pressed = this.field23830;
-        mc.gameSettings.keyBindSneak.pressed = this.field23831;
-        mc.world.removeEntityFromWorld(this.field23823);
-        mc.player.resetPositionToBB();
-        if (player != null) {
-            mc.player.entityCollisionReduction = player.entityCollisionReduction;
-        }
-
-        player = null;
-    }
-
     @EventTarget
-    public void method16642(EventPushBlock var1) {
+    public void onMoveInput(EventMoveInput event) {
         if (this.isEnabled()) {
-            var1.cancelled = true;
-        }
-    }
+            double speed = this.getNumberValueBySettingName("Speed") / 2.0;
 
-    @EventTarget
-    public void method16643(EventKeyPress var1) {
-        if (this.isEnabled()) {
-            if (var1.getKey() != mc.gameSettings.keyBindSneak.keyCode.getKeyCode()) {
-                if (var1.getKey() != mc.gameSettings.keyBindJump.keyCode.getKeyCode()) {
-                    if (var1.getKey() != mc.gameSettings.keyBindForward.keyCode.getKeyCode()) {
-                        if (var1.getKey() != mc.gameSettings.keyBindBack.keyCode.getKeyCode()) {
-                            if (var1.getKey() != mc.gameSettings.keyBindLeft.keyCode.getKeyCode()) {
-                                if (var1.getKey() == mc.gameSettings.keyBindRight.keyCode.getKeyCode()) {
-                                    var1.cancelled = true;
-                                    this.field23829 = true;
-                                }
-                            } else {
-                                var1.cancelled = true;
-                                this.field23828 = true;
-                            }
-                        } else {
-                            var1.cancelled = true;
-                            this.field23827 = true;
-                        }
-                    } else {
-                        var1.cancelled = true;
-                        this.field23826 = true;
-                    }
-                } else {
-                    var1.cancelled = true;
-                    this.field23830 = true;
-                }
-            } else {
-                var1.cancelled = true;
-                this.field23831 = true;
+            float[] dir = MovementUtil.getDirectionArray(this.moveForward, this.moveStrafe);
+            float forwardDir = dir[1];
+            float strafeDir = dir[2];
+            float yawDir = dir[0];
+
+            double cos = Math.cos(Math.toRadians(yawDir));
+            double sin = Math.sin(Math.toRadians(yawDir));
+
+            this.prevPosX = this.posX;
+            this.prevPosY = this.posY;
+            this.prevPosZ = this.posZ;
+
+            this.posX += (forwardDir * cos + strafeDir * sin) * speed;
+            this.posZ += (forwardDir * sin - strafeDir * cos) * speed;
+
+            if (this.jump) {
+                this.posY += speed;
+            }
+            if (this.sneak) {
+                this.posY -= speed;
             }
 
-            this.field23825 = this.field23826 != this.field23827 ? (float) (!this.field23826 ? -1 : 1) : 0.0F;
-            this.field23824 = this.field23828 != this.field23829 ? (float) (!this.field23828 ? -1 : 1) : 0.0F;
+            event.forward = 0;
+            event.strafe = 0;
+            event.jumping = false;
+            event.sneaking = false;
         }
     }
 
     @EventTarget
-    public void method16644(EventMouseHover var1) {
-        if (this.isEnabled()) {
-            if (var1.getMouseButton() != mc.gameSettings.keyBindSneak.keyCode.getKeyCode()) {
-                if (var1.getMouseButton() != mc.gameSettings.keyBindJump.keyCode.getKeyCode()) {
-                    if (var1.getMouseButton() != mc.gameSettings.keyBindForward.keyCode.getKeyCode()) {
-                        if (var1.getMouseButton() != mc.gameSettings.keyBindBack.keyCode.getKeyCode()) {
-                            if (var1.getMouseButton() != mc.gameSettings.keyBindLeft.keyCode.getKeyCode()) {
-                                if (var1.getMouseButton() == mc.gameSettings.keyBindRight.keyCode.getKeyCode()) {
-                                    var1.cancelled = true;
-                                    this.field23829 = false;
-                                }
-                            } else {
-                                var1.cancelled = true;
-                                this.field23828 = false;
-                            }
-                        } else {
-                            var1.cancelled = true;
-                            this.field23827 = false;
-                        }
-                    } else {
-                        var1.cancelled = true;
-                        this.field23826 = false;
-                    }
-                } else {
-                    var1.cancelled = true;
-                    this.field23830 = false;
-                }
-            } else {
-                var1.cancelled = true;
-                this.field23831 = false;
-            }
-
-            this.field23825 = this.field23826 != this.field23827 ? (float) (!this.field23826 ? -1 : 1) : 0.0F;
-            this.field23824 = this.field23828 != this.field23829 ? (float) (!this.field23828 ? -1 : 1) : 0.0F;
-        }
-    }
-
-    @EventTarget
-    public void method16645(EventJump var1) {
-        if (this.isEnabled()) {
-            var1.cancelled = true;
-        }
-    }
-
-    @EventTarget
-    public void method16646(EventMotion var1) {
-        if (this.isEnabled() && var1.isPre()) {
-            var1.setYaw(this.field23821 % 360.0F);
-            var1.setPitch(this.field23822);
-            mc.player.lastReportedYaw = this.field23821;
-            mc.player.lastReportedPitch = this.field23822;
-            float[] var4 = MovementUtil.getDirectionArray(this.field23825, this.field23824);
-            float var5 = var4[1];
-            float var6 = var4[2];
-            float var7 = var4[0];
-            double var8 = Math.cos(Math.toRadians(var7));
-            double var10 = Math.sin(Math.toRadians(var7));
-            double var12 = this.getNumberValueBySettingName("Speed") / 2.0F;
-            this.field23818 = this.field23815;
-            this.field23820 = this.field23817;
-            this.field23819 = this.field23816;
-            this.field23815 += ((double) var5 * var8 + (double) var6 * var10) * var12;
-            this.field23817 += ((double) var5 * var10 - (double) var6 * var8) * var12;
-            if (this.field23830) {
-                this.field23816 += var12;
-            }
-
-            if (this.field23831) {
-                this.field23816 -= var12;
+    public void onMotion(EventMotion event) {
+        if (this.isEnabled() && event.isPre()) {
+            if (this.getBooleanValueFromSettingName("AllowRotationChange")) {
+                event.setYaw(this.yaw % 360.0F);
+                event.setPitch(this.pitch);
+                mc.player.lastReportedYaw = this.yaw;
+                mc.player.lastReportedPitch = this.pitch;
             }
         }
     }
 
     @EventTarget
-    public void method16647(EventReceivePacket event) {
+    public void onKeyPress(EventKeyPress event) {
+        if (this.isEnabled()) {
+            int key = event.getKey();
+            if (key == mc.gameSettings.keyBindForward.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.forward = true;
+            } else if (key == mc.gameSettings.keyBindBack.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.backward = true;
+            } else if (key == mc.gameSettings.keyBindLeft.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.left = true;
+            } else if (key == mc.gameSettings.keyBindRight.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.right = true;
+            } else if (key == mc.gameSettings.keyBindJump.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.jump = true;
+            } else if (key == mc.gameSettings.keyBindSneak.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.sneak = true;
+            }
+
+            this.moveForward = this.forward != this.backward ? (this.forward ? 1.0F : -1.0F) : 0.0F;
+            this.moveStrafe = this.left != this.right ? (this.left ? 1.0F : -1.0F) : 0.0F;
+        }
+    }
+
+    @EventTarget
+    public void onMouseHover(EventMouseHover event) {
+        if (this.isEnabled()) {
+            int button = event.getMouseButton();
+            if (button == mc.gameSettings.keyBindForward.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.forward = false;
+            } else if (button == mc.gameSettings.keyBindBack.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.backward = false;
+            } else if (button == mc.gameSettings.keyBindLeft.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.left = false;
+            } else if (button == mc.gameSettings.keyBindRight.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.right = false;
+            } else if (button == mc.gameSettings.keyBindJump.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.jump = false;
+            } else if (button == mc.gameSettings.keyBindSneak.keyCode.getKeyCode()) {
+                event.cancelled = true;
+                this.sneak = false;
+            }
+
+            this.moveForward = this.forward != this.backward ? (this.forward ? 1.0F : -1.0F) : 0.0F;
+            this.moveStrafe = this.left != this.right ? (this.left ? 1.0F : -1.0F) : 0.0F;
+        }
+    }
+
+    @EventTarget
+    public void onJump(EventJump event) {
+        if (this.isEnabled()) {
+            event.cancelled = true;
+        }
+    }
+
+    @EventTarget
+    public void onReceivePacket(EventReceivePacket event) {
         if (this.isEnabled()) {
             if (mc.player != null) {
                 if (event.packet instanceof SPlayerPositionLookPacket packet) {
-                    this.field23821 = packet.yaw;
-                    this.field23822 = packet.pitch;
+                    this.yaw = packet.yaw;
+                    this.pitch = packet.pitch;
                     packet.yaw = mc.player.rotationYaw;
                     packet.pitch = mc.player.rotationPitch;
-                    double var5 = packet.x;
-                    double var7 = packet.y;
-                    double var9 = packet.z;
-                    float var11 = PlayerEntity.STANDING_SIZE.width;
-                    float var12 = PlayerEntity.STANDING_SIZE.height;
-                    mc.player
-                            .setBoundingBox(new AxisAlignedBB(var5 - (double) var11, var7, var9 - (double) var11, var5 + (double) var11, var7 + (double) var12, var9 + (double) var11));
+                    double x = packet.x;
+                    double y = packet.y;
+                    double z = packet.z;
+                    float w = PlayerEntity.STANDING_SIZE.width;
+                    float h = PlayerEntity.STANDING_SIZE.height;
+                    mc.player.setBoundingBox(new AxisAlignedBB(
+                            x - (double) w, y, z - (double) w,
+                            x + (double) w, y + (double) h, z + (double) w));
                     event.cancelled = true;
                     player.setMotion(0.0, 0.0, 0.0);
                 }
@@ -295,29 +293,35 @@ public class Freecam extends Module {
     }
 
     @EventTarget
-    public void method16648(EventSendPacket var1) {
+    public void onSendPacket(EventSendPacket event) {
         if (this.isEnabled()) {
-            if (var1.packet instanceof CAnimateHandPacket) {
+            if (event.packet instanceof CAnimateHandPacket) {
                 player.swingArm(Hand.MAIN_HAND);
             }
-
-            if (var1.packet instanceof CUseEntityPacket var4) {
-				if (var4.getEntityFromWorld(mc.world) == null) {
-                    var1.cancelled = true;
+            if (event.packet instanceof CUseEntityPacket usePacket) {
+                if (usePacket.getEntityFromWorld(mc.world) == null) {
+                    event.cancelled = true;
                 }
             }
         }
     }
 
     @EventTarget
-    public void method16649(EventRenderFire var1) {
+    public void onRenderFire(EventRenderFire event) {
         if (this.isEnabled()) {
-            var1.cancelled = true;
+            event.cancelled = true;
         }
     }
 
     @EventTarget
-    public void method16650(EventLoadWorld var1) {
+    public void onPushBlock(EventPushBlock event) {
+        if (this.isEnabled()) {
+            event.cancelled = true;
+        }
+    }
+
+    @EventTarget
+    public void onLoadWorld(EventLoadWorld event) {
         if (this.isEnabled()) {
             this.setState(false);
         }

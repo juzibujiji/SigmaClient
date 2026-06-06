@@ -4,6 +4,7 @@ import com.elfmcys.yesstevemodel.client.OpenYsmBakedPlayerModel;
 import com.elfmcys.yesstevemodel.client.OpenYsmModelLoader;
 import com.elfmcys.yesstevemodel.capability.OpenYsmPlayerAnimationState;
 import com.elfmcys.yesstevemodel.client.animation.controller.OpenYsmControllerRuntime;
+import com.elfmcys.yesstevemodel.geckolib4.cache.GeckoLibCache;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
@@ -73,6 +74,10 @@ public final class YesSteveModel {
         return initialized;
     }
 
+    public static boolean isEnabled() {
+        return initialized && clientConfig.isEnabled();
+    }
+
     public static Path getConfigDirectory() {
         return configDirectory;
     }
@@ -87,6 +92,20 @@ public final class YesSteveModel {
 
     public static Optional<OpenYsmModelEntry> getSelectedModelEntry() {
         return MODEL_INDEX.findById(clientConfig.getSelectedModelId());
+    }
+
+    public static void setEnabled(boolean enabled) {
+        if (clientConfig.isEnabled() == enabled) {
+            return;
+        }
+
+        clientConfig.setEnabled(enabled);
+        if (!enabled) {
+            clearPlayerModelCache();
+            OpenYsmPlayerAnimationState.clearAll();
+            OpenYsmControllerRuntime.clearAll();
+        }
+        saveClientConfig();
     }
 
     public static void setRenderPlayers(boolean renderPlayers) {
@@ -118,7 +137,7 @@ public final class YesSteveModel {
     }
 
     public static OpenYsmBakedPlayerModel getSelectedPlayerModel(IResourceManager resourceManager) {
-        if (!clientConfig.isRenderPlayers()) {
+        if (!clientConfig.isEnabled() || !clientConfig.isRenderPlayers()) {
             return null;
         }
 
@@ -196,6 +215,9 @@ public final class YesSteveModel {
     }
 
     private static void clearPlayerModelCache() {
+        if (cachedPlayerModel != null && cachedPlayerModel.getGeoModelResource() != null) {
+            GeckoLibCache.removeBakedModel(cachedPlayerModel.getGeoModelResource());
+        }
         cachedPlayerModel = null;
         cachedPlayerModelId = null;
         clearFailedPlayerModelCache();

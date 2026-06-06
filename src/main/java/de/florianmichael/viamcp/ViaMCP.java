@@ -25,6 +25,7 @@ import com.viaversion.viaversion.protocols.v1_16_1to1_16_2.packet.ServerboundPac
 import com.viaversion.viaversion.protocols.v1_16_4to1_17.packet.ClientboundPackets1_17;
 import com.viaversion.viaversion.protocols.v1_16_4to1_17.packet.ServerboundPackets1_17;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
+import de.florianmichael.viamcp.fixes.compat.ViaMCPProviders;
 import net.minecraft.util.SharedConstants;
 
 import java.io.File;
@@ -38,7 +39,12 @@ public class ViaMCP {
     }
 
     public ViaMCP() {
-        ViaLoadingBase.ViaLoadingBaseBuilder.create().runDirectory(new File("ViaMCP")).nativeVersion(NATIVE_VERSION).onProtocolReload(protocolVersion -> {}).build();
+        ViaLoadingBase.ViaLoadingBaseBuilder.create()
+                .runDirectory(new File("ViaMCP"))
+                .nativeVersion(NATIVE_VERSION)
+                .providers(ViaMCPProviders::register)
+                .onProtocolReload(protocolVersion -> {})
+                .build();
         fixTransactions();
     }
 

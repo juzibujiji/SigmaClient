@@ -1,5 +1,6 @@
 package net.minecraft.block;
 
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.fluid.Fluids;
@@ -68,6 +69,11 @@ public abstract class AbstractSignBlock extends ContainerBlock implements IWater
 
     public ActionResultType onBlockActivated(BlockState state, World worldIn, BlockPos pos, PlayerEntity player, Hand handIn, BlockRayTraceResult hit)
     {
+        if (InteractionProtocol.atOrOlderThan1_14_4())
+        {
+            return worldIn.isRemote ? ActionResultType.SUCCESS : ActionResultType.PASS;
+        }
+
         ItemStack itemstack = player.getHeldItem(handIn);
         boolean flag = itemstack.getItem() instanceof DyeItem && player.abilities.allowEdit;
 

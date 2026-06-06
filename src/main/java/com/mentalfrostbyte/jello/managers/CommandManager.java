@@ -49,6 +49,7 @@ public class CommandManager extends Manager {
         this.register(new KillPotion());
         this.register(new Enchant());
         this.register(new TP());
+        this.register(new Ysm());
     }
 
     public Command getCommandByName(String var1) {

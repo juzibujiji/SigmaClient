@@ -1,5 +1,6 @@
 package net.minecraft.inventory.container;
 
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
@@ -78,7 +79,8 @@ public class BrewingStandContainer extends Container
 
             if ((index < 0 || index > 2) && index != 3 && index != 4)
             {
-                if (BrewingStandContainer.FuelSlot.isValidBrewingFuel(itemstack))
+                if (InteractionProtocol.supportsBrewingFuelSlot()
+                        && BrewingStandContainer.FuelSlot.isValidBrewingFuel(itemstack))
                 {
                     if (this.mergeItemStack(itemstack1, 4, 5, false) || this.slot.isItemValid(itemstack1) && !this.mergeItemStack(itemstack1, 3, 4, false))
                     {
@@ -167,7 +169,7 @@ public class BrewingStandContainer extends Container
 
         public boolean isItemValid(ItemStack stack)
         {
-            return isValidBrewingFuel(stack);
+            return InteractionProtocol.supportsBrewingFuelSlot() && isValidBrewingFuel(stack);
         }
 
         public static boolean isValidBrewingFuel(ItemStack itemStackIn)
@@ -178,6 +180,11 @@ public class BrewingStandContainer extends Container
         public int getSlotStackLimit()
         {
             return 64;
+        }
+
+        public boolean isEnabled()
+        {
+            return InteractionProtocol.supportsBrewingFuelSlot();
         }
     }
 

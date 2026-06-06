@@ -1,5 +1,6 @@
 package net.minecraft.block;
 
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.fluid.Fluid;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.fluid.Fluids;
@@ -12,11 +13,21 @@ public interface IWaterLoggable extends IBucketPickupHandler, ILiquidContainer
 {
 default boolean canContainFluid(IBlockReader worldIn, BlockPos pos, BlockState state, Fluid fluidIn)
     {
+        if (!InteractionProtocol.supportsWaterlogging())
+        {
+            return false;
+        }
+
         return !state.get(BlockStateProperties.WATERLOGGED) && fluidIn == Fluids.WATER;
     }
 
 default boolean receiveFluid(IWorld worldIn, BlockPos pos, BlockState state, FluidState fluidStateIn)
     {
+        if (!InteractionProtocol.supportsWaterlogging())
+        {
+            return false;
+        }
+
         if (!state.get(BlockStateProperties.WATERLOGGED) && fluidStateIn.getFluid() == Fluids.WATER)
         {
             if (!worldIn.isRemote())

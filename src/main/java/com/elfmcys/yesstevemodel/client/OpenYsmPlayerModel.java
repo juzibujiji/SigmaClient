@@ -44,6 +44,7 @@ public final class OpenYsmPlayerModel extends PlayerModel<AbstractClientPlayerEn
         ActiveAnimationSet active = this.bakedModel.getAnimations()
                 .resolveActive(snapshot, extraState, AnimationRenderContext.GAME);
         this.bakedModel.getAnimations().apply(this.bakedModel.getBones(), active, 0.0F);
+        OpenYsmDebugLogger.logActiveState(this.bakedModel, active);
     }
 
     @Override

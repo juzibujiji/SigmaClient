@@ -1,6 +1,7 @@
 package net.minecraft.block;
 
 import com.google.common.collect.Maps;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import java.util.Map;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
@@ -54,6 +55,11 @@ public class FlowerPotBlock extends Block
         Block block = item instanceof BlockItem ? POTTED_CONTENT.getOrDefault(((BlockItem)item).getBlock(), Blocks.AIR) : Blocks.AIR;
         boolean flag = block == Blocks.AIR;
         boolean flag1 = this.flower == Blocks.AIR;
+
+        if (InteractionProtocol.atOrOlderThan1_10() && !flag1 && flag)
+        {
+            return ActionResultType.CONSUME;
+        }
 
         if (flag != flag1)
         {

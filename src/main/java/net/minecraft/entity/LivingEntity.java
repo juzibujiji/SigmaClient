@@ -2070,8 +2070,15 @@ public abstract class LivingEntity extends Entity {
      */
     protected void jump()
     {
-        final EventJump jumpEvent = new EventJump(this.getMotion(), this.rotationYaw);
-        EventBus.call(jumpEvent);
+        Vector3d vector3d = this.getMotion();
+        float yaw = this.rotationYaw;
+
+        if (!PacketFixFor1_21Plus.shouldUseGrimVanillaMovement()) {
+            final EventJump jumpEvent = new EventJump(vector3d, yaw);
+            EventBus.call(jumpEvent);
+            vector3d = jumpEvent.vector;
+            yaw = jumpEvent.yaw;
+        }
 
         float f = this.getJumpUpwardsMotion();
 
@@ -2080,12 +2087,11 @@ public abstract class LivingEntity extends Entity {
             f += 0.1F * (float)(this.getActivePotionEffect(Effects.JUMP_BOOST).getAmplifier() + 1);
         }
 
-        Vector3d vector3d = jumpEvent.vector;
         this.setMotion(vector3d.x, (double)f, vector3d.z);
 
         if (this.isSprinting())
         {
-            float f1 = jumpEvent.yaw * ((float)Math.PI / 180F);
+            float f1 = yaw * ((float)Math.PI / 180F);
 
             this.setMotion(this.getMotion().add((double)(-MathHelper.sin(f1) * 0.2F), 0.0D, (double)(MathHelper.cos(f1) * 0.2F)));
         }
@@ -2356,7 +2362,9 @@ public abstract class LivingEntity extends Entity {
 
     protected float getOffGroundSpeed() {
         if (PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics()) {
-            return this.getControllingPassenger() instanceof PlayerEntity ? this.getAIMoveSpeed() * 0.1F : 0.02F;
+            return this.getControllingPassenger() instanceof PlayerEntity
+                    ? this.getAIMoveSpeed() * 0.1F
+                    : this.isSprinting() ? 0.025999999F : 0.02F;
         }
 
         return this.jumpMovementFactor;

@@ -1,5 +1,6 @@
 package net.minecraft.client.network.play;
 
+import com.elfmcys.yesstevemodel.network.OpenYsmNetwork;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -2029,6 +2030,9 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
      */
     public void handleCustomPayload(SCustomPayloadPlayPacket packetIn) {
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
+        if (OpenYsmNetwork.handleClientPayload(packetIn)) {
+            return;
+        }
         ResourceLocation resourcelocation = packetIn.getChannelName();
         PacketBuffer packetbuffer = null;
 
