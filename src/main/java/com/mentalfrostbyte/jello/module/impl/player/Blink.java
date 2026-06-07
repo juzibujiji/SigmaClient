@@ -1,15 +1,20 @@
 package com.mentalfrostbyte.jello.module.impl.player;
 
+import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRendererLivingEntity;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.managers.FriendManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
+import com.mentalfrostbyte.jello.module.impl.combat.Teams;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
+import com.mentalfrostbyte.jello.util.game.player.combat.CombatUtil;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.entity.player.RemoteClientPlayerEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.*;
 import net.minecraft.network.IPacket;
@@ -31,6 +36,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Blink extends Module {
     private static final BooleanSetting slowRelease = new BooleanSetting("SlowRelease","SlowRelease Mode On ReleasePlayerPacket", true);
     private static final NumberSetting<Integer> slowReleaseMaxTick = new NumberSetting<>("SlowReleaseMaxTick", "SlowRelease Max Tick", 50, 1, 500, 10);
+    
+    private static final BooleanSetting antiaim = new BooleanSetting("AntiAim", "Anti Attack To You", true);
+    
     public static RemoteClientPlayerEntity clientPlayerEntity;
 
     private final LinkedBlockingQueue<IPacket<?>> packets = new LinkedBlockingQueue<>();
@@ -39,7 +47,7 @@ public class Blink extends Module {
 
     public Blink() {
         super(ModuleCategory.PLAYER, "Blink", "Stops your packets to blink");
-        this.registerSetting(slowRelease,slowReleaseMaxTick);
+        this.registerSetting(slowRelease,slowReleaseMaxTick,antiaim);
     }
 
     @Override
@@ -67,6 +75,15 @@ public class Blink extends Module {
     @EventTarget
     public void onMotion(EventMotion event) {
         if (event.isPre()) {
+            if (antiaim.getCurrentValue()) {
+                mc.world.getPlayers().stream().filter(entity -> {
+                    return (entity != mc.player && entity != clientPlayerEntity && !CombatUtil.arePlayersOnSameTeam(entity) && !Client.getInstance().friendManager.isFriend(entity));
+                }).forEach(player -> {
+                    while ((isAiming(player) || getDistanceToLocalPlayer(player) < 4) && !packets.isEmpty()) {
+                        releaseoneC03();
+                    }
+                });
+            }
             if (slowRelease.getCurrentValue()) {
                 float blinkTicks = slowReleaseMaxTick.getCurrentValue();
                 long movementCount = packets.stream().filter(p -> p instanceof CPlayerPacket).count();
@@ -104,6 +121,10 @@ public class Blink extends Module {
                 break;
             }
         }
+    }
+
+    private double getDistanceToLocalPlayer(Entity entity) {
+        return entity.getDistance(posX, posY, posZ);
     }
 
     private void handleFakePlayerPacket(IPacket<?> packet) {
