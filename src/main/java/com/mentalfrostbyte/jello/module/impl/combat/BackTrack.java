@@ -302,14 +302,28 @@ public class BackTrack extends Module {
 
     Vector3d targetpos = null;
     private void releasefollowSPacket() {
-        while (!packets.isEmpty() && getbacktrackDistance(KillAura.targetEntity) > followTargetStartReach.getCurrentValue()) {
-            IPacket<?> packet;
+        while (!packets.isEmpty()
+                // 条件1：真实位置超过设定距离
+                && getbacktrackDistance(KillAura.targetEntity) > followTargetStartReach.getCurrentValue()
+                // 条件2：当前延迟位置仍在攻击范围内（作为持续条件）
+                && mc.player.getDistance(KillAura.targetEntity) <= followTargetKeepAttackReach.getCurrentValue()) {
 
-            targetpos = KillAura.targetEntity.getPositionVector();
+            // 先peek：如果是tick标记，直接跳过，不打断循环
+            if (packets.peek() instanceof CChatMessagePacket chat
+                    && chat.message.equals("BackTrack Slow Release Tick")) {
+                packets.poll(); // 移除标记
+                continue;
+            }
+
+            if (targetpos == null) targetpos = KillAura.targetEntity.getPositionVector();
 
             if (packets.peek() instanceof SEntityPacket entityPacket) {
                 if (entityPacket.getEntity(mc.world) == KillAura.targetEntity) {
-                    targetpos = new Vector3d(targetpos.x + entityPacket.posX / 4096.0D, targetpos.y + entityPacket.posY / 4096.0D, targetpos.z + entityPacket.posZ / 4096.0D);
+                    targetpos = new Vector3d(
+                            targetpos.x + entityPacket.posX / 4096.0D,
+                            targetpos.y + entityPacket.posY / 4096.0D,
+                            targetpos.z + entityPacket.posZ / 4096.0D
+                    );
                 }
             } else if (packets.peek() instanceof SEntityTeleportPacket teleportPacket) {
                 if (teleportPacket.getEntityId() == KillAura.targetEntity.getEntityId()) {
@@ -317,6 +331,7 @@ public class BackTrack extends Module {
                 }
             }
 
+            // 释放这个包后，目标会超出攻击范围 → 停止
             if (mc.player.getDistanceToEntityBox(new BoundingBox(
                     targetpos.x - KillAura.targetEntity.getWidth() / 2,
                     targetpos.y,
@@ -325,22 +340,21 @@ public class BackTrack extends Module {
                     targetpos.y + KillAura.targetEntity.getHeight(),
                     targetpos.z + KillAura.targetEntity.getWidth() / 2
             )) > followTargetKeepAttackReach.getCurrentValue()) {
-                targetpos = KillAura.targetEntity.getPositionVector();
+                targetpos = null;
                 break;
             }
 
+            // 取出并处理包
+            IPacket<?> packet;
             try {
                 packet = packets.take();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-            if (packet instanceof CChatMessagePacket && ((CChatMessagePacket) packet).message.equals("BackTrack Slow Release Tick")) {
-                break;//跳过这个包
-            }
+
             EventReceivePacket event = new EventReceivePacket(packet);
             EventBus.call(event);
             if (!event.cancelled) {
-                //已经设置血量过了不设置了
                 if (event.packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) {
                     RemoteClientPlayerEntity entity = new RemoteClientPlayerEntity(mc.world, mc.player.getGameProfile());
                     entity.setHealth(mc.player.getHealth());
