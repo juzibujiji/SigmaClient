@@ -80,6 +80,9 @@ public class ModuleManager {
             this.register(new com.mentalfrostbyte.jello.module.impl.render.classic.ESP());
         }
 
+        this.register(new IRCClient());
+        this.register(new IRCServer());
+
         // COMBAT
         this.register(new AutoClicker());
         this.register(new AntiKnockback());

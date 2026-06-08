@@ -50,6 +50,7 @@ public class CommandManager extends Manager {
         this.register(new Enchant());
         this.register(new TP());
         this.register(new Ysm());
+        this.register(new IRC());
     }
 
     public Command getCommandByName(String var1) {
@@ -137,7 +138,8 @@ public class CommandManager extends Manager {
                         args.add(new ChatCommandArguments(parts[i]));
                     }
 
-                    MinecraftUtil.addChatMessage(" ");
+                    //这玩意我注释掉 这玩意会空行 输入irc聊天不舒服
+                    //MinecraftUtil.addChatMessage(" ");
 
                     try {
                         command.run(message, args.toArray(new ChatCommandArguments[0]), msg -> MinecraftUtil.addChatMessage(this.getPrefix() + " " + msg));
@@ -149,7 +151,8 @@ public class CommandManager extends Manager {
                         MinecraftUtil.addChatMessage(this.getPrefix() + " Usage: " + "." + command.getName() + " " + command.getOptions());
                     }
 
-                    MinecraftUtil.addChatMessage(" ");
+                    //这玩意我注释掉 这玩意会空行 输入irc聊天不舒服
+                    //MinecraftUtil.addChatMessage(" ");
                 }
             }
 
