@@ -7,6 +7,7 @@ import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.render.jello.esp.util.Class2329;
 import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
+import com.mentalfrostbyte.jello.util.client.render.HybridFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
@@ -687,6 +688,8 @@ public class RenderUtil implements MinecraftUtil {
                 font = ResourceRegistry.JelloLightFont36;
             } else if (font == ResourceRegistry.RegularFont20) {
                 font = ResourceRegistry.RegularFont40;
+            } else if (font == ResourceRegistry.JelloMediumFont14) {
+                font = ResourceRegistry.JelloMediumFont28;
             } else if (font == ResourceRegistry.JelloMediumFont20) {
                 font = ResourceRegistry.JelloMediumFont40;
             } else if (font == ResourceRegistry.JelloMediumFont25) {
@@ -1527,6 +1530,114 @@ public class RenderUtil implements MinecraftUtil {
                     + inputVector[2] * matrixBuffer.get(matrixBuffer.position() + 8 + i)
                     + inputVector[3] * matrixBuffer.get(matrixBuffer.position() + 12 + i);
         }
+    }
+
+    // ========== Hybrid Font Rendering Methods ==========
+    // These methods automatically use Jello fonts for ASCII (English/numbers)
+    // and Microsoft YaHei for non-ASCII (Chinese, etc.)
+
+    /**
+     * Draw string with hybrid font rendering.
+     * ASCII characters use Jello font, non-ASCII use Microsoft YaHei.
+     *
+     * @param jelloFont The Jello font for ASCII
+     * @param x X position
+     * @param y Y position
+     * @param text Text to draw
+     * @param color ARGB color
+     */
+    public static void drawHybridString(TrueTypeFont jelloFont, float x, float y, String text, int color) {
+        drawHybridString(jelloFont, x, y, text, color, FontSizeAdjust.field14488, FontSizeAdjust.field14489, false);
+    }
+
+    /**
+     * Draw string with hybrid font rendering and adjustments.
+     * ASCII characters use Jello font, non-ASCII use Microsoft YaHei (LyricsFont).
+     *
+     * @param jelloFont The Jello font for ASCII
+     * @param x X position
+     * @param y Y position
+     * @param text Text to draw
+     * @param color ARGB color
+     * @param widthAdjust Width adjustment mode
+     * @param heightAdjust Height adjustment mode
+     * @param shadow Whether to draw shadow
+     */
+    public static void drawHybridString(TrueTypeFont jelloFont, float x, float y, String text, int color,
+                                        FontSizeAdjust widthAdjust, FontSizeAdjust heightAdjust, boolean shadow) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+
+        // Use LyricsFont as fallback for non-ASCII characters
+        TrueTypeFont fallbackFont = ResourceRegistry.LyricsFont;
+
+        // Calculate adjustments based on hybrid width/height
+        int adjustedWidth = 0;
+        int adjustedHeight = 0;
+
+        int hybridWidth = HybridFontRenderer.getWidth(jelloFont, fallbackFont, text);
+        int hybridHeight = HybridFontRenderer.getHeight(jelloFont, fallbackFont, text);
+
+        adjustedWidth = switch (widthAdjust) {
+            case NEGATE_AND_DIVIDE_BY_2 -> -hybridWidth / 2;
+            case WIDTH_NEGATE -> -hybridWidth;
+            default -> adjustedWidth;
+        };
+
+        adjustedHeight = switch (heightAdjust) {
+            case NEGATE_AND_DIVIDE_BY_2 -> -hybridHeight / 2;
+            case HEIGHT_NEGATE -> -hybridHeight;
+            default -> adjustedHeight;
+        };
+
+        float finalX = x + adjustedWidth;
+        float finalY = y + adjustedHeight;
+
+        // Extract color components
+        float alpha = (float) (color >> 24 & 0xFF) / 255.0F;
+        float red = (float) (color >> 16 & 0xFF) / 255.0F;
+        float green = (float) (color >> 8 & 0xFF) / 255.0F;
+        float blue = (float) (color & 0xFF) / 255.0F;
+
+        GL11.glPushMatrix();
+        RenderSystem.enableBlend();
+        GL11.glBlendFunc(770, 771);
+
+        // Draw shadow if requested
+        if (shadow) {
+            Color shadowColor = new Color(0.0F, 0.0F, 0.0F, 0.35F);
+            HybridFontRenderer.drawString(jelloFont, fallbackFont, finalX, finalY + 2, text, shadowColor);
+        }
+
+        // Draw main text
+        Color mainColor = new Color(red, green, blue, alpha);
+        HybridFontRenderer.drawString(jelloFont, fallbackFont, finalX, finalY, text, mainColor);
+
+        RenderSystem.disableBlend();
+        GL11.glPopMatrix();
+    }
+
+    /**
+     * Get width of text when rendered with hybrid fonts.
+     *
+     * @param jelloFont The Jello font for ASCII
+     * @param text Text to measure
+     * @return Width in pixels
+     */
+    public static int getHybridStringWidth(TrueTypeFont jelloFont, String text) {
+        return HybridFontRenderer.getWidth(jelloFont, ResourceRegistry.LyricsFont, text);
+    }
+
+    /**
+     * Get height of text when rendered with hybrid fonts.
+     *
+     * @param jelloFont The Jello font for ASCII
+     * @param text Text to measure
+     * @return Height in pixels
+     */
+    public static int getHybridStringHeight(TrueTypeFont jelloFont, String text) {
+        return HybridFontRenderer.getHeight(jelloFont, ResourceRegistry.LyricsFont, text);
     }
 }
 

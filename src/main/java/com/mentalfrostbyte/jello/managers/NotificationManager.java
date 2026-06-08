@@ -79,13 +79,14 @@ public class NotificationManager extends Manager {
                         (float) (var7 + this.field39923 - 1), (float) (var8 + 1), (float) (var7 + this.field39923), (float) (var8 + this.field39924 - 1), var11
                 );
                 RenderUtil.drawBlurredBackground(var7, var8, var7 + this.field39923 - this.field39927, var8 + this.field39924);
-                RenderUtil.drawString(
+                // Use hybrid font rendering to support Chinese characters
+                RenderUtil.drawHybridString(
                         ResourceRegistry.JelloLightFont20, (float) (var7 + this.field39924 + this.field39927 - 2), (float) (var8 + this.field39927), notif.title, var12
                 );
-                RenderUtil.drawString(
+                RenderUtil.drawHybridString(
                         ResourceRegistry.JelloLightFont14,
                         (float) (var7 + this.field39924 + this.field39927 - 2),
-                        (float) (var8 + this.field39927 + ResourceRegistry.JelloLightFont20.getHeight(notif.title)),
+                        (float) (var8 + this.field39927 + RenderUtil.getHybridStringHeight(ResourceRegistry.JelloLightFont20, notif.title)),
                         notif.desc,
                         var12
                 );

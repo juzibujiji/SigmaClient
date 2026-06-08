@@ -99,6 +99,7 @@ public class ModuleManager {
         this.register(new NewAura());
         // RENDER
         this.register(new AntiBlind());
+        this.register(new BlockAnimations());
         this.register(new DVDSimulator());
         this.register(new FPSBooster());
         this.register(new Fullbright());

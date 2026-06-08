@@ -9,6 +9,7 @@ import com.mentalfrostbyte.jello.managers.ViaManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.combat.KillAura;
+import com.mentalfrostbyte.jello.module.impl.render.BlockAnimations;
 import com.mentalfrostbyte.jello.module.settings.impl.ModeSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.game.player.combat.CombatUtil;
@@ -133,14 +134,23 @@ public class OldHitting extends Module {
     @EventTarget
     @LowerPriority
     public void method16022(EventHandAnimation event) {
+        Module blockAnimations = Client.getInstance().moduleManager.getModuleByClass(BlockAnimations.class);
+        boolean blockAnimationsEnabled = blockAnimations != null && blockAnimations.isEnabled();
+
         if (this.isEnabled() || mc.gameSettings.keyBindUseItem.isKeyDown()
                 || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
+            boolean leftShield = event.method13926() && event.getHand() == HandSide.LEFT
+                    && event.getItemStack().getItem() instanceof ShieldItem;
+
+            if (blockAnimationsEnabled && !leftShield) {
+                return;
+            }
+
             float swingProgress = event.getSwingProgress();
             event.getMatrix().translate(getNumberValueBySettingName("XPos"), getNumberValueBySettingName("YPos"),
                     getNumberValueBySettingName("ZPos"));
 
-            if (event.method13926() && event.getHand() == HandSide.LEFT
-                    && event.getItemStack().getItem() instanceof ShieldItem) {
+            if (leftShield) {
                 event.renderBlocking(false);
             } else if (event.getHand() != HandSide.LEFT || !field23408) {
                 if ((field23408 || Client.getInstance().moduleManager.getModuleByClass(KillAura.class).isEnabled()

@@ -484,16 +484,41 @@ public class MusicPlayer extends AnimatedIconPanel {
         // NanoVG ignores the GL matrix and needs absolute screen coords.
         if (this.showNeteaseQr && this.neteaseQrImage != null) {
             // Panel-local coords for GL
-            float localX = (this.getWidthA() - 200) / 2.0f;
-            float localY = (this.getHeightA() - 260) / 2.0f;
+            float overlayWidth = 240.0F;
+            float overlayHeight = 300.0F;
+            float qrSize = 200.0F;
+            float padding = 20.0F;
+            float overlayX = (this.getWidthA() - overlayWidth) / 2.0F;
+            float overlayY = (this.getHeightA() - overlayHeight) / 2.0F;
+            float localX = overlayX + padding;
+            float localY = overlayY + padding;
             // Absolute coords for NanoVG
             float absX = this.getXA() + localX;
             float absY = this.getYA() + localY;
 
-            // GL: dark semi-transparent background
-            RenderUtil.drawRoundedRect(localX - 20, localY - 20,
-                    localX + 220, localY + 280,
-                    RenderUtil2.applyAlpha(0xFF1a1a2e, partialTicks * 0.95F));
+            float overlayAlpha = partialTicks;
+            RenderUtil.drawRoundedRect(
+                    overlayX, overlayY,
+                    overlayWidth, overlayHeight,
+                    14.0F, overlayAlpha);
+
+            int backgroundColor = RenderUtil2.applyAlpha(-16777216, overlayAlpha * 0.88F);
+            RenderUtil.drawRoundedRect(
+                    overlayX, overlayY,
+                    overlayX + overlayWidth, overlayY + overlayHeight,
+                    backgroundColor);
+
+            int borderColor = RenderUtil2.applyAlpha(-16777216, overlayAlpha * 0.18F);
+            RenderUtil.drawRoundedRect(overlayX, overlayY, overlayX + overlayWidth, overlayY + 1.0F, borderColor);
+            RenderUtil.drawRoundedRect(overlayX, overlayY + overlayHeight - 1.0F, overlayX + overlayWidth, overlayY + overlayHeight, borderColor);
+            RenderUtil.drawRoundedRect(overlayX, overlayY + 1.0F, overlayX + 1.0F, overlayY + overlayHeight - 1.0F, borderColor);
+            RenderUtil.drawRoundedRect(overlayX + overlayWidth - 1.0F, overlayY + 1.0F, overlayX + overlayWidth, overlayY + overlayHeight - 1.0F, borderColor);
+
+            RenderUtil.drawBlurredBackground(
+                    (int) (this.getXA() + overlayX),
+                    (int) (this.getYA() + overlayY),
+                    (int) (this.getXA() + overlayX + overlayWidth),
+                    (int) (this.getYA() + overlayY + overlayHeight));
 
             // GL: upload QR texture if needed
             if (this.neteaseQrTexture == null && this.neteaseQrImage != null) {
@@ -512,10 +537,11 @@ public class MusicPlayer extends AnimatedIconPanel {
 
             // GL: draw QR image
             if (this.neteaseQrTexture != null) {
-                RenderUtil.drawImage(localX, localY, 200, 200,
+                RenderUtil.drawImage(localX, localY, qrSize, qrSize,
                         this.neteaseQrTexture,
                         RenderUtil2.applyAlpha(-1, partialTicks));
             }
+            RenderUtil.restoreScissor();
 
             // NanoVG: draw text hints using absolute screen coords
             if (NanoVGFontRenderer.isInitialized()) {
@@ -525,12 +551,12 @@ public class MusicPlayer extends AnimatedIconPanel {
                 String qrHint = "\u8bf7\u7528\u7f51\u6613\u4e91\u97f3\u4e50 App \u626b\u7801";
                 float tw = NanoVGFontRenderer.getTextWidth(qrHint, 16f);
                 NanoVGFontRenderer.drawText(qrHint,
-                        absX + (200 - tw) / 2, absY + 210, 16f,
+                        absX + (qrSize - tw) / 2, absY + 210, 16f,
                         RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks));
                 String closeHint = "\u70b9\u51fb\u4efb\u610f\u4f4d\u7f6e\u5173\u95ed";
                 float tw2 = NanoVGFontRenderer.getTextWidth(closeHint, 14f);
                 NanoVGFontRenderer.drawText(closeHint,
-                        absX + (200 - tw2) / 2, absY + 235, 14f,
+                        absX + (qrSize - tw2) / 2, absY + 235, 14f,
                         RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks * 0.7f));
                 NanoVGFontRenderer.endFrame();
             }
@@ -863,16 +889,17 @@ public class MusicPlayer extends AnimatedIconPanel {
                     RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4));
             NanoVGFontRenderer.endFrame();
         } else {
-            RenderUtil.drawString(
+            // Use hybrid font rendering to support Chinese song titles
+            RenderUtil.drawHybridString(
                     ResourceRegistry.JelloLightFont25,
-                    (float) ((this.getWidthA() - ResourceRegistry.JelloLightFont25.getWidth(this.field20849) + this.width)
+                    (float) ((this.getWidthA() - RenderUtil.getHybridStringWidth(ResourceRegistry.JelloLightFont25, this.field20849) + this.width)
                             / 2),
                     16.0F + (1.0F - var4) * 14.0F,
                     this.field20849,
                     RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4));
-            RenderUtil.drawString(
+            RenderUtil.drawHybridString(
                     ResourceRegistry.JelloMediumFont25,
-                    (float) ((this.getWidthA() - ResourceRegistry.JelloMediumFont25.getWidth(this.field20849) + this.width)
+                    (float) ((this.getWidthA() - RenderUtil.getHybridStringWidth(ResourceRegistry.JelloMediumFont25, this.field20849) + this.width)
                             / 2),
                     16.0F + (1.0F - var4) * 14.0F,
                     this.field20849,

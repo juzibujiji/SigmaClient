@@ -34,10 +34,14 @@ public class ResourceRegistry {
         public static final TrueTypeFont RegularFont40 = getFont("com/mentalfrostbyte/gui/resources/font/regular.ttf",
                         0,
                         40.0F);
+        public static final TrueTypeFont JelloMediumFont14 = getFont(
+                        "com/mentalfrostbyte/gui/resources/font/helvetica-neue medium.ttf", 0, 14.0F);
         public static final TrueTypeFont JelloMediumFont20 = getFont(
                         "com/mentalfrostbyte/gui/resources/font/helvetica-neue medium.ttf", 0, 20.0F);
         public static final TrueTypeFont JelloMediumFont25 = getFont(
                         "com/mentalfrostbyte/gui/resources/font/helvetica-neue medium.ttf", 0, 25.0F);
+        public static final TrueTypeFont JelloMediumFont28 = getFont(
+                        "com/mentalfrostbyte/gui/resources/font/helvetica-neue medium.ttf", 0, 28.0F);
         public static final TrueTypeFont JelloMediumFont40 = getFont(
                         "com/mentalfrostbyte/gui/resources/font/helvetica-neue medium.ttf", 0, 40.0F);
         public static final TrueTypeFont JelloMediumFont50 = getFont(
