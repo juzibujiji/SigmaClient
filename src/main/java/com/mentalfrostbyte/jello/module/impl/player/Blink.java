@@ -75,7 +75,8 @@ public class Blink extends Module {
     @EventTarget
     public void onMotion(EventMotion event) {
         if (event.isPre()) {
-            if (antiaim.getCurrentValue()) {
+            //bug有时间就修
+            /*if (antiaim.getCurrentValue()) {
                 mc.world.getPlayers().stream().filter(entity -> {
                     return (entity != mc.player && entity != clientPlayerEntity && !CombatUtil.arePlayersOnSameTeam(entity) && !Client.getInstance().friendManager.isFriend(entity));
                 }).forEach(player -> {
@@ -83,7 +84,7 @@ public class Blink extends Module {
                         releaseoneC03();
                     }
                 });
-            }
+            }*/
             if (slowRelease.getCurrentValue()) {
                 float blinkTicks = slowReleaseMaxTick.getCurrentValue();
                 long movementCount = packets.stream().filter(p -> p instanceof CPlayerPacket).count();
