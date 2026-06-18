@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.animation.controller;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.capability.OpenYsmPlayerAnimationState;
 import com.elfmcys.yesstevemodel.client.animation.LoopMode;
 import com.elfmcys.yesstevemodel.client.animation.OpenYsmAnimationSet;
 import com.elfmcys.yesstevemodel.client.animation.PlayerStateSnapshot;
@@ -38,6 +39,12 @@ public final class OpenYsmControllerRuntime {
 
     public static Result tick(String modelId, Collection<ControllerDefinition> definitions,
                               Map<String, OpenYsmAnimationSet.Clip> clips, PlayerStateSnapshot snapshot) {
+        return tick(modelId, definitions, clips, snapshot, null);
+    }
+
+    public static Result tick(String modelId, Collection<ControllerDefinition> definitions,
+                              Map<String, OpenYsmAnimationSet.Clip> clips, PlayerStateSnapshot snapshot,
+                              Map<String, Double> externalVariables) {
         if (snapshot == null || modelId == null || modelId.isEmpty() || definitions == null || definitions.isEmpty()) {
             return Result.EMPTY;
         }
@@ -64,7 +71,7 @@ public final class OpenYsmControllerRuntime {
             AnimationFinishSummary finishSummary = finishSummary(state, instance.elapsedSeconds(snapshot.ageInTicks), clips);
             for (ControllerTransition transition : state.getTransitions()) {
                 boolean result = evaluateCondition(transition.getExpression(), snapshot, modelId,
-                        definition.getName(), transition.getTargetState(), finishSummary);
+                        definition.getName(), transition.getTargetState(), finishSummary, externalVariables);
                 debugTransition(snapshot, modelId, definition, previousState, transition, result);
                 if (result && definition.getStates().containsKey(transition.getTargetState())) {
                     instance.transitionTo(transition.getTargetState(), snapshot.ageInTicks, state.getBlendTransitionSeconds());
@@ -95,10 +102,10 @@ public final class OpenYsmControllerRuntime {
             if (blendedPreviousState != null && previousBlendWeight > 0.0F) {
                 appendStateAnimations(active, activeNames, clips, snapshot, modelId, definition, blendedPreviousState,
                         instance.getPreviousStateElapsedSeconds(), previousBlendWeight, finishSummary(blendedPreviousState,
-                                instance.getPreviousStateElapsedSeconds(), clips));
+                                instance.getPreviousStateElapsedSeconds(), clips), externalVariables);
             }
             appendStateAnimations(active, activeNames, clips, snapshot, modelId, definition, state, elapsed,
-                    currentBlendWeight, outputFinishSummary);
+                    currentBlendWeight, outputFinishSummary, externalVariables);
             debugActive(snapshot, modelId, definition, previousState, instance.getCurrentState(), activeNames);
         }
         return active.isEmpty() ? Result.EMPTY : new Result(active);
@@ -108,10 +115,11 @@ public final class OpenYsmControllerRuntime {
                                               Map<String, OpenYsmAnimationSet.Clip> clips, PlayerStateSnapshot snapshot,
                                               String modelId, ControllerDefinition definition,
                                               ControllerStateDefinition state, float elapsed, float layerWeight,
-                                              AnimationFinishSummary finishSummary) {
+                                              AnimationFinishSummary finishSummary,
+                                              Map<String, Double> externalVariables) {
         for (ControllerAnimationRef animationRef : state.getAnimations()) {
                 float weight = evaluateWeight(animationRef.getWeightExpression(), snapshot, modelId,
-                        definition.getName(), animationRef.getAnimationName(), finishSummary) * layerWeight;
+                        definition.getName(), animationRef.getAnimationName(), finishSummary, externalVariables) * layerWeight;
                 OpenYsmAnimationSet.Clip clip = findClip(clips, animationRef.getAnimationName());
                 if (clip == null) {
                     debugSkip(snapshot, modelId, definition, state, animationRef, "clip not found");
@@ -146,12 +154,13 @@ public final class OpenYsmControllerRuntime {
 
     private static boolean evaluateCondition(String expression, PlayerStateSnapshot snapshot, String modelId,
                                              String controllerName, String targetState,
-                                             AnimationFinishSummary finishSummary) {
+                                             AnimationFinishSummary finishSummary,
+                                             Map<String, Double> externalVariables) {
         if (expression == null || expression.trim().isEmpty()) {
             return false;
         }
         EvaluationResult result = evaluateMolang(expression, snapshot, modelId, controllerName, "transition", targetState,
-                finishSummary);
+                finishSummary, externalVariables);
         if (!result.valid) {
             return false;
         }
@@ -160,9 +169,10 @@ public final class OpenYsmControllerRuntime {
 
     private static float evaluateWeight(String expression, PlayerStateSnapshot snapshot, String modelId,
                                         String controllerName, String animationName,
-                                        AnimationFinishSummary finishSummary) {
+                                        AnimationFinishSummary finishSummary,
+                                        Map<String, Double> externalVariables) {
         EvaluationResult result = evaluateMolang(expression == null || expression.trim().isEmpty() ? "1" : expression,
-                snapshot, modelId, controllerName, "weight", animationName, finishSummary);
+                snapshot, modelId, controllerName, "weight", animationName, finishSummary, externalVariables);
         if (!result.valid) {
             return 0.0F;
         }
@@ -171,10 +181,15 @@ public final class OpenYsmControllerRuntime {
 
     private static EvaluationResult evaluateMolang(String expression, PlayerStateSnapshot snapshot, String modelId,
                                                    String controllerName, String expressionKind, String owner,
-                                                   AnimationFinishSummary finishSummary) {
+                                                   AnimationFinishSummary finishSummary,
+                                                   Map<String, Double> externalVariables) {
         try {
             MolangExpression parsed = MolangParser.parse(expression);
-            MolangContext context = MolangContext.controller(snapshot, modelId, controllerName, MolangBindings.EMPTY,
+            Map<String, Double> variables = externalVariables == null
+                    ? OpenYsmPlayerAnimationState.getGuiVariables(snapshot.uuid, modelId)
+                    : externalVariables;
+            MolangBindings bindings = new MolangBindings(variables, Collections.emptyMap());
+            MolangContext context = MolangContext.controller(snapshot, modelId, controllerName, bindings,
                     finishSummary.allFinished, finishSummary.anyFinished);
             return EvaluationResult.valid((float) MolangEvaluator.evaluate(parsed, context).asDouble());
         } catch (MolangParser.ParseException exception) {

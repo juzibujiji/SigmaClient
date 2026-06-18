@@ -1,5 +1,7 @@
 package net.minecraft.client.renderer.entity;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraEntityModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraEntityRenderHelper;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import net.minecraft.client.renderer.IRenderTypeBuffer;
@@ -22,13 +24,22 @@ public class LlamaSpitRenderer extends EntityRenderer<LlamaSpitEntity>
 
     public void render(LlamaSpitEntity entityIn, float entityYaw, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int packedLightIn)
     {
+        OpenYsmExtraEntityModel ysmModel = OpenYsmExtraEntityRenderHelper.find(entityIn,
+                OpenYsmExtraEntityModel.Kind.PROJECTILE, "minecraft:llama_spit");
         matrixStackIn.push();
         matrixStackIn.translate(0.0D, (double)0.15F, 0.0D);
         matrixStackIn.rotate(Vector3f.YP.rotationDegrees(MathHelper.lerp(partialTicks, entityIn.prevRotationYaw, entityIn.rotationYaw) - 90.0F));
         matrixStackIn.rotate(Vector3f.ZP.rotationDegrees(MathHelper.lerp(partialTicks, entityIn.prevRotationPitch, entityIn.rotationPitch)));
-        this.model.setRotationAngles(entityIn, partialTicks, 0.0F, -0.1F, 0.0F, 0.0F);
-        IVertexBuilder ivertexbuilder = bufferIn.getBuffer(this.model.getRenderType(LLAMA_SPIT_TEXTURE));
-        this.model.render(matrixStackIn, ivertexbuilder, packedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+        if (ysmModel != null)
+        {
+            OpenYsmExtraEntityRenderHelper.render(ysmModel, entityIn, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+        }
+        else
+        {
+            this.model.setRotationAngles(entityIn, partialTicks, 0.0F, -0.1F, 0.0F, 0.0F);
+            IVertexBuilder ivertexbuilder = bufferIn.getBuffer(this.model.getRenderType(LLAMA_SPIT_TEXTURE));
+            this.model.render(matrixStackIn, ivertexbuilder, packedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+        }
         matrixStackIn.pop();
         super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
     }

@@ -1,5 +1,6 @@
 package net.minecraft.world;
 
+import com.elfmcys.yesstevemodel.network.OpenYsmNetwork;
 import com.google.common.collect.Lists;
 import com.mojang.datafixers.util.Pair;
 import java.util.Collection;
@@ -232,6 +233,7 @@ public class TrackedEntity
     public void track(ServerPlayerEntity player)
     {
         this.sendSpawnPackets(player.connection::sendPacket);
+        OpenYsmNetwork.sendKnownExtraEntityModel(this.trackedEntity, player);
         this.trackedEntity.addTrackingPlayer(player);
         player.addEntity(this.trackedEntity);
     }

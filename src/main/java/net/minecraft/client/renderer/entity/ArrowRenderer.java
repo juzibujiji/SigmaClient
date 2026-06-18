@@ -1,5 +1,7 @@
 package net.minecraft.client.renderer.entity;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraEntityModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraEntityRenderHelper;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import net.minecraft.client.renderer.IRenderTypeBuffer;
@@ -20,6 +22,25 @@ public abstract class ArrowRenderer<T extends AbstractArrowEntity> extends Entit
 
     public void render(T entityIn, float entityYaw, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int packedLightIn)
     {
+        OpenYsmExtraEntityModel ysmModel = OpenYsmExtraEntityRenderHelper.find(entityIn,
+                OpenYsmExtraEntityModel.Kind.PROJECTILE, "minecraft:arrow");
+        if (ysmModel != null)
+        {
+            matrixStackIn.push();
+            matrixStackIn.rotate(Vector3f.YP.rotationDegrees(MathHelper.lerp(partialTicks, entityIn.prevRotationYaw, entityIn.rotationYaw) - 90.0F));
+            matrixStackIn.rotate(Vector3f.ZP.rotationDegrees(MathHelper.lerp(partialTicks, entityIn.prevRotationPitch, entityIn.rotationPitch)));
+            float f9 = (float)entityIn.arrowShake - partialTicks;
+            if (f9 > 0.0F)
+            {
+                float f10 = -MathHelper.sin(f9 * 3.0F) * f9;
+                matrixStackIn.rotate(Vector3f.ZP.rotationDegrees(f10));
+            }
+            OpenYsmExtraEntityRenderHelper.render(ysmModel, entityIn, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+            matrixStackIn.pop();
+            super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+            return;
+        }
+
         matrixStackIn.push();
         matrixStackIn.rotate(Vector3f.YP.rotationDegrees(MathHelper.lerp(partialTicks, entityIn.prevRotationYaw, entityIn.rotationYaw) - 90.0F));
         matrixStackIn.rotate(Vector3f.ZP.rotationDegrees(MathHelper.lerp(partialTicks, entityIn.prevRotationPitch, entityIn.rotationPitch)));
@@ -74,4 +95,5 @@ public abstract class ArrowRenderer<T extends AbstractArrowEntity> extends Entit
     {
         vertexBuilder.pos(matrix, (float)offsetX, (float)offsetY, (float)offsetZ).color(255, 255, 255, 255).tex(textureX, textureY).overlay(OverlayTexture.NO_OVERLAY).lightmap(packedLightIn).normal(normals, (float)p_229039_9_, (float)p_229039_11_, (float)p_229039_10_).endVertex();
     }
+
 }

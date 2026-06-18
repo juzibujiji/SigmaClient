@@ -4,7 +4,7 @@
 
 This branch contains a source-level GeckoLib 4 architectural backport slice for MCP 1.16.4 and wires it into the OpenYSM player path. It is not a runtime dependency on a GeckoLib jar, and it is not a tiny cube demo. It is also not yet a complete upstream GeckoLib 4 transplant.
 
-The current default renderer remains `legacy_self` so the old path can be used as a fallback while the GL4/OpenYSM path is verified on real models.
+The current default renderer is `openysm`. The old self renderer remains available as an explicit `legacy_self` fallback.
 
 ## Source Baselines
 
@@ -51,11 +51,12 @@ OpenYSM keeps the existing resource and package layer, then bakes into GL4-style
 
 Current integration points:
 
-- `OpenYsmModelLoader` builds both legacy `OpenYsmBone` wrappers and GL4-style `GeoBone`/`GeoCube` trees.
-- `OpenYsmBakedPlayerModel` carries the GL4 `BakedGeoModel` and registers it in `GeckoLibCache` under a sanitized OpenYSM resource key.
+- `OpenYsmModelLoader` builds both legacy `OpenYsmBone` wrappers and GL4-style `GeoBone`/`GeoCube` trees for the main player model.
+- `OpenYsmModelLoader` also bakes optional JSON `files.player.model.arm` and binary `.ysm` `armModel` geometry for OpenYSM's dedicated first-person arm path.
+- `OpenYsmBakedPlayerModel` carries separate main and arm `BakedGeoModel` instances and registers them in `GeckoLibCache` under sanitized OpenYSM resource keys.
 - `OpenYsmBone` mirrors pose and visibility state into its linked `GeoBone`.
 - `OpenYsmGl4PlayerModel` renders the player model through `GeoRenderer`.
-- `PlayerRenderer` routes player body and first-person arm rendering through the selected renderer mode.
+- `PlayerRenderer` routes player body and first-person arm rendering through the selected renderer mode, preferring the dedicated arm model when the package provides one and falling back to the main model arms otherwise.
 
 ## Renderer Selector
 
@@ -68,7 +69,7 @@ Supported values:
 - `gl4`: use the MCP-local GL4 renderer path.
 - `openysm`: use the OpenYSM GL4 renderer stack alias.
 
-Initial default: `legacy_self`.
+Initial default: `openysm`.
 
 The `gl4` and `openysm` modes initialize `GeckoLibBackport` and use `OpenYsmGl4PlayerModel`. The old `OpenYsmModelRenderer` is retained only for `legacy_self` fallback and now rate-limits invalid custom quad warnings.
 
@@ -76,8 +77,9 @@ The `gl4` and `openysm` modes initialize `GeckoLibBackport` and use `OpenYsmGl4P
 
 Implemented OpenYSM-side support includes:
 
-- Animation source categories: `main`, `arm`, `extra`, `custom`, `gui_preview`, `controller_referenced`
+- Animation source categories: `main`, `arm`, `fp_arm`, `extra`, `custom`, `gui_preview`, `controller_referenced`
 - Main/arm/extra/custom/gui preview action resolution
+- Binary animation type `11` maps to `fp_arm`, matching OpenYSM's first-person arm animation bucket.
 - `PLAY_ONCE`, `LOOP`, and `HOLD_ON_LAST_FRAME`
 - Default-hidden conditional bones and active-clip visibility behavior
 - Controller state parsing, initial state, transitions, weights, blend transition timing, multiple controllers, and controller reset
@@ -118,14 +120,15 @@ Runtime status:
 
 - Player renderer routing is implemented.
 - GL4/OpenYSM mode can be selected by system property.
+- `openysm` is the default renderer path.
 - Legacy fallback remains available.
-- Broad in-game verification across entity, item, armor, block/tile entity, renderer layers, resource reload, and real OpenYSM model sets is still a TODO.
+- Dedicated OpenYSM first-person arm geometry and `fp_arm` animations are wired for both JSON folders and binary `.ysm` packages.
+- Broad in-game verification across entity, item, armor, block/tile entity, renderer layers, resource reload, and a wider real OpenYSM model matrix is still pending.
 
 ## Known TODOs
 
 - Complete upstream GL4 parser/resource reload/cache parity instead of only the OpenYSM bake path.
 - Add concrete GL4 item/entity/block/armor validation fixtures inside this MCP client.
 - Port or replace specialized GL4 render layers.
-- Verify real encrypted `.ysm` crypto=3 packages, JSON folder models, texture variants, first-person arms, extra/custom actions, and controller transitions in-game.
+- Verify more real encrypted `.ysm` crypto=3 packages, JSON folder models, texture variants, first-person arms, extra/custom actions, and controller transitions in-game.
 - Evaluate NativeModelRenderer/SIMD portability separately without blocking the Java renderer path.
-- Revisit the default renderer after runtime verification; for now it intentionally remains `legacy_self`.

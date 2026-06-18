@@ -10,9 +10,13 @@ import com.elfmcys.yesstevemodel.geckolib4.renderer.GeoRenderer;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import net.minecraft.client.entity.player.AbstractClientPlayerEntity;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.model.PlayerModel;
 import net.minecraft.client.renderer.model.ModelRenderer;
+import net.minecraft.util.HandSide;
 import net.minecraft.util.ResourceLocation;
+
+import java.util.Map;
 
 public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlayerEntity> {
     private final OpenYsmBakedPlayerModel bakedModel;
@@ -20,7 +24,8 @@ public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlaye
     };
 
     public OpenYsmGl4PlayerModel(OpenYsmBakedPlayerModel bakedModel, boolean smallArms) {
-        super(0.0F, smallArms);
+        super(bakedModel.isAllCutout() ? RenderType::getEntityCutoutNoCull : RenderType::getEntityTranslucent,
+                0.0F, smallArms);
         this.bakedModel = bakedModel;
     }
 
@@ -63,6 +68,7 @@ public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlaye
 
         matrixStackIn.push();
         try {
+            matrixStackIn.translate(0.0D, this.bakedModel.getGroundOffsetY(), 0.0D);
             matrixStackIn.scale(this.bakedModel.getWidthScale(), this.bakedModel.getHeightScale(), this.bakedModel.getWidthScale());
             this.renderer.render(geoModel, matrixStackIn, bufferIn, packedLightIn, packedOverlayIn, red, green, blue, alpha);
         } finally {
@@ -72,14 +78,69 @@ public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlaye
 
     public boolean renderBone(String primaryName, String fallbackName, MatrixStack matrixStackIn, IVertexBuilder bufferIn,
                               int packedLightIn, int packedOverlayIn, float red, float green, float blue, float alpha) {
-        BakedGeoModel geoModel = this.bakedModel.getGeoModel();
+        return renderBoneFrom(this.bakedModel.getGeoModel(), this.bakedModel.getBones(), primaryName, fallbackName,
+                matrixStackIn, bufferIn, packedLightIn, packedOverlayIn, red, green, blue, alpha);
+    }
+
+    public boolean renderFirstPersonArm(AbstractClientPlayerEntity entityIn, boolean rightArm, float ageInTicks,
+                                        MatrixStack matrixStackIn, IVertexBuilder bufferIn, int packedLightIn,
+                                        int packedOverlayIn, float red, float green, float blue, float alpha) {
+        if (!this.bakedModel.hasCustomArmModel()) {
+            return false;
+        }
+
+        Map<String, OpenYsmBone> armBones = this.bakedModel.getArmBones();
+        armBones.values().forEach(OpenYsmBone::resetPose);
+        PlayerStateSnapshot snapshot = PlayerStateSnapshot.capture(entityIn, 0.0F, ageInTicks);
+        OpenYsmPlayerAnimationState.State extraState = OpenYsmPlayerAnimationState.get(entityIn);
+        ActiveAnimationSet active = this.bakedModel.getAnimations()
+                .resolveActive(snapshot, extraState, AnimationRenderContext.FIRST_PERSON_ARM);
+        this.bakedModel.getAnimations().apply(armBones, active, 0.0F);
+
+        return renderBoneFrom(this.bakedModel.getArmGeoModel(), armBones,
+                rightArm ? "RightArm" : "LeftArm", rightArm ? "MRightArm" : "MLeftArm",
+                matrixStackIn, bufferIn, packedLightIn, packedOverlayIn, red, green, blue, alpha);
+    }
+
+    @Override
+    public void translateHand(HandSide sideIn, MatrixStack matrixStackIn) {
+        translateItemHand(sideIn, matrixStackIn);
+    }
+
+    public boolean translateItemHand(HandSide sideIn, MatrixStack matrixStackIn) {
+        OpenYsmBone locatorBone = getHandLocatorBone(this.bakedModel.getBones(), sideIn == HandSide.RIGHT);
+        if (locatorBone != null) {
+            translateYsmBone(locatorBone, matrixStackIn);
+            return true;
+        }
+
+        OpenYsmBone armBone = getArmBone(this.bakedModel.getBones(), sideIn == HandSide.RIGHT);
+        if (armBone == null) {
+            super.translateHand(sideIn, matrixStackIn);
+            return false;
+        }
+        translateYsmBone(armBone, matrixStackIn);
+        return false;
+    }
+
+    private void translateYsmBone(OpenYsmBone bone, MatrixStack matrixStackIn) {
+        matrixStackIn.translate(0.0D, this.bakedModel.getGroundOffsetY(), 0.0D);
+        matrixStackIn.scale(this.bakedModel.getWidthScale(), this.bakedModel.getHeightScale(), this.bakedModel.getWidthScale());
+        bone.translateRotateChain(matrixStackIn);
+    }
+
+
+    private boolean renderBoneFrom(BakedGeoModel geoModel, Map<String, OpenYsmBone> bones,
+                                   String primaryName, String fallbackName,
+                                   MatrixStack matrixStackIn, IVertexBuilder bufferIn,
+                                   int packedLightIn, int packedOverlayIn, float red, float green, float blue, float alpha) {
         if (geoModel == null) {
             return false;
         }
 
-        OpenYsmBone wrapper = this.bakedModel.getBones().get(primaryName);
+        OpenYsmBone wrapper = bones.get(primaryName);
         if (wrapper == null) {
-            wrapper = this.bakedModel.getBones().get(fallbackName);
+            wrapper = bones.get(fallbackName);
         }
 
         GeoBone bone = wrapper == null ? geoModel.getBone(primaryName).orElseGet(() -> geoModel.getBone(fallbackName).orElse(null))
@@ -116,5 +177,26 @@ public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlaye
             return true;
         }
         return false;
+    }
+
+    private static OpenYsmBone getArmBone(Map<String, OpenYsmBone> bones, boolean rightArm) {
+        OpenYsmBone armBone = bones.get(rightArm ? "RightArm" : "LeftArm");
+        if (armBone != null) {
+            return armBone;
+        }
+        return bones.get(rightArm ? "MRightArm" : "MLeftArm");
+    }
+
+    private static OpenYsmBone getHandLocatorBone(Map<String, OpenYsmBone> bones, boolean rightArm) {
+        String[] names = rightArm
+                ? new String[]{"RightHand", "MRightHand", "rightHand", "right_hand", "RightHandItem", "rightHandItem", "right_hand_item"}
+                : new String[]{"LeftHand", "MLeftHand", "leftHand", "left_hand", "LeftHandItem", "leftHandItem", "left_hand_item"};
+        for (String name : names) {
+            OpenYsmBone bone = bones.get(name);
+            if (bone != null) {
+                return bone;
+            }
+        }
+        return null;
     }
 }

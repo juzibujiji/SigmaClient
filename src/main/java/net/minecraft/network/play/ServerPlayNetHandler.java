@@ -1311,6 +1311,7 @@ public class ServerPlayNetHandler implements IServerPlayNetHandler
         this.server.refreshStatusNextTick();
         this.server.getPlayerList().func_232641_a_((new TranslationTextComponent("multiplayer.player.left", this.player.getDisplayName())).mergeStyle(TextFormatting.YELLOW), ChatType.SYSTEM, Util.DUMMY_UUID);
         this.player.disconnect();
+        OpenYsmNetwork.forgetServerPlayer(this.player);
         this.server.getPlayerList().playerLoggedOut(this.player);
         IChatFilter ichatfilter = this.player.func_244529_Q();
 

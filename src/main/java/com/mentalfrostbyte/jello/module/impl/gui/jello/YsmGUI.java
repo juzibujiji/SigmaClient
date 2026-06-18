@@ -1,19 +1,20 @@
 package com.mentalfrostbyte.jello.module.impl.gui.jello;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.gui.OpenYsmScreens;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 
 public class YsmGUI extends Module {
     public YsmGUI() {
-        super(ModuleCategory.GUI, "YSM", "Toggle OpenYSM player models");
-        this.enabled = YesSteveModel.isEnabled();
+        super(ModuleCategory.GUI, "YSM", "Open the OpenYSM model manager");
+        this.enabled = false;
     }
 
     @Override
     public void initialize() {
         super.initialize();
-        this.setEnabledBasic(YesSteveModel.isEnabled());
+        this.setEnabledBasic(false);
     }
 
     @Override
@@ -21,12 +22,12 @@ public class YsmGUI extends Module {
         super.onEnable();
         YesSteveModel.setEnabled(true);
         YesSteveModel.setRenderPlayers(true);
+        OpenYsmScreens.openModelManager();
+        this.setEnabledBasic(false);
     }
 
     @Override
     public void onDisable() {
-        YesSteveModel.setEnabled(false);
-        YesSteveModel.setRenderPlayers(false);
         super.onDisable();
     }
 }

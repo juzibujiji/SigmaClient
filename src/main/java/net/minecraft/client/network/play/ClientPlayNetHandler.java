@@ -1,5 +1,6 @@
 package net.minecraft.client.network.play;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmPlayerModelState;
 import com.elfmcys.yesstevemodel.network.OpenYsmNetwork;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -389,6 +390,7 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
     public void handleJoinGame(SJoinGamePacket packetIn) {
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
         ExtendedChunkDataStore.clearAll();
+        OpenYsmPlayerModelState.clearAll();
         this.client.playerController = new PlayerController(this.client, this);
 
         if (this.client.getCurrentServerData() != null) {
@@ -441,6 +443,7 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
         this.client.gameSettings.sendSettingsToServer();
         this.netManager.sendPacket(new CCustomPayloadPacket(CCustomPayloadPacket.BRAND,
                 (new PacketBuffer(Unpooled.buffer())).writeString(ClientBrandRetriever.getClientModName())));
+        OpenYsmNetwork.sendCurrentModelSelection();
         this.client.getMinecraftGame().startGameSession();
     }
 

@@ -1,11 +1,13 @@
 package com.elfmcys.yesstevemodel.client;
 
 import com.elfmcys.yesstevemodel.geckolib4.cache.object.GeoBone;
+import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.renderer.model.ModelRenderer;
 
 public final class OpenYsmBone {
     private final String name;
     private final ModelRenderer renderer;
+    private OpenYsmBone parent;
     private final float baseRotationX;
     private final float baseRotationY;
     private final float baseRotationZ;
@@ -39,6 +41,14 @@ public final class OpenYsmBone {
 
     public ModelRenderer getRenderer() {
         return this.renderer;
+    }
+
+    public OpenYsmBone getParent() {
+        return this.parent;
+    }
+
+    public void setParent(OpenYsmBone parent) {
+        this.parent = parent;
     }
 
     public float getScaleX() {
@@ -153,6 +163,13 @@ public final class OpenYsmBone {
         if (this.geoBone != null) {
             this.geoBone.addPosition(x, y, z);
         }
+    }
+
+    public void translateRotateChain(MatrixStack matrixStackIn) {
+        if (this.parent != null) {
+            this.parent.translateRotateChain(matrixStackIn);
+        }
+        this.renderer.translateRotate(matrixStackIn);
     }
 
     private void syncGeoBonePose() {

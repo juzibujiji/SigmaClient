@@ -1,13 +1,19 @@
 package com.mentalfrostbyte.jello.managers;
 
+import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender2DOffset;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.managers.data.Manager;
 import com.mentalfrostbyte.jello.util.system.math.smoothing.QuadraticEasing;
 import com.mentalfrostbyte.jello.managers.util.notifs.Notification;
+import com.mentalfrostbyte.jello.util.client.ClientMode;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
+import com.mentalfrostbyte.jello.util.client.render.Resources;
+import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
+import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
 import net.minecraft.client.Minecraft;
+import org.newdawn.slick.TrueTypeFont;
 import team.sdhq.eventBus.annotations.EventTarget;
 
 import java.awt.*;
@@ -67,6 +73,11 @@ public class NotificationManager extends Manager {
                         - this.field39925
                         - var4 * (int) ((float) this.field39924 * this.method31994(var4) + (float) this.field39927 * this.method31994(var4));
                 float var9 = Math.min(1.0F, var6);
+                if (Client.getInstance().clientMode == ClientMode.CLASSIC) {
+                    this.drawClassicNotification(notif, var7, var8, var9);
+                    continue;
+                }
+
                 int var10 = new Color(0.14F, 0.14F, 0.14F, var9 * 0.93F).getRGB();
                 int var11 = new Color(0.0F, 0.0F, 0.0F, Math.min(var6 * 0.075F, 1.0F)).getRGB();
                 int var12 = new Color(1.0F, 1.0F, 1.0F, var9).getRGB();
@@ -100,6 +111,57 @@ public class NotificationManager extends Manager {
                 );
             }
         }
+    }
+
+    private void drawClassicNotification(Notification notif, int x, int y, float alpha) {
+        int width = 312;
+        int height = 56;
+        int drawX = x + 28;
+        int drawY = y + 4;
+        int background = RenderUtil2.applyAlpha(-2500135, 0.94F * alpha);
+        int border = RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.52F * alpha);
+        int primaryText = RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.92F * alpha);
+        int secondaryText = RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.62F * alpha);
+
+        RenderUtil.drawRoundedRect(
+                (float) drawX,
+                (float) drawY,
+                (float) (drawX + width),
+                (float) (drawY + height),
+                background
+        );
+        RenderUtil.method11429((float) drawX, (float) drawY, (float) (drawX + width), (float) (drawY + height), 1, border);
+        RenderUtil.drawImage((float) (drawX + 8), (float) (drawY + 8), 40.0F, 40.0F, notif.icon);
+        RenderUtil.drawHybridString(
+                Resources.bold16,
+                (float) (drawX + 58),
+                (float) (drawY + 9),
+                this.ellipsize(Resources.bold16, notif.title, width - 70),
+                primaryText
+        );
+        RenderUtil.drawHybridString(
+                Resources.regular15,
+                (float) (drawX + 58),
+                (float) (drawY + 30),
+                this.ellipsize(Resources.regular15, notif.desc, width - 70),
+                secondaryText
+        );
+    }
+
+    private String ellipsize(TrueTypeFont font, String text, int maxWidth) {
+        if (text == null) {
+            return "";
+        }
+        if (RenderUtil.getHybridStringWidth(font, text) <= maxWidth) {
+            return text;
+        }
+
+        String ellipsis = "...";
+        StringBuilder builder = new StringBuilder(text);
+        while (builder.length() > 0 && RenderUtil.getHybridStringWidth(font, builder + ellipsis) > maxWidth) {
+            builder.deleteCharAt(builder.length() - 1);
+        }
+        return builder + ellipsis;
     }
 
     @EventTarget

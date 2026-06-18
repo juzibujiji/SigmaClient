@@ -4,6 +4,8 @@ import com.elfmcys.yesstevemodel.OpenYsmModelEntry;
 import com.elfmcys.yesstevemodel.OpenYsmTextureOption;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.client.OpenYsmModelLoader;
+import com.elfmcys.yesstevemodel.gui.OpenYsmActionWheelScreen;
+import com.elfmcys.yesstevemodel.gui.OpenYsmExtraPlayerRenderScreen;
 import com.elfmcys.yesstevemodel.gui.OpenYsmModelSelectionScreen;
 import com.mentalfrostbyte.jello.command.Command;
 import com.mentalfrostbyte.jello.managers.util.command.ChatCommandArguments;
@@ -21,7 +23,7 @@ import java.util.Optional;
 public class Ysm extends Command {
     private static final String[] SUBCOMMANDS = {
             "on", "off", "enable", "disable", "toggle", "gui",
-            "reload", "list", "select", "textures", "render", "current", "folder"
+            "wheel", "actions", "paperdoll", "overlay", "reload", "list", "select", "textures", "render", "current", "folder"
     };
 
     public Ysm() {
@@ -65,6 +67,20 @@ public class Ysm extends Command {
                     return;
                 }
                 openGui(executor);
+                break;
+            case "wheel":
+            case "actions":
+                if (!ensureAvailable(executor) || hasExtraArgs(args, 1, action, executor)) {
+                    return;
+                }
+                openWheel(executor);
+                break;
+            case "paperdoll":
+            case "overlay":
+                if (!ensureAvailable(executor) || hasExtraArgs(args, 1, action, executor)) {
+                    return;
+                }
+                openExtraPlayerRender(executor);
                 break;
             case "reload":
                 if (!ensureAvailable(executor) || hasExtraArgs(args, 1, "reload", executor)) {
@@ -282,6 +298,26 @@ public class Ysm extends Command {
         executor.send("Opened OpenYSM model selector.");
     }
 
+    private void openWheel(ChatCommandExecutor executor) {
+        if (mc == null) {
+            error(executor, "Minecraft client is not ready.");
+            return;
+        }
+
+        mc.displayGuiScreen(new OpenYsmActionWheelScreen());
+        executor.send("Opened OpenYSM action wheel.");
+    }
+
+    private void openExtraPlayerRender(ChatCommandExecutor executor) {
+        if (mc == null) {
+            error(executor, "Minecraft client is not ready.");
+            return;
+        }
+
+        mc.displayGuiScreen(new OpenYsmExtraPlayerRenderScreen());
+        executor.send("Opened OpenYSM extra player render config.");
+    }
+
     private String textureName() {
         String textureId = YesSteveModel.getClientConfig().getSelectedTextureId();
         return textureId.isEmpty() ? "default" : textureId;
@@ -329,6 +365,7 @@ public class Ysm extends Command {
         usageFor("off", executor);
         usageFor("toggle", executor);
         usageFor("gui", executor);
+        usageFor("wheel", executor);
         usageFor("reload", executor);
         usageFor("list", executor);
         usageFor("textures", executor);
@@ -353,6 +390,10 @@ public class Ysm extends Command {
                 break;
             case "gui":
                 executor.send("Usage: .ysm gui - open the model selector");
+                break;
+            case "wheel":
+            case "actions":
+                executor.send("Usage: .ysm wheel - open the action wheel");
                 break;
             case "reload":
                 executor.send("Usage: .ysm reload - rebuild the model index");

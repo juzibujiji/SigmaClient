@@ -33,6 +33,6 @@ public enum OpenYsmRendererMode {
                 return mode;
             }
         }
-        return LEGACY_SELF;
+        return OPENYSM;
     }
 }

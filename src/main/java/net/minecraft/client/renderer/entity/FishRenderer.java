@@ -1,5 +1,7 @@
 package net.minecraft.client.renderer.entity;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraEntityModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraEntityRenderHelper;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import net.minecraft.client.Minecraft;
@@ -34,19 +36,28 @@ public class FishRenderer extends EntityRenderer<FishingBobberEntity>
 
         if (playerentity != null)
         {
+            OpenYsmExtraEntityModel ysmModel = OpenYsmExtraEntityRenderHelper.find(entityIn,
+                    OpenYsmExtraEntityModel.Kind.PROJECTILE, "minecraft:fishing_bobber");
             matrixStackIn.push();
             matrixStackIn.push();
             matrixStackIn.scale(0.5F, 0.5F, 0.5F);
             matrixStackIn.rotate(this.renderManager.getCameraOrientation());
             matrixStackIn.rotate(Vector3f.YP.rotationDegrees(180.0F));
-            MatrixStack.Entry matrixstack$entry = matrixStackIn.getLast();
-            Matrix4f matrix4f = matrixstack$entry.getMatrix();
-            Matrix3f matrix3f = matrixstack$entry.getNormal();
-            IVertexBuilder ivertexbuilder = bufferIn.getBuffer(field_229103_e_);
-            func_229106_a_(ivertexbuilder, matrix4f, matrix3f, packedLightIn, 0.0F, 0, 0, 1);
-            func_229106_a_(ivertexbuilder, matrix4f, matrix3f, packedLightIn, 1.0F, 0, 1, 1);
-            func_229106_a_(ivertexbuilder, matrix4f, matrix3f, packedLightIn, 1.0F, 1, 1, 0);
-            func_229106_a_(ivertexbuilder, matrix4f, matrix3f, packedLightIn, 0.0F, 1, 0, 0);
+            if (ysmModel != null)
+            {
+                OpenYsmExtraEntityRenderHelper.render(ysmModel, entityIn, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+            }
+            else
+            {
+                MatrixStack.Entry matrixstack$entry = matrixStackIn.getLast();
+                Matrix4f matrix4f = matrixstack$entry.getMatrix();
+                Matrix3f matrix3f = matrixstack$entry.getNormal();
+                IVertexBuilder ivertexbuilder = bufferIn.getBuffer(field_229103_e_);
+                func_229106_a_(ivertexbuilder, matrix4f, matrix3f, packedLightIn, 0.0F, 0, 0, 1);
+                func_229106_a_(ivertexbuilder, matrix4f, matrix3f, packedLightIn, 1.0F, 0, 1, 1);
+                func_229106_a_(ivertexbuilder, matrix4f, matrix3f, packedLightIn, 1.0F, 1, 1, 0);
+                func_229106_a_(ivertexbuilder, matrix4f, matrix3f, packedLightIn, 0.0F, 1, 0, 0);
+            }
             matrixStackIn.pop();
             int i = playerentity.getPrimaryHand() == HandSide.RIGHT ? 1 : -1;
             ItemStack itemstack = playerentity.getHeldItemMainhand();

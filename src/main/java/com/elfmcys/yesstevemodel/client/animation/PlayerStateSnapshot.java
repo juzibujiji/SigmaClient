@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.animation;
 
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.Pose;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
@@ -62,11 +63,46 @@ public final class PlayerStateSnapshot {
         this.offhandEmpty = this.offhand == null || this.offhand.isEmpty();
     }
 
+    private PlayerStateSnapshot(Entity entity, float limbSwingAmount, float ageInTicks) {
+        this.uuid = entity.getUniqueID();
+        this.onGround = entity.isOnGround();
+        this.sneaking = false;
+        this.sprinting = false;
+        this.swimming = false;
+        this.inWater = entity.isInWater();
+        this.elytraFlying = false;
+        this.creativeFlying = false;
+        this.dead = !entity.isAlive();
+        this.pose = entity.getPose() == null ? Pose.STANDING : entity.getPose();
+        this.limbSwingAmount = limbSwingAmount;
+        this.ageInTicks = ageInTicks;
+
+        this.swingInProgress = false;
+        this.swingingHand = null;
+        this.usingItem = false;
+        this.usingHand = null;
+
+        this.mainhand = ItemStack.EMPTY;
+        this.offhand = ItemStack.EMPTY;
+        this.mainhandEmpty = true;
+        this.offhandEmpty = true;
+    }
+
     public static PlayerStateSnapshot capture(LivingEntity entity, float limbSwingAmount, float ageInTicks) {
         if (entity instanceof PlayerEntity) {
             return new PlayerStateSnapshot((PlayerEntity) entity, limbSwingAmount, ageInTicks);
         }
         return null;
+    }
+
+    public static PlayerStateSnapshot captureEntity(Entity entity, float limbSwingAmount, float ageInTicks) {
+        if (entity == null) {
+            return null;
+        }
+        if (entity instanceof PlayerEntity) {
+            return new PlayerStateSnapshot((PlayerEntity) entity, limbSwingAmount, ageInTicks);
+        }
+        return new PlayerStateSnapshot(entity, limbSwingAmount, ageInTicks);
     }
 
     public ItemStack handStack(Hand hand) {

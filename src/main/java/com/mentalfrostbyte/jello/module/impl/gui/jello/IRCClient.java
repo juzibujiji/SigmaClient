@@ -2,15 +2,18 @@ package com.mentalfrostbyte.jello.module.impl.gui.jello;
 
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
+import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.InputSetting;
 import com.mentalfrostbyte.jello.module.impl.gui.jello.irc.IRCClientConnection;
 import com.mentalfrostbyte.jello.module.impl.gui.jello.irc.IRCManager;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.irc.IRCUtlis;
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
 
 public class IRCClient extends Module {
     private final InputSetting ircname = new InputSetting("IRCName", "Your IRC name", "SigmaUser");
     private final InputSetting serverAddress = new InputSetting("ServerIP", "Server IP", "127.0.0.1");
     private final InputSetting serverPort = new InputSetting("ServerPort", "Server port", "25565");
+    private final BooleanSetting noti = new BooleanSetting("Noti", "Show a notification when IRC messages arrive", true);
     private IRCClientConnection clientConnection;
 
     public IRCClient() {
@@ -18,6 +21,7 @@ public class IRCClient extends Module {
         registerSetting(ircname);
         registerSetting(serverAddress);
         registerSetting(serverPort);
+        registerSetting(noti);
     }
 
     @Override
@@ -51,10 +55,16 @@ public class IRCClient extends Module {
     public void sendMessage(String message) {
         if (clientConnection != null && clientConnection.isConnected()) {
             clientConnection.sendMessage(message);
+        } else {
+            IRCUtlis.printMessage("[IRC] Not connected to server");
         }
     }
     
     public IRCClientConnection getConnection() {
         return clientConnection;
+    }
+
+    public boolean isNotificationsEnabled() {
+        return noti.getCurrentValue();
     }
 }

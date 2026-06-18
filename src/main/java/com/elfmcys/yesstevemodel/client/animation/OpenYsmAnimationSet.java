@@ -18,6 +18,7 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.ResourceLocation;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -35,6 +36,9 @@ public final class OpenYsmAnimationSet {
     private final String modelId;
     private final Map<String, Clip> clips = new LinkedHashMap<>();
     private final Map<String, ActionMetadata> actionMetadata = new LinkedHashMap<>();
+    private final Map<String, String> rootWheelEntries = new LinkedHashMap<>();
+    private final Map<String, WheelActionGroup> wheelGroups = new LinkedHashMap<>();
+    private final Map<String, ExtraActionButton> actionButtons = new LinkedHashMap<>();
     private final Map<String, ControllerDefinition> controllerDefinitions = new LinkedHashMap<>();
     private final Set<String> explicitWheelActions = new LinkedHashSet<>();
     private final Set<String> controllerReferencedNames = new LinkedHashSet<>();
@@ -77,6 +81,58 @@ public final class OpenYsmAnimationSet {
             applyMetadata(clip);
             clip.isExtraAction = true;
         }
+    }
+
+    public void registerWheelGroup(String id, Map<String, String> extras) {
+        String safeId = normalizeWheelKey(id);
+        if (safeId.isEmpty() || extras == null || extras.isEmpty()) {
+            return;
+        }
+        WheelActionGroup group = new WheelActionGroup(safeId);
+        for (Map.Entry<String, String> entry : extras.entrySet()) {
+            String actionName = normalizeClipName(entry.getKey());
+            if (actionName.isEmpty()) {
+                continue;
+            }
+            group.actions.put(actionName, entry.getValue() == null ? "" : entry.getValue());
+            String value = entry.getValue();
+            if (value != null && value.startsWith("#")) {
+                registerExplicitAction(actionName, actionName, "", "", false);
+            } else {
+                registerExplicitAction(actionName, actionName, "", value, false);
+            }
+        }
+        this.wheelGroups.put(safeId, group);
+    }
+
+    public void registerRootWheelEntry(String key, String value) {
+        String safeKey = key == null ? "" : key.trim();
+        if (!safeKey.isEmpty()) {
+            this.rootWheelEntries.put(safeKey, value == null ? "" : value);
+        }
+    }
+
+    public void registerActionButton(ExtraActionButton button) {
+        if (button == null || button.getId().isEmpty()) {
+            return;
+        }
+        this.actionButtons.put(button.getId(), button);
+    }
+
+    public Map<String, WheelActionGroup> getWheelGroups() {
+        return Collections.unmodifiableMap(this.wheelGroups);
+    }
+
+    public Map<String, String> getRootWheelEntries() {
+        return Collections.unmodifiableMap(this.rootWheelEntries);
+    }
+
+    public Map<String, ExtraActionButton> getActionButtons() {
+        return Collections.unmodifiableMap(this.actionButtons);
+    }
+
+    public Collection<ControllerDefinition> getControllerDefinitions() {
+        return Collections.unmodifiableCollection(this.controllerDefinitions.values());
     }
 
     public void addJsonAnimations(String group, String originFile, JsonObject animationFile) {
@@ -273,7 +329,9 @@ public final class OpenYsmAnimationSet {
         }
         addBuiltinAlwaysOnClips(active, activeClipNames, elapsedSeconds);
 
-        Clip main = controllerResult.hasMainLayerAnimation() ? null : selectMainState(snapshot);
+        Clip main = context == AnimationRenderContext.FIRST_PERSON_ARM || controllerResult.hasMainLayerAnimation()
+                ? null
+                : selectMainState(snapshot);
         if (main != null) {
             active.mainStateClip = main;
             active.setTime(main, elapsedSeconds);
@@ -804,7 +862,7 @@ public final class OpenYsmAnimationSet {
         String lowerGroup = group == null ? "" : group.toLowerCase(Locale.ROOT);
         return switch (lowerGroup) {
             case "main" -> AnimationSourceType.MAIN;
-            case "arm" -> AnimationSourceType.ARM;
+            case "arm", "fp_arm", "animation-arm", "animation-fp_arm", "first_person_arm" -> AnimationSourceType.ARM;
             case "extra" -> AnimationSourceType.EXTRA;
             case "controller", "animation_controller", "animation_controllers" -> AnimationSourceType.CONTROLLER_REFERENCED;
             case "unknown", "" -> AnimationSourceType.UNKNOWN;
@@ -817,6 +875,7 @@ public final class OpenYsmAnimationSet {
             case 1 -> "main";
             case 2 -> "arm";
             case 3 -> "extra";
+            case 11 -> "fp_arm";
             default -> "custom";
         };
     }
@@ -848,6 +907,14 @@ public final class OpenYsmAnimationSet {
 
     private static String normalizeClipName(String name) {
         return name == null ? "" : name.trim();
+    }
+
+    private static String normalizeWheelKey(String key) {
+        if (key == null) {
+            return "";
+        }
+        String value = key.trim();
+        return value.startsWith("#") ? value : "#" + value;
     }
 
     private static boolean isSingleKeyframeObject(JsonElement element) {
@@ -990,6 +1057,112 @@ public final class OpenYsmAnimationSet {
             this.icon = icon;
             this.description = description;
             this.global = global;
+        }
+    }
+
+    public static final class WheelActionGroup {
+        private final String id;
+        private final Map<String, String> actions = new LinkedHashMap<>();
+
+        private WheelActionGroup(String id) {
+            this.id = id;
+        }
+
+        public String getId() {
+            return this.id;
+        }
+
+        public String getDisplayName() {
+            return this.id.startsWith("#") ? this.id.substring(1) : this.id;
+        }
+
+        public Map<String, String> getActions() {
+            return Collections.unmodifiableMap(this.actions);
+        }
+    }
+
+    public static final class ExtraActionButton {
+        private final String id;
+        private final String name;
+        private final String description;
+        private final List<ActionForm> forms;
+
+        public ExtraActionButton(String id, String name, String description, List<ActionForm> forms) {
+            this.id = normalizeWheelKey(id);
+            this.name = name == null || name.isEmpty() ? this.id : name;
+            this.description = description == null ? "" : description;
+            this.forms = new ArrayList<>(forms == null ? Collections.emptyList() : forms);
+        }
+
+        public String getId() {
+            return this.id;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public String getDescription() {
+            return this.description;
+        }
+
+        public List<ActionForm> getForms() {
+            return Collections.unmodifiableList(this.forms);
+        }
+    }
+
+    public static final class ActionForm {
+        private final String type;
+        private final String title;
+        private final String description;
+        private final String defaultValue;
+        private final float step;
+        private final float min;
+        private final float max;
+        private final Map<String, String> labels;
+
+        public ActionForm(String type, String title, String description, String defaultValue,
+                          float step, float min, float max, Map<String, String> labels) {
+            this.type = type == null ? "" : type.trim().toLowerCase(Locale.ROOT);
+            this.title = title == null ? "" : title;
+            this.description = description == null ? "" : description;
+            this.defaultValue = defaultValue == null ? "" : defaultValue;
+            this.step = step;
+            this.min = min;
+            this.max = max;
+            this.labels = new LinkedHashMap<>(labels == null ? Collections.emptyMap() : labels);
+        }
+
+        public String getType() {
+            return this.type;
+        }
+
+        public String getTitle() {
+            return this.title;
+        }
+
+        public String getDescription() {
+            return this.description;
+        }
+
+        public String getDefaultValue() {
+            return this.defaultValue;
+        }
+
+        public float getStep() {
+            return this.step;
+        }
+
+        public float getMin() {
+            return this.min;
+        }
+
+        public float getMax() {
+            return this.max;
+        }
+
+        public Map<String, String> getLabels() {
+            return Collections.unmodifiableMap(this.labels);
         }
     }
 

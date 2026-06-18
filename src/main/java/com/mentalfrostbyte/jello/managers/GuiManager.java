@@ -44,6 +44,9 @@ import java.util.Map.Entry;
 public class GuiManager {
     public static final Map<Class<? extends net.minecraft.client.gui.screen.Screen>, String> screenToScreenName = new HashMap<Class<? extends net.minecraft.client.gui.screen.Screen>, String>();
     private static final Map<Class<? extends net.minecraft.client.gui.screen.Screen>, Class<? extends Screen>> replacementScreens = new HashMap<Class<? extends net.minecraft.client.gui.screen.Screen>, Class<? extends Screen>>();
+    private static final String IRC_CHAT_HOLDER_CLASS = "com.mentalfrostbyte.jello.gui.impl.irc.IRCChatHolder";
+    private static final String JELLO_IRC_CHAT_SCREEN_CLASS = "com.mentalfrostbyte.jello.gui.impl.jello.ingame.IRCChatScreen";
+    private static final String CLASSIC_IRC_CHAT_SCREEN_CLASS = "com.mentalfrostbyte.jello.gui.impl.classic.irc.ClassicIRCChatScreen";
     public static long arrowCursor;
     public static long pointingHandCursor;
     public static long iBeamCursor;
@@ -53,6 +56,7 @@ public class GuiManager {
     static {
         replacementScreens.put(MainMenuHolder.class, MainMenuScreen.class);
         replacementScreens.put(ClickGuiHolder.class, ClickGuiScreen.class);
+        registerIRCChatReplacement(false);
         replacementScreens.put(KeyboardHolder.class, KeyboardScreen.class);
         replacementScreens.put(MapsHolder.class, MapsScreen.class);
         replacementScreens.put(SnakeHolder.class, SnakeGameScreen.class);
@@ -146,12 +150,14 @@ public class GuiManager {
         replacementScreens.clear();
         replacementScreens.put(MainMenuHolder.class, ClassicMainScreen.class);
         replacementScreens.put(ClickGuiHolder.class, ClassicClickGui.class);
+        registerIRCChatReplacement(true);
     }
 
     public void useJello() {
         replacementScreens.clear();
         replacementScreens.put(MainMenuHolder.class, MainMenuScreen.class);
         replacementScreens.put(ClickGuiHolder.class, ClickGuiScreen.class);
+        registerIRCChatReplacement(false);
         replacementScreens.put(KeyboardHolder.class, KeyboardScreen.class);
         replacementScreens.put(MapsHolder.class, MapsScreen.class);
         replacementScreens.put(SnakeHolder.class, SnakeGameScreen.class);
@@ -165,6 +171,35 @@ public class GuiManager {
         screenToScreenName.put(SnakeHolder.class, "Snake");
         screenToScreenName.put(BirdHolder.class, "Bird");
         screenToScreenName.put(SpotlightHolder.class, "Spotlight");
+    }
+
+    private static void registerReplacement(
+            Class<? extends net.minecraft.client.gui.screen.Screen> holder,
+            Class<? extends Screen> replacement,
+            String name
+    ) {
+        replacementScreens.put(holder, replacement);
+        screenToScreenName.put(holder, name);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void registerIRCChatReplacement(boolean classic) {
+        try {
+            Class<?> holder = Class.forName(IRC_CHAT_HOLDER_CLASS);
+            Class<?> replacement = Class.forName(classic ? CLASSIC_IRC_CHAT_SCREEN_CLASS : JELLO_IRC_CHAT_SCREEN_CLASS);
+            if (!net.minecraft.client.gui.screen.Screen.class.isAssignableFrom(holder) || !Screen.class.isAssignableFrom(replacement)) {
+                Client.logger.warn("IRC Chat GUI has incompatible screen types");
+                return;
+            }
+
+            registerReplacement(
+                    (Class<? extends net.minecraft.client.gui.screen.Screen>) holder,
+                    (Class<? extends Screen>) replacement,
+                    "IRC Chat"
+            );
+        } catch (ClassNotFoundException | LinkageError exc) {
+            Client.logger.warn("IRC Chat GUI is not available; skipping screen registration", exc);
+        }
     }
 
     /**

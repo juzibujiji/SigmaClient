@@ -6,6 +6,7 @@ import com.mentalfrostbyte.jello.gui.base.alerts.AlertComponent;
 import com.mentalfrostbyte.jello.gui.base.alerts.ComponentType;
 import com.mentalfrostbyte.jello.gui.base.animations.Animation;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.Alert;
+import com.mentalfrostbyte.jello.gui.base.elements.impl.button.Button;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.critical.Screen;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.image.types.SmallImage;
 import com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen;
@@ -19,12 +20,15 @@ import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.gui.jello.BrainFreeze;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.system.math.MathHelper;
+import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
+import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
 import com.mentalfrostbyte.jello.util.system.math.smoothing.EasingFunctions;
 import com.mentalfrostbyte.jello.util.system.math.smoothing.QuadraticEasing;
+import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Util;
 
@@ -36,11 +40,14 @@ import java.util.Map;
 public class ClickGuiScreen extends Screen {
     public BlurOverlay blurOverlay;
     private static final Minecraft mc = Minecraft.getInstance();
+    private static final String JELLO_IRC_CHAT_PANEL_CLASS = "com.mentalfrostbyte.jello.gui.impl.jello.ingame.irc.JelloIRCChatPanel";
+    private static final int IRC_CHAT_PANEL_WIDTH = 520;
     private static Animation animationProgress;
     private static boolean animationStarted;
     private static boolean animationCompleted;
     private final Map<ModuleCategory, PanelGroup> categoryPanels = new HashMap<>();
     public MusicPlayer musicPlayer;
+    public CustomGuiScreen ircChatPanel;
     public BrainFreezeOverlay brainFreeze;
     public ConfigScreen configButton;
     public SettingGroup settingGroup;
@@ -75,6 +82,28 @@ public class ClickGuiScreen extends Screen {
 
         this.addToList(this.musicPlayer = new MusicPlayer(this, "musicPlayer"));
         this.musicPlayer.method13215(true);
+        this.ircChatPanel = this.createIRCChatPanel();
+        this.addToList(this.ircChatPanel);
+        if (this.ircChatPanel != null) {
+            this.ircChatPanel.setSelfVisible(false);
+        }
+        Button ircButton;
+        ColorHelper ircButtonColor = new ColorHelper(
+                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.10F),
+                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.20F),
+                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.20F),
+                ClientColors.LIGHT_GREYISH_BLUE.getColor()
+        ).method19412(FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2).method19414(FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2);
+        this.addToList(ircButton = new Button(this, "openIRC", this.getWidthA() - 132, this.getHeightA() - 55, 55, 41, ircButtonColor, "IRC", ResourceRegistry.JelloLightFont18));
+        ircButton.field20586 = 12;
+        ircButton.onClick((screen, mouseButton) -> {
+            if (this.ircChatPanel != null) {
+                this.ircChatPanel.setSelfVisible(true);
+                this.ircChatPanel.method13242();
+            } else {
+                MinecraftUtil.addChatMessage("[IRC] IRC Chat GUI is not available. Rebuild the project.");
+            }
+        });
         SmallImage moreButton;
         this.addToList(moreButton = new SmallImage(this, "more", this.getWidthA() - 69, this.getHeightA() - 55, 55, 41, Resources.optionsPNG1));
 
@@ -95,6 +124,31 @@ public class ClickGuiScreen extends Screen {
         this.blurOverlay = new BlurOverlay(this, this, "overlay");
         RenderUtil2.blur();
         RenderUtil2.setShaderParamsRounded(animationProgress.calcPercent());
+    }
+
+    private CustomGuiScreen createIRCChatPanel() {
+        try {
+            Object panel = Class.forName(JELLO_IRC_CHAT_PANEL_CLASS)
+                    .getConstructor(CustomGuiScreen.class, String.class, int.class, int.class, Runnable.class)
+                    .newInstance(
+                            this,
+                            "ircChat",
+                            Math.max(30, this.getWidthA() - IRC_CHAT_PANEL_WIDTH - 20),
+                            90,
+                            (Runnable) () -> {
+                                if (this.ircChatPanel != null) {
+                                    this.ircChatPanel.setSelfVisible(false);
+                                }
+                            }
+                    );
+            if (panel instanceof CustomGuiScreen) {
+                return (CustomGuiScreen) panel;
+            }
+        } catch (ReflectiveOperationException | LinkageError exc) {
+            Client.logger.warn("IRC Chat panel is not available; Click GUI button will show a fallback message", exc);
+        }
+
+        return null;
     }
 
     public boolean hasJelloMusicRequirements() {

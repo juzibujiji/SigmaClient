@@ -64,6 +64,11 @@ public abstract class LivingRenderer<T extends LivingEntity, M extends EntityMod
         return this.entityModel;
     }
 
+    protected boolean shouldRenderLayersBeforeModel(T entityIn)
+    {
+        return false;
+    }
+
     public void render(T entityIn, float entityYaw, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int packedLightIn)
     {
         if (!Reflector.RenderLivingEvent_Pre_Constructor.exists() || !Reflector.postForgeBusEvent(Reflector.RenderLivingEvent_Pre_Constructor, entityIn, this, partialTicks, matrixStackIn, bufferIn, packedLightIn))
@@ -189,6 +194,13 @@ public abstract class LivingRenderer<T extends LivingEntity, M extends EntityMod
                 boolean flag2 = !flag1 && !entityIn.isInvisibleToPlayer(minecraft.player);
                 boolean flag3 = minecraft.isEntityGlowing(entityIn);
                 RenderType rendertype = this.func_230496_a_(entityIn, flag1, flag2, flag3);
+                boolean renderLayersFirst = this.shouldRenderLayersBeforeModel(entityIn);
+
+                if (renderLayersFirst && !entityIn.isSpectator() && eventRenderEntity.method13954()) {
+                    for (LayerRenderer<T, M> layerrenderer : this.layerRenderers) {
+                        layerrenderer.render(matrixStackIn, bufferIn, packedLightIn, entityIn, f5, f9, partialTicks, f8, f2, f7);
+                    }
+                }
 
                 if (rendertype != null) {
                     IVertexBuilder ivertexbuilder = bufferIn.getBuffer(rendertype);
@@ -210,7 +222,7 @@ public abstract class LivingRenderer<T extends LivingEntity, M extends EntityMod
                     this.entityModel.render(matrixStackIn, ivertexbuilder, packedLightIn, i, 1.0F, 1.0F, 1.0F, evt.getAlpha());
                 }
 
-                if (!entityIn.isSpectator() && eventRenderEntity.method13954()) {
+                if (!renderLayersFirst && !entityIn.isSpectator() && eventRenderEntity.method13954()) {
                     for (LayerRenderer<T, M> layerrenderer : this.layerRenderers) {
                         layerrenderer.render(matrixStackIn, bufferIn, packedLightIn, entityIn, f5, f9, partialTicks, f8, f2, f7);
                     }

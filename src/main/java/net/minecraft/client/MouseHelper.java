@@ -54,6 +54,7 @@ public class MouseHelper {
             if (this.minecraft.currentScreen == null) {
                 if (action != 1 && action != 2) {
                     if (action == 0) {
+                        ModuleKeyPress.listen(button);
                         EventMouseHover var15 = new EventMouseHover(button);
                         EventBus.call(var15);
                         if (var15.cancelled) {

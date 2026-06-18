@@ -17,9 +17,19 @@ public final class OpenYsmBakedPlayerModel {
     private final Map<String, OpenYsmBone> bones;
     private final BakedGeoModel geoModel;
     private final ResourceLocation geoModelResource;
+    private final List<OpenYsmBone> armRootBones;
+    private final Map<String, OpenYsmBone> armBones;
+    private final BakedGeoModel armGeoModel;
+    private final ResourceLocation armGeoModelResource;
     private final OpenYsmAnimationSet animations;
     private final float widthScale;
     private final float heightScale;
+    private final float footModelY;
+    private final boolean renderLayersFirst;
+    private final boolean allCutout;
+    private final boolean disablePreviewRotation;
+    private final boolean guiNoLighting;
+    private final List<OpenYsmExtraEntityModel> extraEntityModels;
     private OpenYsmModelDebugInfo debugInfo;
 
     public OpenYsmBakedPlayerModel(String id, ResourceLocation texture, List<OpenYsmBone> rootBones,
@@ -31,18 +41,72 @@ public final class OpenYsmBakedPlayerModel {
     public OpenYsmBakedPlayerModel(String id, ResourceLocation texture, List<OpenYsmBone> rootBones,
                                    Map<String, OpenYsmBone> bones, BakedGeoModel geoModel,
                                    OpenYsmAnimationSet animations, float widthScale, float heightScale) {
+        this(id, texture, rootBones, bones, geoModel, null, null, null, animations, widthScale, heightScale);
+    }
+
+    public OpenYsmBakedPlayerModel(String id, ResourceLocation texture, List<OpenYsmBone> rootBones,
+                                   Map<String, OpenYsmBone> bones, BakedGeoModel geoModel,
+                                   List<OpenYsmBone> armRootBones, Map<String, OpenYsmBone> armBones,
+                                   BakedGeoModel armGeoModel, OpenYsmAnimationSet animations,
+                                   float widthScale, float heightScale) {
+        this(id, texture, rootBones, bones, geoModel, armRootBones, armBones, armGeoModel,
+                animations, widthScale, heightScale, 24.0F);
+    }
+
+    public OpenYsmBakedPlayerModel(String id, ResourceLocation texture, List<OpenYsmBone> rootBones,
+                                   Map<String, OpenYsmBone> bones, BakedGeoModel geoModel,
+                                   List<OpenYsmBone> armRootBones, Map<String, OpenYsmBone> armBones,
+                                   BakedGeoModel armGeoModel, OpenYsmAnimationSet animations,
+                                   float widthScale, float heightScale, float footModelY) {
+        this(id, texture, rootBones, bones, geoModel, armRootBones, armBones, armGeoModel, animations,
+                widthScale, heightScale, footModelY, false, false, false, false, java.util.Collections.emptyList());
+    }
+
+    public OpenYsmBakedPlayerModel(String id, ResourceLocation texture, List<OpenYsmBone> rootBones,
+                                   Map<String, OpenYsmBone> bones, BakedGeoModel geoModel,
+                                   List<OpenYsmBone> armRootBones, Map<String, OpenYsmBone> armBones,
+                                   BakedGeoModel armGeoModel, OpenYsmAnimationSet animations,
+                                   float widthScale, float heightScale, float footModelY,
+                                   boolean renderLayersFirst, boolean allCutout,
+                                   boolean disablePreviewRotation, boolean guiNoLighting) {
+        this(id, texture, rootBones, bones, geoModel, armRootBones, armBones, armGeoModel, animations,
+                widthScale, heightScale, footModelY, renderLayersFirst, allCutout,
+                disablePreviewRotation, guiNoLighting, java.util.Collections.emptyList());
+    }
+
+    public OpenYsmBakedPlayerModel(String id, ResourceLocation texture, List<OpenYsmBone> rootBones,
+                                   Map<String, OpenYsmBone> bones, BakedGeoModel geoModel,
+                                   List<OpenYsmBone> armRootBones, Map<String, OpenYsmBone> armBones,
+                                   BakedGeoModel armGeoModel, OpenYsmAnimationSet animations,
+                                   float widthScale, float heightScale, float footModelY,
+                                   boolean renderLayersFirst, boolean allCutout,
+                                   boolean disablePreviewRotation, boolean guiNoLighting,
+                                   List<OpenYsmExtraEntityModel> extraEntityModels) {
         this.id = id;
         this.texture = texture;
         this.rootBones = rootBones;
         this.bones = bones;
         this.geoModel = geoModel;
-        this.geoModelResource = geoModel == null ? null : geoModelResource(id);
+        this.geoModelResource = geoModel == null ? null : geoModelResource(id, "main");
         if (this.geoModelResource != null) {
             GeckoLibCache.registerBakedModel(this.geoModelResource, geoModel);
+        }
+        this.armRootBones = armRootBones == null ? rootBones : armRootBones;
+        this.armBones = armBones == null ? bones : armBones;
+        this.armGeoModel = armGeoModel == null ? geoModel : armGeoModel;
+        this.armGeoModelResource = armGeoModel == null ? this.geoModelResource : geoModelResource(id, "arm");
+        if (armGeoModel != null && this.armGeoModelResource != null) {
+            GeckoLibCache.registerBakedModel(this.armGeoModelResource, armGeoModel);
         }
         this.animations = animations;
         this.widthScale = widthScale;
         this.heightScale = heightScale;
+        this.footModelY = footModelY <= 0.0F ? 24.0F : footModelY;
+        this.renderLayersFirst = renderLayersFirst;
+        this.allCutout = allCutout;
+        this.disablePreviewRotation = disablePreviewRotation;
+        this.guiNoLighting = guiNoLighting;
+        this.extraEntityModels = extraEntityModels == null ? java.util.Collections.emptyList() : extraEntityModels;
     }
 
     public String getId() {
@@ -69,6 +133,26 @@ public final class OpenYsmBakedPlayerModel {
         return this.geoModelResource;
     }
 
+    public boolean hasCustomArmModel() {
+        return this.armBones != this.bones && this.armGeoModel != null;
+    }
+
+    public List<OpenYsmBone> getArmRootBones() {
+        return this.armRootBones;
+    }
+
+    public Map<String, OpenYsmBone> getArmBones() {
+        return this.armBones;
+    }
+
+    public BakedGeoModel getArmGeoModel() {
+        return this.armGeoModel;
+    }
+
+    public ResourceLocation getArmGeoModelResource() {
+        return this.armGeoModelResource;
+    }
+
     public OpenYsmAnimationSet getAnimations() {
         return this.animations;
     }
@@ -81,6 +165,39 @@ public final class OpenYsmBakedPlayerModel {
         return this.heightScale;
     }
 
+    public float getGroundOffsetY() {
+        return 1.501F - (this.heightScale * this.footModelY / 16.0F);
+    }
+
+    public boolean isRenderLayersFirst() {
+        return this.renderLayersFirst;
+    }
+
+    public boolean isAllCutout() {
+        return this.allCutout;
+    }
+
+    public boolean isDisablePreviewRotation() {
+        return this.disablePreviewRotation;
+    }
+
+    public boolean isGuiNoLighting() {
+        return this.guiNoLighting;
+    }
+
+    public List<OpenYsmExtraEntityModel> getExtraEntityModels() {
+        return this.extraEntityModels;
+    }
+
+    public OpenYsmExtraEntityModel findExtraEntityModel(OpenYsmExtraEntityModel.Kind kind, String id) {
+        for (OpenYsmExtraEntityModel model : this.extraEntityModels) {
+            if (model.getKind() == kind && model.matches(id)) {
+                return model;
+            }
+        }
+        return null;
+    }
+
     public OpenYsmModelDebugInfo getDebugInfo() {
         return this.debugInfo;
     }
@@ -89,9 +206,9 @@ public final class OpenYsmBakedPlayerModel {
         this.debugInfo = debugInfo;
     }
 
-    private static ResourceLocation geoModelResource(String id) {
+    private static ResourceLocation geoModelResource(String id, String part) {
         String hash = Integer.toHexString(id == null ? 0 : id.hashCode());
-        return new ResourceLocation(YesSteveModel.MOD_ID, "openysm/" + sanitizeResourcePath(id) + "_" + hash);
+        return new ResourceLocation(YesSteveModel.MOD_ID, "openysm/" + sanitizeResourcePath(id) + "_" + part + "_" + hash);
     }
 
     private static String sanitizeResourcePath(String value) {

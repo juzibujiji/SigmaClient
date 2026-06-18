@@ -7,10 +7,12 @@ import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Function;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.model.ModelRenderer;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.inventory.EquipmentSlotType;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.HandSide;
 
 public class PlayerModel<T extends LivingEntity> extends BipedModel<T>
@@ -27,7 +29,12 @@ public class PlayerModel<T extends LivingEntity> extends BipedModel<T>
 
     public PlayerModel(float modelSize, boolean smallArmsIn)
     {
-        super(RenderType::getEntityTranslucent, modelSize, 0.0F, 64, 64);
+        this(RenderType::getEntityTranslucent, modelSize, smallArmsIn);
+    }
+
+    protected PlayerModel(Function<ResourceLocation, RenderType> renderTypeIn, float modelSize, boolean smallArmsIn)
+    {
+        super(renderTypeIn, modelSize, 0.0F, 64, 64);
         this.smallArms = smallArmsIn;
         this.bipedDeadmau5Head = new ModelRenderer(this, 24, 0);
         this.bipedDeadmau5Head.addBox(-3.0F, -6.0F, -1.0F, 6.0F, 6.0F, 1.0F, modelSize);

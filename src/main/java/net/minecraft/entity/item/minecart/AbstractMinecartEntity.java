@@ -1,5 +1,6 @@
 package net.minecraft.entity.item.minecart;
 
+import com.elfmcys.yesstevemodel.network.OpenYsmNetwork;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -358,6 +359,7 @@ public abstract class AbstractMinecartEntity extends Entity
         }
 
         this.updatePortal();
+        OpenYsmNetwork.syncExtraEntityModel(this, this.yesSteveModel$getFirstPlayerPassenger());
 
         if (this.world.isRemote)
         {
@@ -479,6 +481,18 @@ public abstract class AbstractMinecartEntity extends Entity
 
             this.firstUpdate = false;
         }
+    }
+
+    private PlayerEntity yesSteveModel$getFirstPlayerPassenger()
+    {
+        for (Entity passenger : this.getPassengers())
+        {
+            if (passenger instanceof PlayerEntity)
+            {
+                return (PlayerEntity)passenger;
+            }
+        }
+        return null;
     }
 
     /**

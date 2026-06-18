@@ -10,6 +10,8 @@ import com.mentalfrostbyte.jello.event.impl.game.render.EventRenderGUI;
 import com.mentalfrostbyte.jello.managers.GuiManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
+import com.elfmcys.yesstevemodel.OpenYsmClientConfig;
+import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -34,6 +36,7 @@ import net.minecraft.client.gui.overlay.DebugOverlayGui;
 import net.minecraft.client.gui.overlay.PlayerTabOverlayGui;
 import net.minecraft.client.gui.overlay.SubtitleOverlayGui;
 import net.minecraft.client.gui.screen.inventory.ContainerScreen;
+import net.minecraft.client.gui.screen.inventory.InventoryScreen;
 import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.ItemRenderer;
@@ -468,8 +471,30 @@ public class IngameGui extends AbstractGui
             }
         }
 
+        this.renderOpenYsmExtraPlayer(matrixStack);
         RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.enableAlphaTest();
+    }
+
+    private void renderOpenYsmExtraPlayer(MatrixStack matrixStack)
+    {
+        if (this.mc.gameSettings.hideGUI || this.mc.player == null || !YesSteveModel.isEnabled())
+        {
+            return;
+        }
+
+        OpenYsmClientConfig config = YesSteveModel.getClientConfig();
+        if (!config.isExtraPlayerRender())
+        {
+            return;
+        }
+
+        InventoryScreen.drawEntityOnScreen(config.getExtraPlayerX(),
+                config.getExtraPlayerY() + (int)(config.getExtraPlayerScale() * 2.0F),
+                (int)config.getExtraPlayerScale(),
+                config.getExtraPlayerYawOffset(),
+                0.0F,
+                this.mc.player);
     }
 
     private void func_238448_a_(MatrixStack p_238448_1_, FontRenderer p_238448_2_, int p_238448_3_, int p_238448_4_, int p_238448_5_)

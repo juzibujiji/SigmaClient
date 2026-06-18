@@ -1,5 +1,7 @@
 package net.minecraft.client.renderer.entity;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraEntityModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraEntityRenderHelper;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import net.minecraft.block.BlockRenderType;
@@ -28,6 +30,8 @@ public class MinecartRenderer<T extends AbstractMinecartEntity> extends EntityRe
 
     public void render(T entityIn, float entityYaw, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int packedLightIn)
     {
+        OpenYsmExtraEntityModel ysmModel = OpenYsmExtraEntityRenderHelper.find(entityIn,
+                OpenYsmExtraEntityModel.Kind.VEHICLE, "minecraft:minecart");
         super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
         matrixStackIn.push();
         long i = (long)entityIn.getEntityId() * 493286711L;
@@ -100,9 +104,16 @@ public class MinecartRenderer<T extends AbstractMinecartEntity> extends EntityRe
         }
 
         matrixStackIn.scale(-1.0F, -1.0F, 1.0F);
-        this.modelMinecart.setRotationAngles(entityIn, 0.0F, 0.0F, -0.1F, 0.0F, 0.0F);
-        IVertexBuilder ivertexbuilder = bufferIn.getBuffer(this.modelMinecart.getRenderType(this.getEntityTexture(entityIn)));
-        this.modelMinecart.render(matrixStackIn, ivertexbuilder, packedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+        if (ysmModel != null)
+        {
+            OpenYsmExtraEntityRenderHelper.render(ysmModel, entityIn, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+        }
+        else
+        {
+            this.modelMinecart.setRotationAngles(entityIn, 0.0F, 0.0F, -0.1F, 0.0F, 0.0F);
+            IVertexBuilder ivertexbuilder = bufferIn.getBuffer(this.modelMinecart.getRenderType(this.getEntityTexture(entityIn)));
+            this.modelMinecart.render(matrixStackIn, ivertexbuilder, packedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+        }
         matrixStackIn.pop();
     }
 

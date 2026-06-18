@@ -1,5 +1,7 @@
 package net.minecraft.client.renderer.entity.layers;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmGl4PlayerModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmPlayerModel;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.IRenderTypeBuffer;
@@ -47,13 +49,29 @@ public class HeldItemLayer<T extends LivingEntity, M extends EntityModel<T> & IH
         if (!p_229135_2_.isEmpty())
         {
             p_229135_5_.push();
-            this.getEntityModel().translateHand(p_229135_4_, p_229135_5_);
-            p_229135_5_.rotate(Vector3f.XP.rotationDegrees(-90.0F));
-            p_229135_5_.rotate(Vector3f.YP.rotationDegrees(180.0F));
+            boolean locatorTransform = this.translateHand(p_229135_4_, p_229135_5_);
             boolean flag = p_229135_4_ == HandSide.LEFT;
-            p_229135_5_.translate((double)((float)(flag ? -1 : 1) / 16.0F), 0.125D, -0.625D);
+            if (!locatorTransform) {
+                p_229135_5_.rotate(Vector3f.XP.rotationDegrees(-90.0F));
+                p_229135_5_.rotate(Vector3f.YP.rotationDegrees(180.0F));
+                p_229135_5_.translate((double)((float)(flag ? -1 : 1) / 16.0F), 0.125D, -0.625D);
+            }
             Minecraft.getInstance().getFirstPersonRenderer().renderItemSide(p_229135_1_, p_229135_2_, p_229135_3_, flag, p_229135_5_, p_229135_6_, p_229135_7_);
             p_229135_5_.pop();
         }
+    }
+
+    private boolean translateHand(HandSide sideIn, MatrixStack matrixStackIn)
+    {
+        if (this.getEntityModel() instanceof OpenYsmGl4PlayerModel)
+        {
+            return ((OpenYsmGl4PlayerModel)this.getEntityModel()).translateItemHand(sideIn, matrixStackIn);
+        }
+        if (this.getEntityModel() instanceof OpenYsmPlayerModel)
+        {
+            return ((OpenYsmPlayerModel)this.getEntityModel()).translateItemHand(sideIn, matrixStackIn);
+        }
+        this.getEntityModel().translateHand(sideIn, matrixStackIn);
+        return false;
     }
 }

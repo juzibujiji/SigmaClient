@@ -7,6 +7,7 @@ import com.mentalfrostbyte.jello.util.client.ClientMode;
 import com.mentalfrostbyte.jello.event.impl.game.action.EventMouseHover;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.buttons.keybind.Bound;
 import com.mentalfrostbyte.jello.managers.GuiManager;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.YsmActionsGUI;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.util.text.ITextComponent;
@@ -22,7 +23,13 @@ public class ModuleKeyPress {
                 for (Bound bindType : Client.getInstance().moduleManager.getKeyManager().getBindedObjects(key)) {
                     if (bindType != null && bindType.hasTarget()) {
                         switch (bindType.getKeybindTypes()) {
-                            case MODULE -> bindType.getModuleTarget().toggle();
+                            case MODULE -> {
+                                if (bindType.getModuleTarget() instanceof YsmActionsGUI ysmActionsGUI) {
+                                    ysmActionsGUI.openWhilePressing(key);
+                                } else {
+                                    bindType.getModuleTarget().toggle();
+                                }
+                            }
                             case SCREEN -> {
                                 try {
                                     Screen sigmaScreen = bindType.getScreenTarget()

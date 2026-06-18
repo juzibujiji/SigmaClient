@@ -7,15 +7,20 @@ import com.elfmcys.yesstevemodel.client.animation.PlayerStateSnapshot;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import net.minecraft.client.entity.player.AbstractClientPlayerEntity;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.model.PlayerModel;
 import net.minecraft.client.renderer.model.ModelRenderer;
+import net.minecraft.util.HandSide;
 import net.minecraft.util.ResourceLocation;
+
+import java.util.Map;
 
 public final class OpenYsmPlayerModel extends PlayerModel<AbstractClientPlayerEntity> {
     private final OpenYsmBakedPlayerModel bakedModel;
 
     public OpenYsmPlayerModel(OpenYsmBakedPlayerModel bakedModel, boolean smallArms) {
-        super(0.0F, smallArms);
+        super(bakedModel.isAllCutout() ? RenderType::getEntityCutoutNoCull : RenderType::getEntityTranslucent,
+                0.0F, smallArms);
         this.bakedModel = bakedModel;
     }
 
@@ -52,6 +57,7 @@ public final class OpenYsmPlayerModel extends PlayerModel<AbstractClientPlayerEn
                        float red, float green, float blue, float alpha) {
         matrixStackIn.push();
         try {
+            matrixStackIn.translate(0.0D, this.bakedModel.getGroundOffsetY(), 0.0D);
             matrixStackIn.scale(this.bakedModel.getWidthScale(), this.bakedModel.getHeightScale(), this.bakedModel.getWidthScale());
             for (OpenYsmBone bone : this.bakedModel.getRootBones()) {
                 bone.getRenderer().render(matrixStackIn, bufferIn, packedLightIn, packedOverlayIn, red, green, blue, alpha);
@@ -60,6 +66,64 @@ public final class OpenYsmPlayerModel extends PlayerModel<AbstractClientPlayerEn
             matrixStackIn.pop();
         }
     }
+
+    public boolean renderFirstPersonArm(AbstractClientPlayerEntity entityIn, boolean rightArm, float ageInTicks,
+                                        MatrixStack matrixStackIn, IVertexBuilder bufferIn, int packedLightIn,
+                                        int packedOverlayIn, float red, float green, float blue, float alpha) {
+        if (!this.bakedModel.hasCustomArmModel()) {
+            return false;
+        }
+
+        Map<String, OpenYsmBone> armBones = this.bakedModel.getArmBones();
+        armBones.values().forEach(OpenYsmBone::resetPose);
+        PlayerStateSnapshot snapshot = PlayerStateSnapshot.capture(entityIn, 0.0F, ageInTicks);
+        OpenYsmPlayerAnimationState.State extraState = OpenYsmPlayerAnimationState.get(entityIn);
+        ActiveAnimationSet active = this.bakedModel.getAnimations()
+                .resolveActive(snapshot, extraState, AnimationRenderContext.FIRST_PERSON_ARM);
+        this.bakedModel.getAnimations().apply(armBones, active, 0.0F);
+
+        OpenYsmBone armBone = getArmBone(armBones, rightArm);
+        if (armBone == null) {
+            return false;
+        }
+
+        matrixStackIn.push();
+        try {
+            matrixStackIn.scale(this.bakedModel.getWidthScale(), this.bakedModel.getHeightScale(), this.bakedModel.getWidthScale());
+            armBone.getRenderer().render(matrixStackIn, bufferIn, packedLightIn, packedOverlayIn, red, green, blue, alpha);
+            return true;
+        } finally {
+            matrixStackIn.pop();
+        }
+    }
+
+    @Override
+    public void translateHand(HandSide sideIn, MatrixStack matrixStackIn) {
+        translateItemHand(sideIn, matrixStackIn);
+    }
+
+    public boolean translateItemHand(HandSide sideIn, MatrixStack matrixStackIn) {
+        OpenYsmBone locatorBone = getHandLocatorBone(this.bakedModel.getBones(), sideIn == HandSide.RIGHT);
+        if (locatorBone != null) {
+            translateYsmBone(locatorBone, matrixStackIn);
+            return true;
+        }
+
+        OpenYsmBone armBone = getArmBone(this.bakedModel.getBones(), sideIn == HandSide.RIGHT);
+        if (armBone == null) {
+            super.translateHand(sideIn, matrixStackIn);
+            return false;
+        }
+        translateYsmBone(armBone, matrixStackIn);
+        return false;
+    }
+
+    private void translateYsmBone(OpenYsmBone bone, MatrixStack matrixStackIn) {
+        matrixStackIn.translate(0.0D, this.bakedModel.getGroundOffsetY(), 0.0D);
+        matrixStackIn.scale(this.bakedModel.getWidthScale(), this.bakedModel.getHeightScale(), this.bakedModel.getWidthScale());
+        bone.translateRotateChain(matrixStackIn);
+    }
+
 
     private void copyPosePreferControl(String boneName, String controlBoneName, ModelRenderer source) {
         if (!copyPose(controlBoneName, source)) {
@@ -74,5 +138,26 @@ public final class OpenYsmPlayerModel extends PlayerModel<AbstractClientPlayerEn
             return true;
         }
         return false;
+    }
+
+    private static OpenYsmBone getArmBone(Map<String, OpenYsmBone> bones, boolean rightArm) {
+        OpenYsmBone armBone = bones.get(rightArm ? "RightArm" : "LeftArm");
+        if (armBone != null) {
+            return armBone;
+        }
+        return bones.get(rightArm ? "MRightArm" : "MLeftArm");
+    }
+
+    private static OpenYsmBone getHandLocatorBone(Map<String, OpenYsmBone> bones, boolean rightArm) {
+        String[] names = rightArm
+                ? new String[]{"RightHand", "MRightHand", "rightHand", "right_hand", "RightHandItem", "rightHandItem", "right_hand_item"}
+                : new String[]{"LeftHand", "MLeftHand", "leftHand", "left_hand", "LeftHandItem", "leftHandItem", "left_hand_item"};
+        for (String name : names) {
+            OpenYsmBone bone = bones.get(name);
+            if (bone != null) {
+                return bone;
+            }
+        }
+        return null;
     }
 }

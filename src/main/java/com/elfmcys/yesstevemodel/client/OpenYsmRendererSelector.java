@@ -7,13 +7,13 @@ public final class OpenYsmRendererSelector {
     public static final String PROPERTY = "yes_steve_model.renderer";
 
     private static String lastRawValue;
-    private static OpenYsmRendererMode lastMode = OpenYsmRendererMode.LEGACY_SELF;
+    private static OpenYsmRendererMode lastMode = OpenYsmRendererMode.OPENYSM;
 
     private OpenYsmRendererSelector() {
     }
 
     public static OpenYsmRendererMode getMode() {
-        String raw = System.getProperty(PROPERTY, OpenYsmRendererMode.LEGACY_SELF.propertyValue());
+        String raw = System.getProperty(PROPERTY, OpenYsmRendererMode.OPENYSM.propertyValue());
         if (!raw.equals(lastRawValue)) {
             lastRawValue = raw;
             lastMode = OpenYsmRendererMode.fromProperty(raw);

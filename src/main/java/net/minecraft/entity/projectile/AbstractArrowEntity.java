@@ -60,6 +60,11 @@ public abstract class AbstractArrowEntity extends ProjectileEntity
     private IntOpenHashSet piercedEntities;
     private List<Entity> hitEntities;
 
+    public boolean yesSteveModel$isInGround()
+    {
+        return this.inGround;
+    }
+
     protected AbstractArrowEntity(EntityType <? extends AbstractArrowEntity > type, World worldIn)
     {
         super(type, worldIn);

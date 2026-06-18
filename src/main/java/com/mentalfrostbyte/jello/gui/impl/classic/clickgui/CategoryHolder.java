@@ -6,13 +6,19 @@ import com.mentalfrostbyte.jello.gui.impl.classic.clickgui.buttons.Image;
 import com.mentalfrostbyte.jello.gui.impl.classic.clickgui.panel.ClickGuiPanel;
 import com.mentalfrostbyte.jello.gui.impl.classic.clickgui.buttons.Exit;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
+import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
+import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
+import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
+import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.text.StringTextComponent;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class CategoryHolder extends ClickGuiPanel {
+   private static final String IRC_CHAT_HOLDER_CLASS = "com.mentalfrostbyte.jello.gui.impl.irc.IRCChatHolder";
    private final List<Button> field21150 = new ArrayList<Button>();
    public Image field21152;
    public Image field21153;
@@ -29,6 +35,19 @@ public class CategoryHolder extends ClickGuiPanel {
       this.addToList(this.field21155 = new Image(this, "player", 201, 58, 170, 130, "Player", Resources.player, Resources.player2));
       this.addToList(this.field21156 = new Image(this, "visuals", 201, 208, 170, 130, "Visuals", Resources.visuals, Resources.visuals2));
       this.addToList(this.field21154 = new Image(this, "others", 201, 358, 170, 130, "Others", Resources.others, Resources.others2));
+      Button ircButton;
+      this.addToList(ircButton = new Button(
+              this,
+              "ircChat",
+              113,
+              514,
+              170,
+              38,
+              new ColorHelper(-3618616, -2500135, -2500135, ClientColors.DEEP_TEAL.getColor()),
+              "IRC Chat",
+              ResourceRegistry.DefaultClientFont
+      ));
+      ircButton.onClick((var1x, var2x) -> this.openIRCChat());
       Exit var7;
       this.addToList(var7 = new Exit(this, "exit", this.getWidthA() - 41, 9));
       var7.onClick((var0, var1x) -> Minecraft.getInstance().displayGuiScreen(null));
@@ -45,5 +64,18 @@ public class CategoryHolder extends ClickGuiPanel {
    @Override
    public void updatePanelDimensions(int newHeight, int newWidth) {
       super.updatePanelDimensions(newHeight, newWidth);
+   }
+
+   private void openIRCChat() {
+      try {
+         Object holder = Class.forName(IRC_CHAT_HOLDER_CLASS)
+                 .getConstructor(net.minecraft.util.text.ITextComponent.class)
+                 .newInstance(new StringTextComponent("IRC Chat"));
+         if (holder instanceof net.minecraft.client.gui.screen.Screen) {
+            Minecraft.getInstance().displayGuiScreen((net.minecraft.client.gui.screen.Screen)holder);
+         }
+      } catch (ReflectiveOperationException | LinkageError exc) {
+         MinecraftUtil.addChatMessage("[IRC] IRC Chat GUI is not available. Rebuild the project.");
+      }
    }
 }

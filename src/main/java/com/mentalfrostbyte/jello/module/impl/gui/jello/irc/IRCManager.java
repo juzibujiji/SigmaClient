@@ -29,13 +29,17 @@ public class IRCManager {
     public static boolean isConnected() {
         return ircClientModule != null && ircClientModule.isEnabled();
     }
+
+    public static boolean shouldNotify() {
+        return ircClientModule != null && ircClientModule.isNotificationsEnabled();
+    }
     
     /**
      * 发送消息
      */
     public static void sendMessage(String message) {
         if (ircClientModule != null) {
-            ircClientModule.sendMessage(message);
+            ircClientModule.sendMessage(IRCChatHistory.sanitizeMessage(message));
         }
     }
 }

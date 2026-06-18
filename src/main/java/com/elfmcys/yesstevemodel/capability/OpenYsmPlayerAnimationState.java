@@ -5,11 +5,13 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 
 import java.util.Map;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class OpenYsmPlayerAnimationState {
     private static final Map<UUID, State> STATES = new ConcurrentHashMap<>();
+    private static final Map<UUID, Map<String, Map<String, Double>>> GUI_VARIABLES = new ConcurrentHashMap<>();
 
     private OpenYsmPlayerAnimationState() {
     }
@@ -65,10 +67,36 @@ public final class OpenYsmPlayerAnimationState {
             return;
         }
         STATES.entrySet().removeIf(entry -> modelId.equals(entry.getValue().modelId));
+        for (Map<String, Map<String, Double>> byModel : GUI_VARIABLES.values()) {
+            byModel.remove(modelId);
+        }
     }
 
     public static void clearAll() {
         STATES.clear();
+        GUI_VARIABLES.clear();
+    }
+
+    public static void setGuiVariable(UUID playerId, String modelId, String variableName, double value) {
+        if (playerId == null || modelId == null || modelId.isEmpty() || variableName == null || variableName.isEmpty()) {
+            return;
+        }
+        GUI_VARIABLES
+                .computeIfAbsent(playerId, ignored -> new ConcurrentHashMap<>())
+                .computeIfAbsent(modelId, ignored -> new ConcurrentHashMap<>())
+                .put(variableName.toLowerCase(java.util.Locale.ROOT), value);
+    }
+
+    public static Map<String, Double> getGuiVariables(UUID playerId, String modelId) {
+        if (playerId == null || modelId == null || modelId.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Map<String, Map<String, Double>> byModel = GUI_VARIABLES.get(playerId);
+        if (byModel == null) {
+            return java.util.Collections.emptyMap();
+        }
+        Map<String, Double> variables = byModel.get(modelId);
+        return variables == null ? java.util.Collections.emptyMap() : new HashMap<>(variables);
     }
 
     public static final class State {
