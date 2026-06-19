@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client.animation.molang;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class MolangParser {
     private final String source;
@@ -190,16 +191,64 @@ public final class MolangParser {
             case "math.sin" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.sin(args.get(0).evaluate(context).asDouble())));
             case "math.cos" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.cos(args.get(0).evaluate(context).asDouble())));
             case "math.abs" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.abs(args.get(0).evaluate(context).asDouble())));
+            case "math.sqrt" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.sqrt(Math.max(0.0D, args.get(0).evaluate(context).asDouble()))));
+            case "math.floor" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.floor(args.get(0).evaluate(context).asDouble())));
+            case "math.ceil" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.ceil(args.get(0).evaluate(context).asDouble())));
+            case "math.round" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.round(args.get(0).evaluate(context).asDouble())));
+            case "math.trunc" -> requireArgs(name, args, 1, context -> MolangValue.of((long) args.get(0).evaluate(context).asDouble()));
             case "math.min" -> requireArgs(name, args, 2, context -> MolangValue.of(Math.min(args.get(0).evaluate(context).asDouble(), args.get(1).evaluate(context).asDouble())));
             case "math.max" -> requireArgs(name, args, 2, context -> MolangValue.of(Math.max(args.get(0).evaluate(context).asDouble(), args.get(1).evaluate(context).asDouble())));
+            case "math.pow" -> requireArgs(name, args, 2, context -> MolangValue.of(Math.pow(args.get(0).evaluate(context).asDouble(), args.get(1).evaluate(context).asDouble())));
+            case "math.mod" -> requireArgs(name, args, 2, context -> {
+                double divisor = args.get(1).evaluate(context).asDouble();
+                return MolangValue.of(Math.abs(divisor) < 0.000001D ? 0.0D : args.get(0).evaluate(context).asDouble() % divisor);
+            });
             case "math.clamp" -> requireArgs(name, args, 3, context -> {
                 double value = args.get(0).evaluate(context).asDouble();
                 double min = args.get(1).evaluate(context).asDouble();
                 double max = args.get(2).evaluate(context).asDouble();
                 return MolangValue.of(Math.max(min, Math.min(max, value)));
             });
+            case "math.lerp" -> requireArgs(name, args, 3, context -> {
+                double start = args.get(0).evaluate(context).asDouble();
+                double end = args.get(1).evaluate(context).asDouble();
+                double delta = args.get(2).evaluate(context).asDouble();
+                return MolangValue.of(start + (end - start) * delta);
+            });
+            case "math.random" -> requireArgs(name, args, 2, context -> {
+                double min = args.get(0).evaluate(context).asDouble();
+                double max = args.get(1).evaluate(context).asDouble();
+                if (max < min) {
+                    double swap = min;
+                    min = max;
+                    max = swap;
+                }
+                return MolangValue.of(ThreadLocalRandom.current().nextDouble(min, Math.nextUp(max)));
+            });
+            case "math.random_integer" -> requireArgs(name, args, 2, context -> {
+                int min = (int) Math.floor(args.get(0).evaluate(context).asDouble());
+                int max = (int) Math.floor(args.get(1).evaluate(context).asDouble());
+                if (max < min) {
+                    int swap = min;
+                    min = max;
+                    max = swap;
+                }
+                return MolangValue.of(ThreadLocalRandom.current().nextInt(min, max + 1));
+            });
+            case "math.min_angle" -> requireArgs(name, args, 1, context -> MolangValue.of(wrapDegrees(args.get(0).evaluate(context).asDouble())));
             default -> throw error("Unsupported function: " + name);
         };
+    }
+
+    private static double wrapDegrees(double value) {
+        double wrapped = value % 360.0D;
+        if (wrapped >= 180.0D) {
+            wrapped -= 360.0D;
+        }
+        if (wrapped < -180.0D) {
+            wrapped += 360.0D;
+        }
+        return wrapped;
     }
 
     private MolangExpression.Node requireArgs(String name, List<MolangExpression.Node> args, int count,

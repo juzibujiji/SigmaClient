@@ -1,6 +1,9 @@
 package com.elfmcys.yesstevemodel.gui;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraResources;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.matrix.MatrixStack;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.AbstractGui;
 import net.minecraft.client.gui.FontRenderer;
 
@@ -29,5 +32,21 @@ public final class VanillaOpenYsmSkin implements OpenYsmScreenSkin {
         AbstractGui.fill(matrices, left, top, right, bottom, hovered ? 0xAA4A6C86 : 0x88405060);
         AbstractGui.drawCenteredString(matrices, font, label, (left + right) / 2,
                 top + Math.max(4, (bottom - top - 8) / 2), textColor);
+    }
+
+    @Override
+    public void image(MatrixStack matrices, OpenYsmExtraResources.ImageResource image,
+                      int left, int top, int right, int bottom, float alpha) {
+        if (image == null || image.getLocation() == null || right <= left || bottom <= top) {
+            return;
+        }
+        Minecraft.getInstance().getTextureManager().bindTexture(image.getLocation());
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.color4f(1.0F, 1.0F, 1.0F, Math.max(0.0F, Math.min(1.0F, alpha)));
+        AbstractGui.blit(matrices, left, top, right - left, bottom - top, 0.0F, 0.0F,
+                image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight());
+        RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.disableBlend();
     }
 }

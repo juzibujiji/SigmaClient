@@ -30,6 +30,7 @@ public final class OpenYsmBakedPlayerModel {
     private final boolean disablePreviewRotation;
     private final boolean guiNoLighting;
     private final List<OpenYsmExtraEntityModel> extraEntityModels;
+    private final OpenYsmExtraResources extraResources;
     private OpenYsmModelDebugInfo debugInfo;
 
     public OpenYsmBakedPlayerModel(String id, ResourceLocation texture, List<OpenYsmBone> rootBones,
@@ -82,6 +83,20 @@ public final class OpenYsmBakedPlayerModel {
                                    boolean renderLayersFirst, boolean allCutout,
                                    boolean disablePreviewRotation, boolean guiNoLighting,
                                    List<OpenYsmExtraEntityModel> extraEntityModels) {
+        this(id, texture, rootBones, bones, geoModel, armRootBones, armBones, armGeoModel, animations,
+                widthScale, heightScale, footModelY, renderLayersFirst, allCutout,
+                disablePreviewRotation, guiNoLighting, extraEntityModels, OpenYsmExtraResources.EMPTY);
+    }
+
+    public OpenYsmBakedPlayerModel(String id, ResourceLocation texture, List<OpenYsmBone> rootBones,
+                                   Map<String, OpenYsmBone> bones, BakedGeoModel geoModel,
+                                   List<OpenYsmBone> armRootBones, Map<String, OpenYsmBone> armBones,
+                                   BakedGeoModel armGeoModel, OpenYsmAnimationSet animations,
+                                   float widthScale, float heightScale, float footModelY,
+                                   boolean renderLayersFirst, boolean allCutout,
+                                   boolean disablePreviewRotation, boolean guiNoLighting,
+                                   List<OpenYsmExtraEntityModel> extraEntityModels,
+                                   OpenYsmExtraResources extraResources) {
         this.id = id;
         this.texture = texture;
         this.rootBones = rootBones;
@@ -107,6 +122,7 @@ public final class OpenYsmBakedPlayerModel {
         this.disablePreviewRotation = disablePreviewRotation;
         this.guiNoLighting = guiNoLighting;
         this.extraEntityModels = extraEntityModels == null ? java.util.Collections.emptyList() : extraEntityModels;
+        this.extraResources = extraResources == null ? OpenYsmExtraResources.EMPTY : extraResources;
     }
 
     public String getId() {
@@ -187,6 +203,10 @@ public final class OpenYsmBakedPlayerModel {
 
     public List<OpenYsmExtraEntityModel> getExtraEntityModels() {
         return this.extraEntityModels;
+    }
+
+    public OpenYsmExtraResources getExtraResources() {
+        return this.extraResources;
     }
 
     public OpenYsmExtraEntityModel findExtraEntityModel(OpenYsmExtraEntityModel.Kind kind, String id) {

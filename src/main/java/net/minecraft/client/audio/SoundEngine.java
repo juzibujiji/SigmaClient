@@ -5,6 +5,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import javax.annotation.Nullable;
 import net.minecraft.client.GameSettings;
 import net.minecraft.client.renderer.ActiveRenderInfo;
+import net.minecraft.entity.Entity;
 import net.minecraft.resources.IResourceManager;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundCategory;
@@ -453,13 +456,33 @@ public class SoundEngine
                                     }
                                     else
                                     {
-                                        this.audioStreamManager.createStreamingResource(sound.getSoundAsOggLocation(), flag2).thenAccept((audioStream) ->
+                                        if (p_sound instanceof YsmOggSound)
                                         {
-                                            channelmanager$entry.runOnSoundExecutor((source) -> {
-                                                source.playStreamableSounds(audioStream);
-                                                source.play();
+                                            YsmOggSound ysmSound = (YsmOggSound)p_sound;
+                                            channelmanager$entry.runOnSoundExecutor((source) ->
+                                            {
+                                                try
+                                                {
+                                                    source.playStreamableSounds(ysmSound.openStream());
+                                                    source.play();
+                                                }
+                                                catch (IOException exception)
+                                                {
+                                                    LOGGER.warn("Failed to play YSM OGG sound", exception);
+                                                    source.stop();
+                                                }
                                             });
-                                        });
+                                        }
+                                        else
+                                        {
+                                            this.audioStreamManager.createStreamingResource(sound.getSoundAsOggLocation(), flag2).thenAccept((audioStream) ->
+                                            {
+                                                channelmanager$entry.runOnSoundExecutor((source) -> {
+                                                    source.playStreamableSounds(audioStream);
+                                                    source.play();
+                                                });
+                                            });
+                                        }
                                     }
 
                                     if (p_sound instanceof ITickableSound)
@@ -473,6 +496,40 @@ public class SoundEngine
                 }
             }
         }
+    }
+
+    @Nullable
+    public ISound playYsmOgg(byte[] oggData, SoundCategory category, float volume, float pitch, double x, double y, double z)
+    {
+        return this.playYsmOgg(new YsmOggSound(oggData, category, volume, pitch, x, y, z, false, false));
+    }
+
+    @Nullable
+    public ISound playYsmOgg(byte[] oggData, SoundCategory category, float volume, float pitch, Entity entity)
+    {
+        return this.playYsmOgg(oggData, category, volume, pitch, entity, false, false);
+    }
+
+    @Nullable
+    public ISound playYsmOgg(byte[] oggData, SoundCategory category, float volume, float pitch, Entity entity,
+                             boolean looping, boolean global)
+    {
+        if (entity == null)
+        {
+            return null;
+        }
+        return this.playYsmOgg(new YsmOggSound(oggData, category, volume, pitch, entity, looping, global));
+    }
+
+    @Nullable
+    private ISound playYsmOgg(YsmOggSound sound)
+    {
+        if (!this.loaded || sound.isEmpty())
+        {
+            return null;
+        }
+        this.play(sound);
+        return sound;
     }
 
     public void playOnNextTick(ITickableSound tickableSound)
@@ -577,5 +634,148 @@ public class SoundEngine
     public String getDebugString()
     {
         return this.sndSystem.getDebugString();
+    }
+
+    private static final class YsmOggSound implements ITickableSound
+    {
+        private static final ResourceLocation SOUND_ID = new ResourceLocation("yes_steve_model", "custom");
+        private final byte[] oggData;
+        private final SoundCategory category;
+        private final float volume;
+        private final float pitch;
+        @Nullable
+        private Entity entity;
+        private final boolean looping;
+        private final boolean global;
+        private double x;
+        private double y;
+        private double z;
+        private Sound sound = SoundHandler.MISSING_SOUND;
+        private boolean done;
+
+        private YsmOggSound(byte[] oggData, SoundCategory category, float volume, float pitch, double x, double y, double z,
+                            boolean looping, boolean global)
+        {
+            this.oggData = oggData == null ? new byte[0] : oggData;
+            this.category = category == null ? SoundCategory.PLAYERS : category;
+            this.volume = volume;
+            this.pitch = pitch;
+            this.entity = null;
+            this.looping = looping;
+            this.global = global;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        private YsmOggSound(byte[] oggData, SoundCategory category, float volume, float pitch, Entity entity,
+                            boolean looping, boolean global)
+        {
+            this(oggData, category, volume, pitch, entity.getPosX(), entity.getPosY(), entity.getPosZ(), looping, global);
+            this.entity = entity;
+        }
+
+        private boolean isEmpty()
+        {
+            return this.oggData.length == 0;
+        }
+
+        private IAudioStream openStream() throws IOException
+        {
+            return this.looping ? new OggAudioStreamWrapper(OggAudioStream::new, new ByteArrayInputStream(this.oggData))
+                    : new OggAudioStream(new ByteArrayInputStream(this.oggData));
+        }
+
+        public ResourceLocation getSoundLocation()
+        {
+            return SOUND_ID;
+        }
+
+        @Nullable
+        public SoundEventAccessor createAccessor(SoundHandler handler)
+        {
+            SoundEventAccessor accessor = handler.getAccessor(SOUND_ID);
+            if (accessor != null)
+            {
+                this.sound = accessor.cloneEntry();
+            }
+            return accessor;
+        }
+
+        public Sound getSound()
+        {
+            return this.sound;
+        }
+
+        public SoundCategory getCategory()
+        {
+            return this.category;
+        }
+
+        public boolean canRepeat()
+        {
+            return this.looping;
+        }
+
+        public boolean isGlobal()
+        {
+            return this.global;
+        }
+
+        public int getRepeatDelay()
+        {
+            return 0;
+        }
+
+        public float getVolume()
+        {
+            return this.volume;
+        }
+
+        public float getPitch()
+        {
+            return this.pitch;
+        }
+
+        public double getX()
+        {
+            return this.x;
+        }
+
+        public double getY()
+        {
+            return this.y;
+        }
+
+        public double getZ()
+        {
+            return this.z;
+        }
+
+        public ISound.AttenuationType getAttenuationType()
+        {
+            return this.global ? ISound.AttenuationType.NONE : ISound.AttenuationType.LINEAR;
+        }
+
+        public boolean isDonePlaying()
+        {
+            return this.done;
+        }
+
+        public void tick()
+        {
+            if (this.entity == null)
+            {
+                return;
+            }
+            if (!this.entity.isAlive())
+            {
+                this.done = true;
+                return;
+            }
+            this.x = this.entity.getPosX();
+            this.y = this.entity.getPosY();
+            this.z = this.entity.getPosZ();
+        }
     }
 }

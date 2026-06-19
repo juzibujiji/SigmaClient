@@ -295,6 +295,11 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
 
     protected void preRenderCallback(AbstractClientPlayerEntity entitylivingbaseIn, MatrixStack matrixStackIn, float partialTickTime)
     {
+        if (this.entityModel instanceof OpenYsmPlayerModel || this.entityModel instanceof OpenYsmGl4PlayerModel)
+        {
+            matrixStackIn.translate(0.0D, 0.01D, 0.0D);
+            return;
+        }
         float f = 0.9375F;
         matrixStackIn.scale(0.9375F, 0.9375F, 0.9375F);
     }
@@ -464,7 +469,7 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
 
         if (entityLiving.isElytraFlying())
         {
-            super.applyRotations(entityLiving, matrixStackIn, ageInTicks, rotationYaw, partialTicks);
+            this.applyBaseRotations(entityLiving, matrixStackIn, ageInTicks, rotationYaw, partialTicks);
             float f1 = (float)entityLiving.getTicksElytraFlying() + partialTicks;
             float f2 = MathHelper.clamp(f1 * f1 / 100.0F, 0.0F, 1.0F);
 
@@ -487,7 +492,7 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
         }
         else if (f > 0.0F)
         {
-            super.applyRotations(entityLiving, matrixStackIn, ageInTicks, rotationYaw, partialTicks);
+            this.applyBaseRotations(entityLiving, matrixStackIn, ageInTicks, rotationYaw, partialTicks);
             float f3 = entityLiving.isInWater() ? -90.0F - entityLiving.rotationPitch : -90.0F;
             float f4 = MathHelper.lerp(f, 0.0F, f3);
             matrixStackIn.rotate(Vector3f.XP.rotationDegrees(f4));
@@ -499,7 +504,42 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
         }
         else
         {
+            this.applyBaseRotations(entityLiving, matrixStackIn, ageInTicks, rotationYaw, partialTicks);
+        }
+    }
+
+    private void applyBaseRotations(AbstractClientPlayerEntity entityLiving, MatrixStack matrixStackIn, float ageInTicks, float rotationYaw, float partialTicks)
+    {
+        if (!this.usesOpenYsmModel())
+        {
+            super.applyRotations(entityLiving, matrixStackIn, ageInTicks, rotationYaw, partialTicks);
+            return;
+        }
+
+        int previousDeathTime = entityLiving.deathTime;
+        boolean wasSpinAttacking = entityLiving.isSpinAttacking();
+        entityLiving.deathTime = 0;
+        if (wasSpinAttacking)
+        {
+            entityLiving.setLivingFlagForYsmRender(4, false);
+        }
+
+        try
+        {
             super.applyRotations(entityLiving, matrixStackIn, ageInTicks, rotationYaw, partialTicks);
         }
+        finally
+        {
+            entityLiving.deathTime = previousDeathTime;
+            if (wasSpinAttacking)
+            {
+                entityLiving.setLivingFlagForYsmRender(4, true);
+            }
+        }
+    }
+
+    private boolean usesOpenYsmModel()
+    {
+        return this.entityModel instanceof OpenYsmPlayerModel || this.entityModel instanceof OpenYsmGl4PlayerModel;
     }
 }

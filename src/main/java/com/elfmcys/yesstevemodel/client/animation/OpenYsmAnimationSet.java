@@ -9,6 +9,7 @@ import com.elfmcys.yesstevemodel.client.animation.controller.ControllerLayer;
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerStateDefinition;
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerTransition;
 import com.elfmcys.yesstevemodel.client.animation.controller.OpenYsmControllerRuntime;
+import com.elfmcys.yesstevemodel.client.animation.molang.MolangParser;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -28,10 +29,28 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class OpenYsmAnimationSet {
     private static final float DEG_TO_RAD = (float) Math.PI / 180.0F;
     private static final String[] MAIN_STATE_PRIORITY = new String[]{"idle", "walk", "run", "sneak", "sneaking"};
+    private static final int MAX_EVENTS_PER_CLIP = 256;
+    private static final int MAX_EVENT_TEXT_LENGTH = 512;
+    private static final int MAX_FUNCTION_CONTROLLER_SCRIPT_LENGTH = 8192;
+    private static final int MAX_FUNCTION_CONTROLLER_ANIMATIONS = 64;
+    private static final Pattern SET_ANIMATION_PATTERN = Pattern.compile(
+            "ctrl\\s*\\.\\s*set_animation\\s*\\(\\s*(['\"])([^'\"]{1,128})\\1",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern CTRL_HAND_FUNCTION_PATTERN = Pattern.compile(
+            "ctrl\\s*\\.\\s*(use|swing|hold)\\s*\\(\\s*(['\"])(mainhand|offhand)\\2\\s*(?:,\\s*(['\"])([^'\"]{0,128})\\4\\s*)?\\)",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern YSM_STRING_FUNCTION_PATTERN = Pattern.compile(
+            "ysm\\s*\\.\\s*(mod_version|keyboard)\\s*\\([^)]{0,128}\\)",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern RELATIVE_BLOCK_TAG_PATTERN = Pattern.compile(
+            "query\\s*\\.\\s*relative_block_has_any_tag\\s*\\(\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*,\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*,\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*,\\s*(['\"])([^'\"]{1,128})\\4\\s*\\)",
+            Pattern.CASE_INSENSITIVE);
 
     private final String modelId;
     private final Map<String, Clip> clips = new LinkedHashMap<>();
@@ -150,6 +169,8 @@ public final class OpenYsmAnimationSet {
             Clip clip = new Clip(name, group, inferSourceType(group, name), originFile,
                     LoopMode.fromJson(animation.get("loop")), getFloat(animation, "animation_length", 0.0F));
             parseJsonBones(clip, animation.getAsJsonObject("bones"));
+            parseJsonSoundEffects(clip, animation.get("sound_effects"));
+            parseJsonTimelineEvents(clip, animation.get("timeline"));
             if (clip.length <= 0.0F) {
                 clip.length = clip.computeLengthFromTracks();
             }
@@ -170,6 +191,8 @@ public final class OpenYsmAnimationSet {
             Clip clip = new Clip(name, effectiveGroup, inferSourceType(effectiveGroup, name), rawFile.fileHash,
                     LoopMode.fromRaw(animation.loopMode), animation.length);
             parseRawBones(clip, animation.boneAnimations);
+            parseRawSoundEffects(clip, animation.soundEffects);
+            parseRawTimelineEvents(clip, animation.timelineEvents);
             if (clip.length <= 0.0F) {
                 clip.length = clip.computeLengthFromTracks();
             }
@@ -229,6 +252,31 @@ public final class OpenYsmAnimationSet {
             }
         }
         markControllerReferences();
+    }
+
+    public void addFunctionControllerReferences(Map<String, String> functions) {
+        if (functions == null || functions.isEmpty()) {
+            return;
+        }
+        int registered = 0;
+        for (Map.Entry<String, String> entry : functions.entrySet()) {
+            FunctionControllerDefinition parsed = parseFunctionController(entry.getKey(), entry.getValue());
+            if (parsed == null || parsed.animationRefs.isEmpty()) {
+                continue;
+            }
+            Map<String, ControllerStateDefinition> states = new LinkedHashMap<>();
+            states.put("default", new ControllerStateDefinition("default", parsed.animationRefs,
+                    Collections.emptyList(), 0.0F));
+            ControllerDefinition definition = new ControllerDefinition(parsed.controllerName, "default", states);
+            if (definition.isUsable()) {
+                this.controllerDefinitions.put(definition.getName(), definition);
+                collectControllerAnimations(definition);
+                registered++;
+            }
+        }
+        if (registered > 0) {
+            markControllerReferences();
+        }
     }
 
     public void configureDefaultHidden(Map<String, OpenYsmBone> bones) {
@@ -497,6 +545,115 @@ public final class OpenYsmAnimationSet {
         }
     }
 
+    private void parseJsonSoundEffects(Clip clip, JsonElement element) {
+        if (element == null || !element.isJsonObject()) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : element.getAsJsonObject().entrySet()) {
+            if (clip.soundEffects.size() >= MAX_EVENTS_PER_CLIP) {
+                return;
+            }
+            Float timestamp = parseTimestamp(entry.getKey());
+            if (timestamp == null) {
+                continue;
+            }
+            String effect = "";
+            JsonElement value = entry.getValue();
+            if (value.isJsonPrimitive()) {
+                effect = safeString(value);
+            } else if (value.isJsonObject()) {
+                effect = getString(value.getAsJsonObject(), "effect", "");
+            }
+            effect = safeEventText(effect);
+            if (!effect.isEmpty()) {
+                clip.soundEffects.add(new SoundEffectKeyframe(timestamp, effect));
+            }
+        }
+        clip.soundEffects.sort(Comparator.comparingDouble(frame -> frame.timestamp));
+    }
+
+    private void parseRawSoundEffects(Clip clip, List<RawYsmModel.RawSoundEffect> soundEffects) {
+        if (soundEffects == null) {
+            return;
+        }
+        for (RawYsmModel.RawSoundEffect soundEffect : soundEffects) {
+            if (clip.soundEffects.size() >= MAX_EVENTS_PER_CLIP) {
+                return;
+            }
+            if (soundEffect == null) {
+                continue;
+            }
+            String effect = safeEventText(soundEffect.effectName);
+            if (!effect.isEmpty()) {
+                clip.soundEffects.add(new SoundEffectKeyframe(Math.max(0.0F, soundEffect.timestamp), effect));
+            }
+        }
+        clip.soundEffects.sort(Comparator.comparingDouble(frame -> frame.timestamp));
+    }
+
+    private void parseJsonTimelineEvents(Clip clip, JsonElement element) {
+        if (element == null || !element.isJsonObject()) {
+            return;
+        }
+        for (Map.Entry<String, JsonElement> entry : element.getAsJsonObject().entrySet()) {
+            if (clip.timelineEvents.size() >= MAX_EVENTS_PER_CLIP) {
+                return;
+            }
+            Float timestamp = parseTimestamp(entry.getKey());
+            if (timestamp == null) {
+                continue;
+            }
+            List<String> events = new ArrayList<>();
+            JsonElement value = entry.getValue();
+            if (value.isJsonArray()) {
+                for (JsonElement child : value.getAsJsonArray()) {
+                    addSafeTimelineEvent(events, child);
+                }
+            } else {
+                addSafeTimelineEvent(events, value);
+            }
+            if (!events.isEmpty()) {
+                clip.timelineEvents.add(new TimelineEventKeyframe(timestamp, events));
+            }
+        }
+        clip.timelineEvents.sort(Comparator.comparingDouble(frame -> frame.timestamp));
+    }
+
+    private void parseRawTimelineEvents(Clip clip, List<RawYsmModel.RawTimelineEvent> timelineEvents) {
+        if (timelineEvents == null) {
+            return;
+        }
+        for (RawYsmModel.RawTimelineEvent timelineEvent : timelineEvents) {
+            if (clip.timelineEvents.size() >= MAX_EVENTS_PER_CLIP) {
+                return;
+            }
+            if (timelineEvent == null || timelineEvent.events == null) {
+                continue;
+            }
+            List<String> events = new ArrayList<>();
+            for (String event : timelineEvent.events) {
+                String safe = safeEventText(event);
+                if (!safe.isEmpty()) {
+                    events.add(safe);
+                }
+            }
+            if (!events.isEmpty()) {
+                clip.timelineEvents.add(new TimelineEventKeyframe(Math.max(0.0F, timelineEvent.timestamp), events));
+            }
+        }
+        clip.timelineEvents.sort(Comparator.comparingDouble(frame -> frame.timestamp));
+    }
+
+    private static void addSafeTimelineEvent(List<String> events, JsonElement element) {
+        if (events.size() >= MAX_EVENTS_PER_CLIP || element == null || !element.isJsonPrimitive()) {
+            return;
+        }
+        String safe = safeEventText(safeString(element));
+        if (!safe.isEmpty()) {
+            events.add(safe);
+        }
+    }
+
     private void parseJsonChannel(JsonElement channel, List<Keyframe> out, float defaultValue) {
         if (channel == null || channel.isJsonNull()) {
             return;
@@ -616,6 +773,554 @@ public final class OpenYsmAnimationSet {
             states.put(state.name, new ControllerStateDefinition(state.name, animations, transitions, state.blendTransitionValue));
         }
         return new ControllerDefinition(firstNonEmpty(controller.animationName, controller.name), controller.initialState, states);
+    }
+
+    private FunctionControllerDefinition parseFunctionController(String functionName, String script) {
+        String controllerName = functionControllerName(functionName);
+        if (controllerName.isEmpty() || script == null || script.isEmpty()
+                || script.length() > MAX_FUNCTION_CONTROLLER_SCRIPT_LENGTH) {
+            return null;
+        }
+        String cleanScript = stripMolangComments(script);
+        Matcher allSetAnimations = SET_ANIMATION_PATTERN.matcher(cleanScript);
+        int totalSetAnimationCalls = 0;
+        while (allSetAnimations.find()) {
+            totalSetAnimationCalls++;
+            if (totalSetAnimationCalls > MAX_FUNCTION_CONTROLLER_ANIMATIONS) {
+                return null;
+            }
+        }
+        if (totalSetAnimationCalls <= 0) {
+            return null;
+        }
+
+        List<ControllerAnimationRef> refs = new ArrayList<>();
+        int matchedConditionalCalls = 0;
+        for (ConditionalBlock block : findConditionalBlocks(cleanScript)) {
+            if (refs.size() >= MAX_FUNCTION_CONTROLLER_ANIMATIONS) {
+                return null;
+            }
+            Matcher matcher = SET_ANIMATION_PATTERN.matcher(maskNestedConditionalBodies(block.body));
+            while (matcher.find()) {
+                String animation = normalizeClipName(matcher.group(2));
+                String expression = sanitizeFunctionControllerExpression(block.condition);
+                if (!animation.isEmpty() && !expression.isEmpty()) {
+                    refs.add(new ControllerAnimationRef(animation, expression));
+                    matchedConditionalCalls++;
+                }
+            }
+        }
+
+        if (matchedConditionalCalls == 0 && totalSetAnimationCalls == 1) {
+            Matcher matcher = SET_ANIMATION_PATTERN.matcher(cleanScript);
+            if (matcher.find()) {
+                String animation = normalizeClipName(matcher.group(2));
+                if (!animation.isEmpty()) {
+                    refs.add(new ControllerAnimationRef(animation, "1"));
+                }
+            }
+        } else if (matchedConditionalCalls != totalSetAnimationCalls) {
+            return null;
+        }
+
+        return refs.isEmpty() ? null : new FunctionControllerDefinition(controllerName, refs);
+    }
+
+    private static String functionControllerName(String functionName) {
+        if (functionName == null) {
+            return "";
+        }
+        int at = functionName.indexOf('@');
+        if (at < 0 || at + 1 >= functionName.length()) {
+            return "";
+        }
+        String suffix = functionName.substring(at + 1).trim();
+        if (suffix.toLowerCase(Locale.ROOT).endsWith(".molang")) {
+            suffix = suffix.substring(0, suffix.length() - ".molang".length());
+        }
+        if (!suffix.toLowerCase(Locale.ROOT).startsWith("player_ctrl_")) {
+            return "";
+        }
+        return "function." + suffix;
+    }
+
+    private static String stripMolangComments(String script) {
+        StringBuilder out = new StringBuilder(script.length());
+        boolean quoted = false;
+        char quote = 0;
+        boolean escaped = false;
+        boolean lineComment = false;
+        boolean blockComment = false;
+        for (int i = 0; i < script.length(); i++) {
+            char c = script.charAt(i);
+            char next = i + 1 < script.length() ? script.charAt(i + 1) : 0;
+            if (lineComment) {
+                if (c == '\n' || c == '\r') {
+                    lineComment = false;
+                    out.append(c);
+                }
+                continue;
+            }
+            if (blockComment) {
+                if (c == '*' && next == '/') {
+                    blockComment = false;
+                    i++;
+                }
+                continue;
+            }
+            if (escaped) {
+                out.append(c);
+                escaped = false;
+                continue;
+            }
+            if (quoted && c == '\\') {
+                out.append(c);
+                escaped = true;
+                continue;
+            }
+            if (quoted) {
+                if (c == quote) {
+                    quoted = false;
+                }
+                out.append(c);
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                quoted = true;
+                quote = c;
+                out.append(c);
+                continue;
+            }
+            if (c == '/' && next == '/') {
+                lineComment = true;
+                i++;
+                continue;
+            }
+            if (c == '/' && next == '*') {
+                blockComment = true;
+                i++;
+                continue;
+            }
+            out.append(c);
+        }
+        return out.toString();
+    }
+
+    private static List<ConditionalBlock> findConditionalBlocks(String script) {
+        List<ConditionalBlock> blocks = new ArrayList<>();
+        findConditionalBlocks(script, 0, script.length(), "", blocks);
+        return blocks;
+    }
+
+    private static String maskNestedConditionalBodies(String body) {
+        if (body == null || body.isEmpty()) {
+            return "";
+        }
+        char[] chars = body.toCharArray();
+        for (ConditionalBlock child : findConditionalBlocks(body)) {
+            int start = Math.max(0, Math.min(chars.length, child.bodyStart));
+            int end = Math.max(start, Math.min(chars.length, child.bodyEnd));
+            for (int i = start; i < end; i++) {
+                chars[i] = ' ';
+            }
+        }
+        return new String(chars);
+    }
+
+    private static void findConditionalBlocks(String script, int start, int end, String parentCondition,
+                                              List<ConditionalBlock> blocks) {
+        String lower = script.toLowerCase(Locale.ROOT);
+        int index = start;
+        while (index < end && blocks.size() < MAX_FUNCTION_CONTROLLER_ANIMATIONS) {
+            ConditionalBlock block = findNextConditionalBlock(script, lower, index, end);
+            if (block == null) {
+                break;
+            }
+            String combinedCondition = combineConditions(parentCondition, block.condition);
+            ConditionalBlock combined = new ConditionalBlock(combinedCondition, block.body, block.bodyStart, block.bodyEnd,
+                    block.closeIndex);
+            blocks.add(combined);
+            findConditionalBlocks(script, block.bodyStart, block.bodyEnd, combinedCondition, blocks);
+            index = block.closeIndex + 1;
+        }
+    }
+
+    private static ConditionalBlock findNextConditionalBlock(String script, String lower, int start, int end) {
+        int index = start;
+        while (index < end) {
+            int nextIf = findNextIf(script, lower, index, end);
+            int nextTernary = findNextTernaryQuestion(script, index, end);
+            if (nextIf < 0 && nextTernary < 0) {
+                return null;
+            }
+            if (nextIf >= 0 && (nextTernary < 0 || nextIf < nextTernary)) {
+                ConditionalBlock block = parseIfBlock(script, nextIf, end);
+                if (block != null) {
+                    return block;
+                }
+                index = nextIf + 2;
+            } else {
+                ConditionalBlock block = parseTernaryBlock(script, nextTernary, end);
+                if (block != null) {
+                    return block;
+                }
+                index = nextTernary + 1;
+            }
+        }
+        return null;
+    }
+
+    private static int findNextIf(String script, String lower, int start, int end) {
+        int index = start;
+        while (index < end) {
+            int ifIndex = lower.indexOf("if", index);
+            if (ifIndex < 0 || ifIndex >= end) {
+                return -1;
+            }
+            if (isWordBoundary(lower, ifIndex - 1) && isWordBoundary(lower, ifIndex + 2)
+                    && !isQuoted(script, start, ifIndex)) {
+                return ifIndex;
+            }
+            index = ifIndex + 2;
+        }
+        return -1;
+    }
+
+    private static ConditionalBlock parseIfBlock(String script, int ifIndex, int end) {
+        int openParen = skipWhitespace(script, ifIndex + 2);
+        if (openParen >= end || script.charAt(openParen) != '(') {
+            return null;
+        }
+        int closeParen = findMatching(script, openParen, '(', ')');
+        if (closeParen < 0 || closeParen >= end) {
+            return null;
+        }
+        int openBrace = skipWhitespace(script, closeParen + 1);
+        if (openBrace >= end || script.charAt(openBrace) != '{') {
+            return null;
+        }
+        int closeBrace = findMatching(script, openBrace, '{', '}');
+        if (closeBrace < 0 || closeBrace >= end) {
+            return null;
+        }
+        return new ConditionalBlock(script.substring(openParen + 1, closeParen),
+                script.substring(openBrace + 1, closeBrace), openBrace + 1, closeBrace, closeBrace);
+    }
+
+    private static int findNextTernaryQuestion(String script, int start, int end) {
+        boolean quoted = false;
+        char quote = 0;
+        boolean escaped = false;
+        int parenDepth = 0;
+        for (int i = start; i < end; i++) {
+            char c = script.charAt(i);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (quoted && c == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (quoted) {
+                if (c == quote) {
+                    quoted = false;
+                }
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                quoted = true;
+                quote = c;
+                continue;
+            }
+            if (c == '(') {
+                parenDepth++;
+            } else if (c == ')' && parenDepth > 0) {
+                parenDepth--;
+            } else if (c == '?' && parenDepth == 0) {
+                return i;
+            } else if (c == '?' && i + 1 < end && script.charAt(i + 1) == '{') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static ConditionalBlock parseTernaryBlock(String script, int questionIndex, int end) {
+        int openBrace = skipWhitespace(script, questionIndex + 1);
+        if (openBrace >= end || script.charAt(openBrace) != '{') {
+            return null;
+        }
+        int closeBrace = findMatching(script, openBrace, '{', '}');
+        if (closeBrace < 0 || closeBrace >= end) {
+            return null;
+        }
+        int conditionStart = findConditionStart(script, questionIndex);
+        String condition = script.substring(conditionStart, questionIndex).trim();
+        if (condition.startsWith(":")) {
+            condition = condition.substring(1).trim();
+        }
+        return new ConditionalBlock(condition, script.substring(openBrace + 1, closeBrace),
+                openBrace + 1, closeBrace, closeBrace);
+    }
+
+    private static int findConditionStart(String script, int questionIndex) {
+        int parenDepth = 0;
+        boolean quoted = false;
+        char quote = 0;
+        boolean escaped = false;
+        for (int i = questionIndex - 1; i >= 0; i--) {
+            char c = script.charAt(i);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (quoted && c == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (quoted) {
+                if (c == quote) {
+                    quoted = false;
+                }
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                quoted = true;
+                quote = c;
+                continue;
+            }
+            if (c == ')') {
+                parenDepth++;
+            } else if (c == '(' && parenDepth > 0) {
+                parenDepth--;
+            } else if (parenDepth == 0 && (c == ';' || c == '{' || c == '}' || c == '\n' || c == '\r')) {
+                return i + 1;
+            }
+        }
+        return 0;
+    }
+
+    private static String combineConditions(String parent, String child) {
+        String safeParent = parent == null ? "" : parent.trim();
+        String safeChild = child == null ? "" : child.trim();
+        if (safeParent.isEmpty()) {
+            return safeChild;
+        }
+        if (safeChild.isEmpty()) {
+            return safeParent;
+        }
+        return "(" + safeParent + ") && (" + safeChild + ")";
+    }
+
+    private static String sanitizeFunctionControllerExpression(String expression) {
+        if (expression == null) {
+            return "";
+        }
+        String safe = normalizeFunctionControllerExpression(expression).trim();
+        if (safe.isEmpty() || safe.length() > 384 || safe.indexOf(';') >= 0 || safe.indexOf('{') >= 0
+                || safe.indexOf('}') >= 0 || safe.indexOf('"') >= 0 || safe.indexOf('\'') >= 0) {
+            return "";
+        }
+        try {
+            MolangParser.parse(safe);
+            return safe;
+        } catch (MolangParser.ParseException ignored) {
+            return "";
+        }
+    }
+
+    private static String normalizeFunctionControllerExpression(String expression) {
+        if (expression == null || expression.isEmpty()) {
+            return "";
+        }
+        String normalized = replaceCtrlHandFunctions(expression);
+        normalized = replaceRelativeBlockTagQueries(normalized);
+        normalized = YSM_STRING_FUNCTION_PATTERN.matcher(normalized).replaceAll("0");
+        return normalized;
+    }
+
+    private static String replaceRelativeBlockTagQueries(String expression) {
+        Matcher matcher = RELATIVE_BLOCK_TAG_PATTERN.matcher(expression);
+        StringBuffer out = new StringBuffer();
+        while (matcher.find()) {
+            String replacement = "query.relative_block_has_any_tag_x" + safeNumberToken(matcher.group(1))
+                    + "_y" + safeNumberToken(matcher.group(2))
+                    + "_z" + safeNumberToken(matcher.group(3))
+                    + "_tag_" + safeResourceToken(matcher.group(5));
+            matcher.appendReplacement(out, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(out);
+        return out.toString();
+    }
+
+    private static String safeNumberToken(String value) {
+        if (value == null || value.isEmpty()) {
+            return "0";
+        }
+        String trimmed = value.trim();
+        StringBuilder safe = new StringBuilder();
+        for (int i = 0; i < trimmed.length() && safe.length() < 16; i++) {
+            char c = trimmed.charAt(i);
+            if (c == '-') {
+                safe.append('m');
+            } else if (c == '+') {
+                safe.append('p');
+            } else if (c == '.') {
+                safe.append('d');
+            } else if (c >= '0' && c <= '9') {
+                safe.append(c);
+            }
+        }
+        return safe.length() == 0 ? "0" : safe.toString();
+    }
+
+    private static String safeResourceToken(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        String raw = value.trim().toLowerCase(Locale.ROOT).replace(':', '_');
+        StringBuilder safe = new StringBuilder();
+        for (int i = 0; i < raw.length() && safe.length() < 96; i++) {
+            char c = raw.charAt(i);
+            if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+                safe.append(c);
+            } else if (c == '_' || c == '-' || c == '/' || c == '.') {
+                safe.append('_');
+            }
+        }
+        return safe.toString();
+    }
+
+    private static String replaceCtrlHandFunctions(String expression) {
+        Matcher matcher = CTRL_HAND_FUNCTION_PATTERN.matcher(expression);
+        StringBuffer out = new StringBuffer();
+        while (matcher.find()) {
+            String function = matcher.group(1).toLowerCase(Locale.ROOT);
+            String hand = matcher.group(3).toLowerCase(Locale.ROOT);
+            String filter = matcher.group(5);
+            String replacement = filteredCtrlIdentifier(function, hand, filter);
+            matcher.appendReplacement(out, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(out);
+        return out.toString();
+    }
+
+    private static String filteredCtrlIdentifier(String function, String hand, String filter) {
+        String base = switch (function) {
+            case "swing" -> "mainhand".equals(hand) ? "ctrl.swing_mainhand" : "ctrl.swing_offhand";
+            case "hold" -> "mainhand".equals(hand) ? "ctrl.hold_mainhand" : "ctrl.hold_offhand";
+            default -> "mainhand".equals(hand) ? "ctrl.using_mainhand" : "ctrl.using_offhand";
+        };
+        String safeFilter = safeItemFilterIdentifier(filter);
+        return safeFilter.isEmpty() ? base : base + "_" + safeFilter;
+    }
+
+    private static String safeItemFilterIdentifier(String filter) {
+        if (filter == null) {
+            return "";
+        }
+        String value = filter.trim().toLowerCase(Locale.ROOT);
+        if (value.isEmpty()) {
+            return "";
+        }
+        String type;
+        String id;
+        if (value.startsWith("#")) {
+            type = "tag";
+            id = value.substring(1);
+        } else if (value.startsWith(":")) {
+            type = "suffix";
+            id = value.substring(1);
+        } else {
+            type = value.contains(":") ? "item" : "suffix";
+            id = value;
+        }
+        id = id.replace(':', '.');
+        StringBuilder safe = new StringBuilder(type);
+        safe.append('_');
+        for (int i = 0; i < id.length() && safe.length() < 80; i++) {
+            char c = id.charAt(i);
+            if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+                safe.append(c);
+            } else if (c == '_' || c == '.' || c == '-' || c == '/') {
+                safe.append('_');
+            }
+        }
+        return safe.length() <= type.length() + 1 ? "" : safe.toString();
+    }
+
+    private static int skipWhitespace(String value, int index) {
+        while (index < value.length() && Character.isWhitespace(value.charAt(index))) {
+            index++;
+        }
+        return index;
+    }
+
+    private static int findMatching(String value, int openIndex, char open, char close) {
+        int depth = 0;
+        boolean quoted = false;
+        char quote = 0;
+        boolean escaped = false;
+        for (int i = openIndex; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (quoted && c == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (quoted) {
+                if (c == quote) {
+                    quoted = false;
+                }
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                quoted = true;
+                quote = c;
+                continue;
+            }
+            if (c == open) {
+                depth++;
+            } else if (c == close) {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static boolean isWordBoundary(String value, int index) {
+        if (index < 0 || index >= value.length()) {
+            return true;
+        }
+        char c = value.charAt(index);
+        return !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_');
+    }
+
+    private static boolean isQuoted(String value, int start, int index) {
+        boolean quoted = false;
+        char quote = 0;
+        boolean escaped = false;
+        for (int i = start; i < index && i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (escaped) {
+                escaped = false;
+            } else if (quoted && c == '\\') {
+                escaped = true;
+            } else if (quoted && c == quote) {
+                quoted = false;
+            } else if (!quoted && (c == '\'' || c == '"')) {
+                quoted = true;
+                quote = c;
+            }
+        }
+        return quoted;
     }
 
     private void parseControllerAnimationRefs(JsonElement animations, List<ControllerAnimationRef> out) {
@@ -999,6 +1704,14 @@ public final class OpenYsmAnimationSet {
         }
     }
 
+    private static String safeEventText(String value) {
+        if (value == null) {
+            return "";
+        }
+        String safe = value.replace('\0', ' ').trim();
+        return safe.length() > MAX_EVENT_TEXT_LENGTH ? safe.substring(0, MAX_EVENT_TEXT_LENGTH) : safe;
+    }
+
     private static float getFloat(JsonObject json, String key, float fallback) {
         try {
             return json != null && json.has(key) ? json.get(key).getAsFloat() : fallback;
@@ -1057,6 +1770,32 @@ public final class OpenYsmAnimationSet {
             this.icon = icon;
             this.description = description;
             this.global = global;
+        }
+    }
+
+    private static final class FunctionControllerDefinition {
+        private final String controllerName;
+        private final List<ControllerAnimationRef> animationRefs;
+
+        private FunctionControllerDefinition(String controllerName, List<ControllerAnimationRef> animationRefs) {
+            this.controllerName = controllerName;
+            this.animationRefs = animationRefs;
+        }
+    }
+
+    private static final class ConditionalBlock {
+        private final String condition;
+        private final String body;
+        private final int bodyStart;
+        private final int bodyEnd;
+        private final int closeIndex;
+
+        private ConditionalBlock(String condition, String body, int bodyStart, int bodyEnd, int closeIndex) {
+            this.condition = condition == null ? "" : condition;
+            this.body = body == null ? "" : body;
+            this.bodyStart = bodyStart;
+            this.bodyEnd = bodyEnd;
+            this.closeIndex = closeIndex;
         }
     }
 
@@ -1173,6 +1912,8 @@ public final class OpenYsmAnimationSet {
         public final String originFile;
         public final Set<String> touchedBones = new LinkedHashSet<>();
         public final Map<String, BoneTrack> boneTracks = new LinkedHashMap<>();
+        public final List<SoundEffectKeyframe> soundEffects = new ArrayList<>();
+        public final List<TimelineEventKeyframe> timelineEvents = new ArrayList<>();
         public final boolean isMainState;
         public final boolean isHandCondition;
         public boolean isExtraAction;
@@ -1238,6 +1979,26 @@ public final class OpenYsmAnimationSet {
         private Keyframe(float timestamp, float[] values) {
             this.timestamp = timestamp;
             this.values = values;
+        }
+    }
+
+    public static final class SoundEffectKeyframe {
+        public final float timestamp;
+        public final String effectName;
+
+        private SoundEffectKeyframe(float timestamp, String effectName) {
+            this.timestamp = Math.max(0.0F, timestamp);
+            this.effectName = effectName == null ? "" : effectName;
+        }
+    }
+
+    public static final class TimelineEventKeyframe {
+        public final float timestamp;
+        public final List<String> events;
+
+        private TimelineEventKeyframe(float timestamp, List<String> events) {
+            this.timestamp = Math.max(0.0F, timestamp);
+            this.events = Collections.unmodifiableList(new ArrayList<>(events == null ? Collections.emptyList() : events));
         }
     }
 }

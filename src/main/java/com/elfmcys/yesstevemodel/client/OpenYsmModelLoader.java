@@ -15,6 +15,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.client.renderer.model.ModelRenderer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.NativeImage;
@@ -22,6 +23,9 @@ import net.minecraft.resources.IResource;
 import net.minecraft.resources.IResourceManager;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.vector.Vector3f;
+import net.optifine.shaders.MultiTexID;
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
 import org.apache.commons.lang3.StringUtils;
 
 import javax.imageio.ImageIO;
@@ -42,6 +46,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -57,6 +62,12 @@ public final class OpenYsmModelLoader {
     private static final int DEFAULT_TEXTURE_SIZE = 64;
     private static final int MAX_TEXTURE_SIZE = 8192;
     private static final int MAX_TEXTURE_PIXELS = 8192 * 8192;
+    private static final int MAX_EXTRA_RESOURCE_COUNT = 256;
+    private static final int MAX_SOUND_RESOURCE_BYTES = 8 * 1024 * 1024;
+    private static final int MAX_FUNCTION_RESOURCE_BYTES = 64 * 1024;
+    private static final int MAX_LANGUAGE_RESOURCE_BYTES = 512 * 1024;
+    private static final int MAX_GUI_IMAGE_RESOURCE_BYTES = 16 * 1024 * 1024;
+    private static final int MAX_TRANSLATION_TEXT_LENGTH = 512;
     private static boolean imageIoPluginsScanned;
 
     private OpenYsmModelLoader() {
@@ -80,8 +91,8 @@ public final class OpenYsmModelLoader {
             if (modelPath.isEmpty()) {
                 throw new IOException("YSM player main model is missing");
             }
-            String texturePath = selectTexturePath(ysm, player, textureId);
-            ResourceLocation textureLocation = source.loadTexture(entry, texturePath);
+            OpenYsmTextureOption textureOption = selectTextureOption(ysm, player, textureId);
+            ResourceLocation textureLocation = source.loadTexture(entry, textureOption);
             BakedPart mainPart = bakeJsonPart(source, modelPath, entry.getId());
             BakedPart armPart = null;
             String armModelPath = getString(modelFiles, "arm", "");
@@ -97,6 +108,9 @@ public final class OpenYsmModelLoader {
             JsonObject properties = ysm.has("properties") && ysm.get("properties").isJsonObject() ? ysm.getAsJsonObject("properties") : new JsonObject();
             OpenYsmAnimationSet animations = buildJsonAnimationSet(ysm, player, source, entry.getId(),
                     combinedBoneMap(mainPart.bones, armPart == null ? null : armPart.bones));
+            OpenYsmExtraResources extraResources = buildJsonExtraResources(entry, properties, source);
+            animations.addFunctionControllerReferences(extraResources.getFunctions());
+            animations.configureDefaultHidden(combinedBoneMap(mainPart.bones, armPart == null ? null : armPart.bones));
             OpenYsmBakedPlayerModel bakedModel = new OpenYsmBakedPlayerModel(entry.getId(), textureLocation,
                     ImmutableList.copyOf(mainPart.roots), mainPart.bones, mainPart.geoModel,
                     armPart == null ? null : ImmutableList.copyOf(armPart.roots),
@@ -109,7 +123,9 @@ public final class OpenYsmModelLoader {
                     getBoolean(properties, "render_layers_first", false),
                     getBoolean(properties, "all_cutout", false),
                     getBoolean(properties, "disable_preview_rotation", false),
-                    getBoolean(properties, "gui_no_lighting", false));
+                    getBoolean(properties, "gui_no_lighting", false),
+                    Collections.emptyList(),
+                    extraResources);
             OpenYsmDebugLogger.logModelLoad(bakedModel);
             return bakedModel;
         }
@@ -268,6 +284,110 @@ public final class OpenYsmModelLoader {
             }
         }
         animations.registerExplicitAction(animationName, displayName, icon, description, global);
+    }
+
+    private static OpenYsmExtraResources buildJsonExtraResources(OpenYsmModelEntry entry, JsonObject properties,
+                                                                 ModelSource source) {
+        Map<String, byte[]> sounds = new LinkedHashMap<>();
+        Map<String, String> functions = new LinkedHashMap<>();
+        Map<String, Map<String, String>> translations = new LinkedHashMap<>();
+        Map<String, OpenYsmExtraResources.ImageResource> images = new LinkedHashMap<>();
+
+        registerJsonGuiImage(entry, source, images, getString(properties, "gui_background", ""), "gui_background");
+        registerJsonGuiImage(entry, source, images, getString(properties, "gui_foreground", ""), "gui_foreground");
+
+        for (String relativePath : source.listResourceFiles()) {
+            String normalized = relativePath.replace('\\', '/');
+            try {
+                if ((normalized.startsWith("sounds/") || normalized.endsWith(".ogg")) && sounds.size() < MAX_EXTRA_RESOURCE_COUNT) {
+                    byte[] data = source.readBytes(normalized, MAX_SOUND_RESOURCE_BYTES);
+                    if (data != null && data.length > 0) {
+                        sounds.putIfAbsent(extractFileName(normalized), data);
+                    }
+                } else if (normalized.startsWith("lang/") && normalized.endsWith(".json")
+                        && translations.size() < MAX_EXTRA_RESOURCE_COUNT) {
+                    byte[] data = source.readBytes(normalized, MAX_LANGUAGE_RESOURCE_BYTES);
+                    Map<String, String> language = parseLanguageJson(data);
+                    String locale = normalized.substring("lang/".length(), normalized.length() - ".json".length());
+                    locale = safeResourceName(locale);
+                    if (!locale.isEmpty() && !language.isEmpty()) {
+                        translations.put(locale, language);
+                    }
+                } else if (normalized.startsWith("functions/") && normalized.endsWith(".molang")
+                        && functions.size() < MAX_EXTRA_RESOURCE_COUNT) {
+                    byte[] data = source.readBytes(normalized, MAX_FUNCTION_RESOURCE_BYTES);
+                    if (data != null && data.length > 0) {
+                        functions.putIfAbsent(extractFileName(normalized),
+                                sanitizeResourceText(new String(data, StandardCharsets.UTF_8), MAX_FUNCTION_RESOURCE_BYTES));
+                    }
+                }
+            } catch (IOException | RuntimeException exception) {
+                YesSteveModel.LOGGER.warn("[YSM] Failed to load extra JSON resource model='{}' path='{}'",
+                        entry.getId(), normalized, exception);
+            }
+        }
+
+        return new OpenYsmExtraResources(sounds, functions, translations, images);
+    }
+
+    private static void registerJsonGuiImage(OpenYsmModelEntry entry, ModelSource source,
+                                             Map<String, OpenYsmExtraResources.ImageResource> images,
+                                             String configuredPath, String id) {
+        byte[] data = null;
+        String path = configuredPath;
+        try {
+            if (!StringUtils.isBlank(path)) {
+                data = source.readBytes(path, MAX_GUI_IMAGE_RESOURCE_BYTES);
+            }
+        } catch (IOException ignored) {
+            data = null;
+        }
+        if (data == null) {
+            path = "background/" + id + ".png";
+            try {
+                data = source.readBytes(path, MAX_GUI_IMAGE_RESOURCE_BYTES);
+            } catch (IOException ignored) {
+                data = null;
+            }
+        }
+        if (data == null || data.length == 0) {
+            return;
+        }
+
+        try {
+            OpenYsmExtraResources.ImageResource resource = registerImageTexture(entry, id, data, 0, 0, 0);
+            if (resource != null) {
+                images.put(id, resource);
+            }
+        } catch (IOException | RuntimeException exception) {
+            YesSteveModel.LOGGER.warn("[YSM] Failed to register JSON GUI image model='{}' path='{}'",
+                    entry.getId(), path, exception);
+        }
+    }
+
+    private static Map<String, String> parseLanguageJson(byte[] data) {
+        if (data == null || data.length == 0) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        try {
+            JsonObject json = JsonParser.parseString(new String(data, StandardCharsets.UTF_8)).getAsJsonObject();
+            for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
+                if (values.size() >= MAX_EXTRA_RESOURCE_COUNT) {
+                    break;
+                }
+                if (entry.getValue().isJsonPrimitive()) {
+                    String key = sanitizeResourceText(entry.getKey(), MAX_TRANSLATION_TEXT_LENGTH);
+                    String value = sanitizeResourceText(entry.getValue().getAsString(), MAX_TRANSLATION_TEXT_LENGTH);
+                    if (!key.isEmpty()) {
+                        values.put(key, value);
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+            return Collections.emptyMap();
+        }
+        return values;
     }
 
     private static void registerRawActionMetadata(OpenYsmAnimationSet animations, RawYsmModel rawModel) {
@@ -438,6 +558,9 @@ public final class OpenYsmModelLoader {
         OpenYsmAnimationSet animations = buildRawAnimationSet(rawModel, entry.getId(),
                 combinedBoneMap(mainPart.bones, armPart == null ? null : armPart.bones));
         List<OpenYsmExtraEntityModel> extraEntityModels = buildRawExtraEntityModels(entry, rawModel);
+        OpenYsmExtraResources extraResources = buildRawExtraResources(entry, rawModel);
+        animations.addFunctionControllerReferences(extraResources.getFunctions());
+        animations.configureDefaultHidden(combinedBoneMap(mainPart.bones, armPart == null ? null : armPart.bones));
         OpenYsmBakedPlayerModel bakedModel = new OpenYsmBakedPlayerModel(entry.getId(), textureLocation,
                 ImmutableList.copyOf(mainPart.roots), mainPart.bones, mainPart.geoModel,
                 armPart == null ? null : ImmutableList.copyOf(armPart.roots),
@@ -448,7 +571,8 @@ public final class OpenYsmModelLoader {
                 rawModel.properties.allCutout,
                 rawModel.properties.disablePreviewRotation,
                 rawModel.properties.guiNoLighting,
-                extraEntityModels);
+                extraEntityModels,
+                extraResources);
         bakedModel.setDebugInfo(buildRawDebugInfo(entry, rawModel, selectedTexture, animations));
         OpenYsmDebugLogger.logModelLoad(bakedModel);
         return bakedModel;
@@ -553,6 +677,151 @@ public final class OpenYsmModelLoader {
             return null;
         }
         return textures.values().iterator().next();
+    }
+
+    private static OpenYsmExtraResources buildRawExtraResources(OpenYsmModelEntry entry, RawYsmModel rawModel) {
+        Map<String, byte[]> sounds = new LinkedHashMap<>();
+        Map<String, String> functions = new LinkedHashMap<>();
+        Map<String, Map<String, String>> translations = new LinkedHashMap<>();
+        Map<String, OpenYsmExtraResources.ImageResource> images = new LinkedHashMap<>();
+
+        for (Map.Entry<String, RawYsmModel.RawDataFile> sound : rawModel.soundFiles.entrySet()) {
+            if (sounds.size() >= MAX_EXTRA_RESOURCE_COUNT) {
+                break;
+            }
+            String name = safeResourceName(sound.getKey());
+            byte[] data = sound.getValue() == null ? null : sound.getValue().data;
+            if (!name.isEmpty() && data != null && data.length > 0 && data.length <= MAX_SOUND_RESOURCE_BYTES) {
+                sounds.put(name, data);
+            }
+        }
+
+        for (Map.Entry<String, RawYsmModel.RawDataFile> function : rawModel.functionFiles.entrySet()) {
+            if (functions.size() >= MAX_EXTRA_RESOURCE_COUNT) {
+                break;
+            }
+            String name = safeResourceName(function.getKey());
+            byte[] data = function.getValue() == null ? null : function.getValue().data;
+            if (!name.isEmpty() && data != null && data.length > 0 && data.length <= MAX_FUNCTION_RESOURCE_BYTES) {
+                functions.put(name, sanitizeResourceText(new String(data, StandardCharsets.UTF_8), MAX_FUNCTION_RESOURCE_BYTES));
+            }
+        }
+
+        for (Map.Entry<String, RawYsmModel.RawLanguageFile> language : rawModel.languageFiles.entrySet()) {
+            if (translations.size() >= MAX_EXTRA_RESOURCE_COUNT) {
+                break;
+            }
+            String locale = safeResourceName(language.getKey());
+            if (locale.isEmpty() || language.getValue() == null || language.getValue().data == null) {
+                continue;
+            }
+            Map<String, String> nodes = new LinkedHashMap<>();
+            for (Map.Entry<String, String> node : language.getValue().data.entrySet()) {
+                if (nodes.size() >= MAX_EXTRA_RESOURCE_COUNT) {
+                    break;
+                }
+                String key = sanitizeResourceText(node.getKey(), MAX_TRANSLATION_TEXT_LENGTH);
+                String value = sanitizeResourceText(node.getValue(), MAX_TRANSLATION_TEXT_LENGTH);
+                if (!key.isEmpty()) {
+                    nodes.put(key, value);
+                }
+            }
+            if (!nodes.isEmpty()) {
+                translations.put(locale, nodes);
+            }
+        }
+
+        registerRawImages(entry, images, rawModel.properties.backgroundImages);
+        List<RawYsmModel.RawImage> avatarImages = new ArrayList<>();
+        for (RawYsmModel.RawMetadata.Author author : rawModel.metadata.authors) {
+            if (author != null && author.avatarImage != null) {
+                avatarImages.add(author.avatarImage);
+            }
+        }
+        avatarImages.addAll(rawModel.metadata.extraAvatars);
+        registerRawImages(entry, images, avatarImages);
+
+        return new OpenYsmExtraResources(sounds, functions, translations, images);
+    }
+
+    private static void registerRawImages(OpenYsmModelEntry entry, Map<String, OpenYsmExtraResources.ImageResource> images,
+                                          List<RawYsmModel.RawImage> rawImages) {
+        if (rawImages == null || rawImages.isEmpty()) {
+            return;
+        }
+        for (RawYsmModel.RawImage image : rawImages) {
+            if (images.size() >= MAX_EXTRA_RESOURCE_COUNT) {
+                return;
+            }
+            String name = safeResourceName(image == null ? "" : image.name);
+            if (name.isEmpty() || images.containsKey(name)) {
+                continue;
+            }
+            try {
+                OpenYsmExtraResources.ImageResource resource = registerImageTexture(entry, name, image);
+                if (resource != null) {
+                    images.put(name, resource);
+                }
+            } catch (IOException | RuntimeException exception) {
+                YesSteveModel.LOGGER.warn("[YSM] Failed to register extra image model='{}' image='{}'",
+                        entry.getId(), name, exception);
+            }
+        }
+    }
+
+    private static OpenYsmExtraResources.ImageResource registerImageTexture(OpenYsmModelEntry entry, String imageName,
+                                                                            RawYsmModel.RawImage image) throws IOException {
+        if (image == null || image.data == null || image.data.length == 0) {
+            return null;
+        }
+        return registerImageTexture(entry, imageName, image.data, image.width, image.height, image.format);
+    }
+
+    private static OpenYsmExtraResources.ImageResource registerImageTexture(OpenYsmModelEntry entry, String imageName,
+                                                                            byte[] data, int width, int height,
+                                                                            int imageFormat) throws IOException {
+        RawYsmModel.RawTexture texture = new RawYsmModel.RawTexture();
+        texture.name = imageName;
+        texture.data = data;
+        texture.width = width;
+        texture.height = height;
+        texture.imageFormat = imageFormat;
+        NativeImage nativeImage = readTexture(texture);
+        ResourceLocation location = new ResourceLocation(YesSteveModel.MOD_ID,
+                "dynamic/gui/" + sha256(entry.getSourceType().name() + ":" + entry.getId() + ":" + imageName).substring(0, 24));
+        int actualWidth = nativeImage.getWidth();
+        int actualHeight = nativeImage.getHeight();
+        Minecraft.getInstance().getTextureManager().loadTexture(location, new DynamicTexture(nativeImage));
+        return new OpenYsmExtraResources.ImageResource(location, actualWidth, actualHeight);
+    }
+
+    private static String safeResourceName(String value) {
+        if (value == null) {
+            return "";
+        }
+        String safe = value.replace('\0', ' ').trim();
+        return safe.length() > 128 ? safe.substring(0, 128) : safe;
+    }
+
+    private static String sanitizeResourceText(String value, int maxLength) {
+        if (value == null) {
+            return "";
+        }
+        String safe = value.replace('\0', ' ').trim();
+        return safe.length() > maxLength ? safe.substring(0, maxLength) : safe;
+    }
+
+    private static String extractFileName(String fullPath) {
+        String name = fullPath == null ? "" : fullPath.replace('\\', '/');
+        int lastSlash = name.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            name = name.substring(lastSlash + 1);
+        }
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            name = name.substring(0, dot);
+        }
+        return safeResourceName(name);
     }
 
     private static String safeExtraModelId(String id) {
@@ -794,6 +1063,8 @@ public final class OpenYsmModelLoader {
                 + ", tips=" + rawModel.metadata.tips
                 + ", previewAnimation=" + rawModel.properties.previewAnimation
                 + ", backgroundImages=" + rawModel.properties.backgroundImages.size()
+                + ", sounds=" + rawModel.soundFiles.keySet()
+                + ", languages=" + rawModel.languageFiles.keySet()
                 + ", extraAnimations=" + rawModel.properties.extraAnimations.keySet();
 
         return new OpenYsmModelDebugInfo(
@@ -876,7 +1147,7 @@ public final class OpenYsmModelLoader {
         }
     }
 
-    private static String selectTexturePath(JsonObject ysm, JsonObject player, String textureId) throws IOException {
+    private static OpenYsmTextureOption selectTextureOption(JsonObject ysm, JsonObject player, String textureId) throws IOException {
         List<OpenYsmTextureOption> options = textureOptions(player);
         if (options.isEmpty()) {
             throw new IOException("YSM player texture list is empty");
@@ -884,11 +1155,11 @@ public final class OpenYsmModelLoader {
 
         OpenYsmTextureOption selected = findTexture(options, textureId);
         if (selected != null) {
-            return selected.getPath();
+            return selected;
         }
 
         selected = findTexture(options, defaultTextureId(ysm));
-        return selected != null ? selected.getPath() : options.get(0).getPath();
+        return selected != null ? selected : options.get(0);
     }
 
     public static OpenYsmTextureOption findTexture(List<OpenYsmTextureOption> options, String textureId) {
@@ -924,14 +1195,25 @@ public final class OpenYsmModelLoader {
 
     private static void addTextureOption(List<OpenYsmTextureOption> options, JsonElement texture) {
         String path = null;
+        String normalPath = "";
+        String specularPath = "";
         if (texture.isJsonPrimitive()) {
             path = texture.getAsString();
-        } else if (texture.isJsonObject() && texture.getAsJsonObject().has("uv")) {
-            path = texture.getAsJsonObject().get("uv").getAsString();
+        } else if (texture.isJsonObject()) {
+            JsonObject object = texture.getAsJsonObject();
+            if (object.has("uv") && object.get("uv").isJsonPrimitive()) {
+                path = object.get("uv").getAsString();
+            }
+            if (object.has("normal") && object.get("normal").isJsonPrimitive()) {
+                normalPath = object.get("normal").getAsString();
+            }
+            if (object.has("specular") && object.get("specular").isJsonPrimitive()) {
+                specularPath = object.get("specular").getAsString();
+            }
         }
 
         if (!StringUtils.isBlank(path)) {
-            options.add(new OpenYsmTextureOption(textureIdFromPath(path), path));
+            options.add(new OpenYsmTextureOption(textureIdFromPath(path), path, normalPath, specularPath));
         }
     }
 
@@ -1431,10 +1713,18 @@ public final class OpenYsmModelLoader {
     }
 
     private static ResourceLocation registerTexture(OpenYsmModelEntry entry, String texturePath, InputStream inputStream) throws IOException {
+        return registerTexture(entry, texturePath, inputStream, null, null);
+    }
+
+    private static ResourceLocation registerTexture(OpenYsmModelEntry entry, String texturePath, InputStream inputStream,
+                                                    InputStream normalInputStream,
+                                                    InputStream specularInputStream) throws IOException {
         NativeImage nativeImage = readTexture(inputStream);
+        NativeImage normalImage = readOptionalShaderLayer(normalInputStream, nativeImage);
+        NativeImage specularImage = readOptionalShaderLayer(specularInputStream, nativeImage);
         ResourceLocation location = new ResourceLocation(YesSteveModel.MOD_ID,
                 "dynamic/" + sha256(entry.getSourceType().name() + ":" + entry.getId() + ":" + texturePath).substring(0, 24));
-        Minecraft.getInstance().getTextureManager().loadTexture(location, new DynamicTexture(nativeImage));
+        Minecraft.getInstance().getTextureManager().loadTexture(location, new OpenYsmLayeredDynamicTexture(nativeImage, normalImage, specularImage));
         return location;
     }
 
@@ -1449,10 +1739,63 @@ public final class OpenYsmModelLoader {
         }
 
         NativeImage nativeImage = readTexture(texture);
+        NativeImage normalImage = null;
+        NativeImage specularImage = null;
+        if (texture.subTextures != null) {
+            for (RawYsmModel.RawTexture.SubTexture subTexture : texture.subTextures) {
+                NativeImage layerImage = readOptionalShaderLayer(subTexture, nativeImage);
+                if (layerImage == null) {
+                    continue;
+                }
+                if (subTexture.specularType == 1 && normalImage == null) {
+                    normalImage = layerImage;
+                } else if (subTexture.specularType == 2 && specularImage == null) {
+                    specularImage = layerImage;
+                } else {
+                    layerImage.close();
+                }
+            }
+        }
         ResourceLocation location = new ResourceLocation(YesSteveModel.MOD_ID,
                 "dynamic/" + sha256(entry.getSourceType().name() + ":" + entry.getId() + ":" + textureKey).substring(0, 24));
-        Minecraft.getInstance().getTextureManager().loadTexture(location, new DynamicTexture(nativeImage));
+        Minecraft.getInstance().getTextureManager().loadTexture(location, new OpenYsmLayeredDynamicTexture(nativeImage, normalImage, specularImage));
         return location;
+    }
+
+    private static NativeImage readOptionalShaderLayer(InputStream inputStream, NativeImage baseImage) throws IOException {
+        if (inputStream == null) {
+            return null;
+        }
+        NativeImage nativeImage = readTexture(inputStream);
+        if (!matchesBaseTextureSize(nativeImage, baseImage)) {
+            nativeImage.close();
+            return null;
+        }
+        return nativeImage;
+    }
+
+    private static NativeImage readOptionalShaderLayer(RawYsmModel.RawTexture.SubTexture subTexture, NativeImage baseImage) throws IOException {
+        if (subTexture == null || subTexture.data == null || subTexture.data.length == 0) {
+            return null;
+        }
+        RawYsmModel.RawTexture texture = new RawYsmModel.RawTexture();
+        texture.data = subTexture.data;
+        texture.width = subTexture.width;
+        texture.height = subTexture.height;
+        texture.imageFormat = subTexture.imageFormat;
+        NativeImage nativeImage = readTexture(texture);
+        if (!matchesBaseTextureSize(nativeImage, baseImage)) {
+            nativeImage.close();
+            return null;
+        }
+        return nativeImage;
+    }
+
+    private static boolean matchesBaseTextureSize(NativeImage nativeImage, NativeImage baseImage) {
+        return nativeImage != null
+                && baseImage != null
+                && nativeImage.getWidth() == baseImage.getWidth()
+                && nativeImage.getHeight() == baseImage.getHeight();
     }
 
     private static NativeImage readTexture(RawYsmModel.RawTexture texture) throws IOException {
@@ -1488,6 +1831,17 @@ public final class OpenYsmModelLoader {
         }
 
         return NativeImage.read(new ByteArrayInputStream(data));
+    }
+
+    private static byte[] readBounded(InputStream inputStream, int maxBytes) throws IOException {
+        if (inputStream == null) {
+            return null;
+        }
+        byte[] data = inputStream.readNBytes(maxBytes + 1);
+        if (data.length > maxBytes) {
+            throw new IOException("Model resource exceeds " + maxBytes + " bytes");
+        }
+        return data;
     }
 
     private static boolean isWebP(byte[] data) {
@@ -1712,6 +2066,72 @@ public final class OpenYsmModelLoader {
         int[] legacyUv;
     }
 
+    private static final class OpenYsmLayeredDynamicTexture extends DynamicTexture {
+        private NativeImage normalImage;
+        private NativeImage specularImage;
+
+        private OpenYsmLayeredDynamicTexture(NativeImage baseImage, NativeImage normalImage, NativeImage specularImage) {
+            super(baseImage);
+            this.normalImage = normalImage;
+            this.specularImage = specularImage;
+            this.uploadShaderLayers();
+        }
+
+        private void uploadShaderLayers() {
+            if (this.normalImage == null && this.specularImage == null) {
+                return;
+            }
+
+            if (!RenderSystem.isOnRenderThreadOrInit()) {
+                RenderSystem.recordRenderCall(this::uploadShaderLayersOnRenderThread);
+            } else {
+                this.uploadShaderLayersOnRenderThread();
+            }
+        }
+
+        private void uploadShaderLayersOnRenderThread() {
+            MultiTexID multiTexID = this.getMultiTexID();
+            NativeImage baseImage = this.getTextureData();
+            if (baseImage == null) {
+                this.closeLayerImages();
+                return;
+            }
+
+            int width = baseImage.getWidth();
+            int height = baseImage.getHeight();
+            if (this.normalImage != null) {
+                GlStateManager.bindTexture(multiTexID.norm);
+                TextureUtil.prepareImage(multiTexID.norm, 0, width, height);
+                this.normalImage.uploadTextureSub(0, 0, 0, 0, 0, width, height, false, false, false, true);
+                this.normalImage = null;
+            }
+            if (this.specularImage != null) {
+                GlStateManager.bindTexture(multiTexID.spec);
+                TextureUtil.prepareImage(multiTexID.spec, 0, width, height);
+                this.specularImage.uploadTextureSub(0, 0, 0, 0, 0, width, height, false, false, false, true);
+                this.specularImage = null;
+            }
+            GlStateManager.bindTexture(multiTexID.base);
+        }
+
+        @Override
+        public void close() {
+            this.closeLayerImages();
+            super.close();
+        }
+
+        private void closeLayerImages() {
+            if (this.normalImage != null) {
+                this.normalImage.close();
+                this.normalImage = null;
+            }
+            if (this.specularImage != null) {
+                this.specularImage.close();
+                this.specularImage = null;
+            }
+        }
+    }
+
     private abstract static class ModelSource implements AutoCloseable {
         static ModelSource open(IResourceManager resourceManager, OpenYsmModelEntry entry) throws IOException {
             if (entry.getYsmJsonResource() != null) {
@@ -1739,7 +2159,13 @@ public final class OpenYsmModelLoader {
 
         abstract JsonObject readJson(String relativePath) throws IOException;
 
-        abstract ResourceLocation loadTexture(OpenYsmModelEntry entry, String texturePath) throws IOException;
+        abstract ResourceLocation loadTexture(OpenYsmModelEntry entry, OpenYsmTextureOption textureOption) throws IOException;
+
+        abstract byte[] readBytes(String relativePath, int maxBytes) throws IOException;
+
+        List<String> listResourceFiles() {
+            return Collections.emptyList();
+        }
 
         @Override
         public void close() throws IOException {
@@ -1762,8 +2188,34 @@ public final class OpenYsmModelLoader {
         }
 
         @Override
-        ResourceLocation loadTexture(OpenYsmModelEntry entry, String texturePath) throws IOException {
-            return new ResourceLocation(YesSteveModel.MOD_ID, appendPath(this.basePath, texturePath));
+        ResourceLocation loadTexture(OpenYsmModelEntry entry, OpenYsmTextureOption textureOption) throws IOException {
+            if (!textureOption.hasShaderLayers()) {
+                return new ResourceLocation(YesSteveModel.MOD_ID, appendPath(this.basePath, textureOption.getPath()));
+            }
+            try (InputStream inputStream = this.openTexture(textureOption.getPath());
+                 InputStream normalInputStream = this.openOptionalTexture(textureOption.getNormalPath());
+                 InputStream specularInputStream = this.openOptionalTexture(textureOption.getSpecularPath())) {
+                return registerTexture(entry, textureOption.getPath(), inputStream, normalInputStream, specularInputStream);
+            }
+        }
+
+        @Override
+        byte[] readBytes(String relativePath, int maxBytes) throws IOException {
+            try (InputStream inputStream = this.openTexture(relativePath)) {
+                return readBounded(inputStream, maxBytes);
+            }
+        }
+
+        private InputStream openTexture(String relativePath) throws IOException {
+            IResource resource = this.resourceManager.getResource(new ResourceLocation(YesSteveModel.MOD_ID, appendPath(this.basePath, relativePath)));
+            return resource.getInputStream();
+        }
+
+        private InputStream openOptionalTexture(String relativePath) throws IOException {
+            if (StringUtils.isBlank(relativePath)) {
+                return null;
+            }
+            return this.openTexture(relativePath);
         }
     }
 
@@ -1782,10 +2234,43 @@ public final class OpenYsmModelLoader {
         }
 
         @Override
-        ResourceLocation loadTexture(OpenYsmModelEntry entry, String texturePath) throws IOException {
-            try (InputStream inputStream = Files.newInputStream(resolveInside(this.root, texturePath))) {
-                return registerTexture(entry, texturePath, inputStream);
+        ResourceLocation loadTexture(OpenYsmModelEntry entry, OpenYsmTextureOption textureOption) throws IOException {
+            try (InputStream inputStream = Files.newInputStream(resolveInside(this.root, textureOption.getPath()));
+                 InputStream normalInputStream = this.openOptionalTexture(textureOption.getNormalPath());
+                 InputStream specularInputStream = this.openOptionalTexture(textureOption.getSpecularPath())) {
+                return registerTexture(entry, textureOption.getPath(), inputStream, normalInputStream, specularInputStream);
             }
+        }
+
+        @Override
+        byte[] readBytes(String relativePath, int maxBytes) throws IOException {
+            Path path = resolveInside(this.root, relativePath);
+            if (Files.size(path) > maxBytes) {
+                throw new IOException("Model resource exceeds " + maxBytes + " bytes: " + relativePath);
+            }
+            try (InputStream inputStream = Files.newInputStream(path)) {
+                return readBounded(inputStream, maxBytes);
+            }
+        }
+
+        @Override
+        List<String> listResourceFiles() {
+            List<String> files = new ArrayList<>();
+            try (Stream<Path> stream = Files.walk(this.root)) {
+                stream.filter(Files::isRegularFile)
+                        .limit(MAX_EXTRA_RESOURCE_COUNT * 8L)
+                        .forEach(path -> files.add(this.root.relativize(path).toString().replace('\\', '/')));
+            } catch (IOException exception) {
+                YesSteveModel.LOGGER.warn("[YSM] Failed to list folder model resources root='{}'", this.root, exception);
+            }
+            return files;
+        }
+
+        private InputStream openOptionalTexture(String relativePath) throws IOException {
+            if (StringUtils.isBlank(relativePath)) {
+                return null;
+            }
+            return Files.newInputStream(resolveInside(this.root, relativePath));
         }
     }
 
@@ -1811,10 +2296,48 @@ public final class OpenYsmModelLoader {
         }
 
         @Override
-        ResourceLocation loadTexture(OpenYsmModelEntry entry, String texturePath) throws IOException {
-            try (InputStream inputStream = this.openEntry(texturePath)) {
-                return registerTexture(entry, texturePath, inputStream);
+        ResourceLocation loadTexture(OpenYsmModelEntry entry, OpenYsmTextureOption textureOption) throws IOException {
+            try (InputStream inputStream = this.openEntry(textureOption.getPath());
+                 InputStream normalInputStream = this.openOptionalEntry(textureOption.getNormalPath());
+                 InputStream specularInputStream = this.openOptionalEntry(textureOption.getSpecularPath())) {
+                return registerTexture(entry, textureOption.getPath(), inputStream, normalInputStream, specularInputStream);
             }
+        }
+
+        @Override
+        byte[] readBytes(String relativePath, int maxBytes) throws IOException {
+            String entryName = this.rootPrefix + OpenYsmArchiveUtil.normalizeArchivePath(relativePath);
+            ZipEntry zipEntry = OpenYsmArchiveUtil.findEntry(this.zipFile, entryName);
+            if (zipEntry == null) {
+                throw new IOException("Model archive resource is missing: " + relativePath);
+            }
+            if (zipEntry.getSize() > maxBytes) {
+                throw new IOException("Model archive resource exceeds " + maxBytes + " bytes: " + relativePath);
+            }
+            try (InputStream inputStream = this.zipFile.getInputStream(zipEntry)) {
+                return readBounded(inputStream, maxBytes);
+            }
+        }
+
+        @Override
+        List<String> listResourceFiles() {
+            List<String> files = new ArrayList<>();
+            this.zipFile.stream()
+                    .filter(entry -> !entry.isDirectory())
+                    .limit(MAX_EXTRA_RESOURCE_COUNT * 8L)
+                    .forEach(entry -> {
+                        try {
+                            String normalized = OpenYsmArchiveUtil.normalizeArchivePath(entry.getName());
+                            if (normalized.startsWith(this.rootPrefix)) {
+                                String relative = normalized.substring(this.rootPrefix.length());
+                                if (!relative.isEmpty()) {
+                                    files.add(relative);
+                                }
+                            }
+                        } catch (IOException ignored) {
+                        }
+                    });
+            return files;
         }
 
         @Override
@@ -1829,6 +2352,13 @@ public final class OpenYsmModelLoader {
                 throw new IOException("Model archive resource is missing: " + relativePath);
             }
             return this.zipFile.getInputStream(zipEntry);
+        }
+
+        private InputStream openOptionalEntry(String relativePath) throws IOException {
+            if (StringUtils.isBlank(relativePath)) {
+                return null;
+            }
+            return this.openEntry(relativePath);
         }
     }
 }

@@ -3125,6 +3125,10 @@ public abstract class LivingEntity extends Entity {
         this.dataManager.set(LIVING_FLAGS, (byte) i);
     }
 
+    public void setLivingFlagForYsmRender(int key, boolean value) {
+        this.setLivingFlag(key, value);
+    }
+
     public void setActiveHand(Hand hand) {
         ItemStack itemstack = this.getHeldItem(hand);
 

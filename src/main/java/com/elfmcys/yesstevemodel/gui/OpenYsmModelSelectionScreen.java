@@ -3,6 +3,8 @@ package com.elfmcys.yesstevemodel.gui;
 import com.elfmcys.yesstevemodel.OpenYsmModelEntry;
 import com.elfmcys.yesstevemodel.OpenYsmTextureOption;
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmBakedPlayerModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraResources;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.util.Util;
@@ -41,6 +43,11 @@ public class OpenYsmModelSelectionScreen extends Screen {
     @Override
     public void render(MatrixStack matrices, int mouseX, int mouseY, float delta) {
         this.renderBackground(matrices);
+        OpenYsmBakedPlayerModel selectedModel = this.service.selectedModel(this.minecraft);
+        OpenYsmExtraResources.ImageResource background = findGuiImage(selectedModel, "gui_background", "background");
+        if (background != null) {
+            this.skin.image(matrices, background, 0, 0, this.width, this.height, 0.36F);
+        }
         Layout layout = this.layout();
         int visibleRows = this.visibleRows();
         this.scroll = clamp(this.scroll, 0, this.maxScroll(visibleRows));
@@ -56,6 +63,10 @@ public class OpenYsmModelSelectionScreen extends Screen {
         this.skin.panel(matrices, layout.right - 2, TOP - 2, layout.right + RIGHT_WIDTH + 2, layout.bottom + 2);
         this.renderModelList(matrices, mouseX, mouseY, layout, visibleRows);
         this.renderDetails(matrices, mouseX, mouseY, layout);
+        OpenYsmExtraResources.ImageResource foreground = findGuiImage(selectedModel, "gui_foreground", "foreground");
+        if (foreground != null) {
+            this.skin.image(matrices, foreground, 0, 0, this.width, this.height, 0.28F);
+        }
 
         if (!this.status.isEmpty()) {
             drawString(matrices, this.font, this.shorten(this.status, layout.totalWidth), layout.left, layout.bottom + 10, 0xD7E4EF);
@@ -247,6 +258,19 @@ public class OpenYsmModelSelectionScreen extends Screen {
     private String textureName() {
         String textureId = YesSteveModel.getClientConfig().getSelectedTextureId();
         return textureId == null || textureId.isEmpty() ? "default" : textureId;
+    }
+
+    private static OpenYsmExtraResources.ImageResource findGuiImage(OpenYsmBakedPlayerModel model, String... names) {
+        if (model == null || model.getExtraResources() == null || names == null) {
+            return null;
+        }
+        for (String name : names) {
+            OpenYsmExtraResources.ImageResource image = model.getExtraResources().getImageResource(name);
+            if (image != null) {
+                return image;
+            }
+        }
+        return null;
     }
 
     private int visibleRows() {

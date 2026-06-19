@@ -1,11 +1,14 @@
 package com.elfmcys.yesstevemodel.client.animation;
 
+import net.minecraft.client.entity.player.ClientPlayerEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.Pose;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.Direction;
 import net.minecraft.util.Hand;
+import net.minecraft.world.World;
 
 import java.util.UUID;
 
@@ -24,9 +27,19 @@ public final class PlayerStateSnapshot {
     public final boolean elytraFlying;
     public final boolean creativeFlying;
     public final boolean dead;
+    public final boolean attacked;
     public final Pose pose;
     public final float limbSwingAmount;
     public final float ageInTicks;
+    public final World world;
+    public final double posX;
+    public final double posY;
+    public final double posZ;
+    public final int cardinalFacing2d;
+    public final float inputHorizontal;
+    public final float inputVertical;
+    public final boolean inputJumping;
+    public final int foodLevel;
 
     public final boolean swingInProgress;
     public final Hand swingingHand;
@@ -48,9 +61,28 @@ public final class PlayerStateSnapshot {
         this.elytraFlying = player.isElytraFlying();
         this.creativeFlying = player.abilities != null && player.abilities.isFlying;
         this.dead = !player.isAlive() || player.getHealth() <= 0.0F;
+        this.attacked = player.hurtTime > 0;
         this.pose = player.getPose();
         this.limbSwingAmount = limbSwingAmount;
         this.ageInTicks = ageInTicks;
+        this.world = player.world;
+        this.posX = player.getPosX();
+        this.posY = player.getPosY();
+        this.posZ = player.getPosZ();
+        this.cardinalFacing2d = Direction.fromAngle(player.rotationYaw).getIndex();
+        this.inputHorizontal = player instanceof ClientPlayerEntity
+                && ((ClientPlayerEntity) player).movementInput != null
+                ? ((ClientPlayerEntity) player).movementInput.moveStrafe
+                : player.moveStrafing;
+        this.inputVertical = player instanceof ClientPlayerEntity
+                && ((ClientPlayerEntity) player).movementInput != null
+                ? ((ClientPlayerEntity) player).movementInput.moveForward
+                : player.moveForward;
+        this.inputJumping = player instanceof ClientPlayerEntity
+                && ((ClientPlayerEntity) player).movementInput != null
+                ? ((ClientPlayerEntity) player).movementInput.jump
+                : !player.isOnGround();
+        this.foodLevel = player.getFoodStats() == null ? 20 : player.getFoodStats().getFoodLevel();
 
         this.swingInProgress = player.isSwingInProgress;
         this.swingingHand = player.swingingHand;
@@ -73,9 +105,19 @@ public final class PlayerStateSnapshot {
         this.elytraFlying = false;
         this.creativeFlying = false;
         this.dead = !entity.isAlive();
+        this.attacked = entity instanceof LivingEntity && ((LivingEntity) entity).hurtTime > 0;
         this.pose = entity.getPose() == null ? Pose.STANDING : entity.getPose();
         this.limbSwingAmount = limbSwingAmount;
         this.ageInTicks = ageInTicks;
+        this.world = entity.world;
+        this.posX = entity.getPosX();
+        this.posY = entity.getPosY();
+        this.posZ = entity.getPosZ();
+        this.cardinalFacing2d = Direction.fromAngle(entity.rotationYaw).getIndex();
+        this.inputHorizontal = 0.0F;
+        this.inputVertical = 0.0F;
+        this.inputJumping = !entity.isOnGround();
+        this.foodLevel = 20;
 
         this.swingInProgress = false;
         this.swingingHand = null;

@@ -17,6 +17,7 @@ import net.minecraft.client.GameSettings;
 import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.resources.ReloadListener;
+import net.minecraft.entity.Entity;
 import net.minecraft.profiler.IProfiler;
 import net.minecraft.resources.IResource;
 import net.minecraft.resources.IResourceManager;
@@ -168,6 +169,25 @@ public class SoundHandler extends ReloadListener<SoundHandler.Loader>
     public void play(ISound sound)
     {
         this.sndManager.play(sound);
+    }
+
+    @Nullable
+    public ISound playYsmOgg(byte[] oggData, SoundCategory category, float volume, float pitch, double x, double y, double z)
+    {
+        return this.sndManager.playYsmOgg(oggData, category, volume, pitch, x, y, z);
+    }
+
+    @Nullable
+    public ISound playYsmOgg(byte[] oggData, SoundCategory category, float volume, float pitch, Entity entity)
+    {
+        return this.sndManager.playYsmOgg(oggData, category, volume, pitch, entity);
+    }
+
+    @Nullable
+    public ISound playYsmOgg(byte[] oggData, SoundCategory category, float volume, float pitch, Entity entity,
+                             boolean looping, boolean global)
+    {
+        return this.sndManager.playYsmOgg(oggData, category, volume, pitch, entity, looping, global);
     }
 
     /**

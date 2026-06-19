@@ -19,6 +19,9 @@ public enum ControllerLayer {
         if (lower.contains("player.post_main") || lower.contains("post_main")) {
             return POST_MAIN;
         }
+        if (lower.contains("player.pre_parallel") || lower.contains("pre_parallel")) {
+            return PRE_MAIN;
+        }
         if (lower.contains("player.parallel_") || lower.contains("parallel_")) {
             return PARALLEL;
         }

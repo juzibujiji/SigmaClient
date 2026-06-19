@@ -4,6 +4,7 @@ import com.elfmcys.yesstevemodel.client.OpenYsmBakedPlayerModel;
 import com.elfmcys.yesstevemodel.client.OpenYsmModelLoader;
 import com.elfmcys.yesstevemodel.client.OpenYsmPlayerModelState;
 import com.elfmcys.yesstevemodel.capability.OpenYsmPlayerAnimationState;
+import com.elfmcys.yesstevemodel.client.animation.OpenYsmAnimationEventDispatcher;
 import com.elfmcys.yesstevemodel.client.animation.controller.OpenYsmControllerRuntime;
 import com.elfmcys.yesstevemodel.geckolib4.cache.GeckoLibCache;
 import com.elfmcys.yesstevemodel.network.OpenYsmNetwork;
@@ -153,6 +154,7 @@ public final class YesSteveModel {
         if (!entry.get().getId().equals(previousModelId)) {
             OpenYsmPlayerAnimationState.clearModel(previousModelId);
             OpenYsmControllerRuntime.clearModel(previousModelId);
+            OpenYsmAnimationEventDispatcher.clearModel(previousModelId);
         }
         clearPlayerModelCache();
         saveClientConfig();

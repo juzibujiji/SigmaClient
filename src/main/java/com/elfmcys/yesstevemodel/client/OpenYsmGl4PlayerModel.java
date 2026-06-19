@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client;
 import com.elfmcys.yesstevemodel.capability.OpenYsmPlayerAnimationState;
 import com.elfmcys.yesstevemodel.client.animation.ActiveAnimationSet;
 import com.elfmcys.yesstevemodel.client.animation.AnimationRenderContext;
+import com.elfmcys.yesstevemodel.client.animation.OpenYsmAnimationEventDispatcher;
 import com.elfmcys.yesstevemodel.client.animation.PlayerStateSnapshot;
 import com.elfmcys.yesstevemodel.geckolib4.cache.object.BakedGeoModel;
 import com.elfmcys.yesstevemodel.geckolib4.cache.object.GeoBone;
@@ -54,6 +55,7 @@ public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlaye
         OpenYsmPlayerAnimationState.State extraState = OpenYsmPlayerAnimationState.get(entityIn);
         ActiveAnimationSet active = this.bakedModel.getAnimations()
                 .resolveActive(snapshot, extraState, AnimationRenderContext.GAME);
+        OpenYsmAnimationEventDispatcher.dispatch(this.bakedModel, entityIn, active, snapshot);
         this.bakedModel.getAnimations().apply(this.bakedModel.getBones(), active, 0.0F);
         OpenYsmDebugLogger.logActiveState(this.bakedModel, active);
     }

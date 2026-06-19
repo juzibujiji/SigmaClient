@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.gui;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmExtraResources;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.gui.FontRenderer;
 
@@ -10,4 +11,8 @@ public interface OpenYsmScreenSkin {
 
     void button(MatrixStack matrices, FontRenderer font, String label, int left, int top, int right, int bottom,
                 boolean hovered, int textColor);
+
+    default void image(MatrixStack matrices, OpenYsmExtraResources.ImageResource image,
+                       int left, int top, int right, int bottom, float alpha) {
+    }
 }
