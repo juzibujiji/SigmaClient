@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class OpenYsmPlayerModelState {
     private static final Map<UUID, Choice> CLIENT_CHOICES = new ConcurrentHashMap<>();
     private static final Map<Integer, Choice> CLIENT_EXTRA_ENTITY_CHOICES = new ConcurrentHashMap<>();
+    private static final ThreadLocal<Float> PREVIEW_AGE_IN_TICKS = new ThreadLocal<>();
 
     private OpenYsmPlayerModelState() {
     }
@@ -73,6 +74,23 @@ public final class OpenYsmPlayerModelState {
     public static OpenYsmBakedPlayerModel getBakedModelForPlayer(PlayerEntity player, IResourceManager resourceManager) {
         Choice choice = choiceFor(player);
         return choice == null ? null : YesSteveModel.getPlayerModel(resourceManager, choice.getModelId(), choice.getTextureId());
+    }
+
+    public static void beginPreviewRender(float ageInTicks) {
+        PREVIEW_AGE_IN_TICKS.set(Math.max(0.0F, ageInTicks));
+    }
+
+    public static void endPreviewRender() {
+        PREVIEW_AGE_IN_TICKS.remove();
+    }
+
+    public static boolean isPreviewRender() {
+        return PREVIEW_AGE_IN_TICKS.get() != null;
+    }
+
+    public static float previewAgeInTicks(float fallbackAgeInTicks) {
+        Float previewAge = PREVIEW_AGE_IN_TICKS.get();
+        return previewAge == null ? fallbackAgeInTicks : previewAge;
     }
 
     public static OpenYsmBakedPlayerModel getBakedModelForExtraEntity(Entity entity, IResourceManager resourceManager) {

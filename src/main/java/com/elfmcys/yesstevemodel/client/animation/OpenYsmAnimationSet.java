@@ -9,6 +9,10 @@ import com.elfmcys.yesstevemodel.client.animation.controller.ControllerLayer;
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerStateDefinition;
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerTransition;
 import com.elfmcys.yesstevemodel.client.animation.controller.OpenYsmControllerRuntime;
+import com.elfmcys.yesstevemodel.client.animation.molang.MolangBindings;
+import com.elfmcys.yesstevemodel.client.animation.molang.MolangContext;
+import com.elfmcys.yesstevemodel.client.animation.molang.MolangEvaluator;
+import com.elfmcys.yesstevemodel.client.animation.molang.MolangExpression;
 import com.elfmcys.yesstevemodel.client.animation.molang.MolangParser;
 import com.elfmcys.yesstevemodel.resource.pojo.RawYsmModel;
 import com.google.gson.JsonArray;
@@ -37,6 +41,7 @@ public final class OpenYsmAnimationSet {
     private static final String[] MAIN_STATE_PRIORITY = new String[]{"idle", "walk", "run", "sneak", "sneaking"};
     private static final int MAX_EVENTS_PER_CLIP = 256;
     private static final int MAX_EVENT_TEXT_LENGTH = 512;
+    private static final int MAX_BLEND_WEIGHT_EXPRESSION_LENGTH = 256;
     private static final int MAX_FUNCTION_CONTROLLER_SCRIPT_LENGTH = 8192;
     private static final int MAX_FUNCTION_CONTROLLER_ANIMATIONS = 64;
     private static final Pattern SET_ANIMATION_PATTERN = Pattern.compile(
@@ -168,6 +173,7 @@ public final class OpenYsmAnimationSet {
             JsonObject animation = entry.getValue().getAsJsonObject();
             Clip clip = new Clip(name, group, inferSourceType(group, name), originFile,
                     LoopMode.fromJson(animation.get("loop")), getFloat(animation, "animation_length", 0.0F));
+            clip.blendWeightExpression = blendWeightExpression(animation.get("blend_weight"));
             parseJsonBones(clip, animation.getAsJsonObject("bones"));
             parseJsonSoundEffects(clip, animation.get("sound_effects"));
             parseJsonTimelineEvents(clip, animation.get("timeline"));
@@ -190,6 +196,7 @@ public final class OpenYsmAnimationSet {
             String name = normalizeClipName(animation.name);
             Clip clip = new Clip(name, effectiveGroup, inferSourceType(effectiveGroup, name), rawFile.fileHash,
                     LoopMode.fromRaw(animation.loopMode), animation.length);
+            clip.blendWeightExpression = blendWeightExpression(animation.blendWeight);
             parseRawBones(clip, animation.boneAnimations);
             parseRawSoundEffects(clip, animation.soundEffects);
             parseRawTimelineEvents(clip, animation.timelineEvents);
@@ -366,16 +373,19 @@ public final class OpenYsmAnimationSet {
         }
 
         float elapsedSeconds = snapshot.ageInTicks / 20.0F;
+        boolean playingExtraAnimation = isExtraActionPlaying(snapshot, extraState);
         OpenYsmControllerRuntime.Result controllerResult = OpenYsmControllerRuntime.tick(this.modelId,
-                this.controllerDefinitions.values(), this.clips, snapshot);
+                this.controllerDefinitions.values(), this.clips, snapshot, null, playingExtraAnimation);
         Set<String> activeClipNames = new LinkedHashSet<>();
         for (OpenYsmControllerRuntime.ActiveControllerAnimation controllerAnimation : controllerResult.getActiveAnimations()) {
+            float clipWeight = evaluateClipBlendWeight(controllerAnimation.getClip(), snapshot);
             active.addControllerClip(controllerAnimation.getClip(), controllerAnimation.getLayer(),
-                    controllerAnimation.getTimeSeconds(), controllerAnimation.getWeight(),
+                    controllerAnimation.getTimeSeconds(), controllerAnimation.getWeight() * clipWeight,
                     controllerAnimation.getControllerName(), controllerAnimation.getStateName());
             activeClipNames.add(controllerAnimation.getClip().name);
         }
-        addBuiltinAlwaysOnClips(active, activeClipNames, elapsedSeconds);
+        active.controllerEvents.addAll(controllerResult.getControllerEvents());
+        addBuiltinAlwaysOnClips(active, activeClipNames, elapsedSeconds, snapshot);
 
         Clip main = context == AnimationRenderContext.FIRST_PERSON_ARM || controllerResult.hasMainLayerAnimation()
                 ? null
@@ -383,11 +393,13 @@ public final class OpenYsmAnimationSet {
         if (main != null) {
             active.mainStateClip = main;
             active.setTime(main, elapsedSeconds);
+            active.setWeight(main, evaluateClipBlendWeight(main, snapshot));
         }
 
         for (Clip hand : selectHandClips(snapshot)) {
             active.handClips.add(hand);
             active.setTime(hand, elapsedSeconds);
+            active.setWeight(hand, evaluateClipBlendWeight(hand, snapshot));
         }
 
         if (extraState != null && this.modelId.equals(extraState.getModelId())) {
@@ -400,6 +412,7 @@ public final class OpenYsmAnimationSet {
                     active.extraActionClip = Optional.of(extra);
                     active.actionSource = extraState.getSource();
                     active.setTime(extra, elapsed);
+                    active.setWeight(extra, evaluateClipBlendWeight(extra, snapshot));
                 }
             }
         }
@@ -413,6 +426,7 @@ public final class OpenYsmAnimationSet {
                 active.previewClip = Optional.of(preview);
                 active.actionSource = ActionSource.PREVIEW;
                 active.setTime(preview, elapsedSeconds);
+                active.setWeight(preview, evaluateClipBlendWeight(preview, snapshot));
             }
         }
 
@@ -426,31 +440,46 @@ public final class OpenYsmAnimationSet {
         return active;
     }
 
-    private void addBuiltinAlwaysOnClips(ActiveAnimationSet active, Set<String> activeClipNames, float elapsedSeconds) {
+    private boolean isExtraActionPlaying(PlayerStateSnapshot snapshot, OpenYsmPlayerAnimationState.State extraState) {
+        if (snapshot == null || extraState == null || !this.modelId.equals(extraState.getModelId())) {
+            return false;
+        }
+        Clip extra = this.clips.get(extraState.getAnimationName());
+        if (extra == null || !isWheelVisible(extra)) {
+            return false;
+        }
+        float elapsed = extraState.elapsedSeconds(snapshot.ageInTicks);
+        return extra.loopMode != LoopMode.PLAY_ONCE || extra.length <= 0.0F || elapsed <= extra.length;
+    }
+
+    private void addBuiltinAlwaysOnClips(ActiveAnimationSet active, Set<String> activeClipNames, float elapsedSeconds,
+                                         PlayerStateSnapshot snapshot) {
         if (!addBuiltinAlwaysOnClip(active, activeClipNames, "pre_parallel0", ControllerLayer.PRE_MAIN,
-                elapsedSeconds, "builtin.pre_parallel_0")) {
+                elapsedSeconds, "builtin.pre_parallel_0", snapshot)) {
             addBuiltinAlwaysOnClip(active, activeClipNames, "Hair_Physics", ControllerLayer.PRE_MAIN,
-                    elapsedSeconds, "builtin.pre_parallel_0");
+                    elapsedSeconds, "builtin.pre_parallel_0", snapshot);
         }
 
         for (int i = 1; i <= 7; i++) {
             addBuiltinAlwaysOnClip(active, activeClipNames, "pre_parallel" + i, ControllerLayer.PRE_MAIN,
-                    elapsedSeconds, "builtin.pre_parallel_" + i);
+                    elapsedSeconds, "builtin.pre_parallel_" + i, snapshot);
         }
         for (int i = 0; i <= 7; i++) {
             addBuiltinAlwaysOnClip(active, activeClipNames, "parallel" + i, ControllerLayer.PARALLEL,
-                    elapsedSeconds, "builtin.parallel_" + i);
+                    elapsedSeconds, "builtin.parallel_" + i, snapshot);
         }
     }
 
     private boolean addBuiltinAlwaysOnClip(ActiveAnimationSet active, Set<String> activeClipNames, String clipName,
-                                           ControllerLayer layer, float elapsedSeconds, String controllerName) {
+                                           ControllerLayer layer, float elapsedSeconds, String controllerName,
+                                           PlayerStateSnapshot snapshot) {
         Clip clip = findClipByName(clipName);
         if (clip == null || activeClipNames.contains(clip.name)) {
             return false;
         }
 
-        active.addControllerClip(clip, layer, elapsedSeconds, 1.0F, controllerName, "default");
+        active.addControllerClip(clip, layer, elapsedSeconds, evaluateClipBlendWeight(clip, snapshot),
+                controllerName, "default");
         activeClipNames.add(clip.name);
         return true;
     }
@@ -460,17 +489,24 @@ public final class OpenYsmAnimationSet {
             return;
         }
 
-        for (ActiveAnimationSet.ActiveClip activeClip : active.activeClipsInOrder()) {
-            for (String boneName : activeClip.getClip().touchedBones) {
-                OpenYsmBone bone = bones.get(boneName);
-                if (bone != null) {
-                    bone.setVisible(true);
+        try (AutoCloseable ignored = MolangContext.pushBones(bones)) {
+            for (ActiveAnimationSet.ActiveClip activeClip : active.activeClipsInOrder()) {
+                for (String boneName : activeClip.getClip().touchedBones) {
+                    OpenYsmBone bone = bones.get(boneName);
+                    if (bone != null) {
+                        bone.setVisible(true);
+                    }
                 }
             }
-        }
 
-        for (ActiveAnimationSet.ActiveClip activeClip : active.activeClipsInOrder()) {
-            applyClip(bones, activeClip.getClip(), activeClip.getTimeSeconds(), activeClip.getWeight());
+            for (ActiveAnimationSet.ActiveClip activeClip : active.activeClipsInOrder()) {
+                applyClip(bones, activeClip.getClip(), activeClip.getTimeSeconds(), activeClip.getWeight());
+            }
+        } catch (Exception exception) {
+            if (isDebugEnabled()) {
+                YesSteveModel.LOGGER.info("[DEBUG-animation-state] model={} bone scoped animation apply failed", this.modelId,
+                        exception);
+            }
         }
     }
 
@@ -687,12 +723,16 @@ public final class OpenYsmAnimationSet {
             return;
         }
         for (RawYsmModel.RawKeyframe frame : channel) {
-            float[] vector = vectorFromObjects(frame.postData, defaultValue);
-            if (vector == null && frame.hasPreData) {
-                vector = vectorFromObjects(frame.preData, defaultValue);
+            float[] post = vectorFromObjects(frame.postData, defaultValue);
+            float[] pre = frame.hasPreData ? vectorFromObjects(frame.preData, defaultValue) : post;
+            if (post == null) {
+                post = pre;
             }
-            if (vector != null) {
-                out.add(new Keyframe(frame.timestamp, vector));
+            if (pre == null) {
+                pre = post;
+            }
+            if (post != null) {
+                out.add(new Keyframe(frame.timestamp, pre, post, frame.interpolationMode));
             }
         }
         out.sort(Comparator.comparingDouble(frame -> frame.timestamp));
@@ -746,7 +786,11 @@ public final class OpenYsmAnimationSet {
                 List<ControllerTransition> transitions = new ArrayList<>();
                 parseControllerTransitions(stateObject.get("transitions"), transitions);
                 states.put(stateEntry.getKey(), new ControllerStateDefinition(stateEntry.getKey(), animations, transitions,
-                        getFloat(stateObject, "blend_transition", 0.0F)));
+                        getFloat(stateObject, "blend_transition", 0.0F),
+                        parseControllerBlendTransitions(stateObject.get("blend_transition")),
+                        parseControllerEventList(stateObject.get("on_entry")),
+                        parseControllerEventList(stateObject.get("on_exit")),
+                        parseControllerEventList(firstElement(stateObject, "sound_effects", "sound_effect"))));
             }
         }
         return new ControllerDefinition(controllerName, getString(controller, "initial_state", ""), states);
@@ -770,9 +814,110 @@ public final class OpenYsmAnimationSet {
                     transitions.add(new ControllerTransition(transition.getKey(), transition.getValue()));
                 }
             }
-            states.put(state.name, new ControllerStateDefinition(state.name, animations, transitions, state.blendTransitionValue));
+            states.put(state.name, new ControllerStateDefinition(state.name, animations, transitions, state.blendTransitionValue,
+                    state.blendTransitions,
+                    sanitizeControllerEvents(state.onEntry),
+                    sanitizeControllerEvents(state.onExit),
+                    sanitizeControllerEvents(state.soundEffects)));
         }
         return new ControllerDefinition(firstNonEmpty(controller.animationName, controller.name), controller.initialState, states);
+    }
+
+    private static JsonElement firstElement(JsonObject object, String... keys) {
+        if (object == null || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            if (key != null && object.has(key)) {
+                return object.get(key);
+            }
+        }
+        return null;
+    }
+
+    private static List<String> parseControllerEventList(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return Collections.emptyList();
+        }
+        List<String> events = new ArrayList<>();
+        if (element.isJsonArray()) {
+            for (JsonElement child : element.getAsJsonArray()) {
+                addControllerEvent(events, controllerEventText(child));
+                if (events.size() >= MAX_EVENTS_PER_CLIP) {
+                    break;
+                }
+            }
+        } else {
+            addControllerEvent(events, controllerEventText(element));
+        }
+        return events;
+    }
+
+    private static String controllerEventText(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return "";
+        }
+        if (element.isJsonObject()) {
+            JsonObject object = element.getAsJsonObject();
+            return safeString(firstElement(object, "effect", "event", "sound", "name"));
+        }
+        return safeString(element);
+    }
+
+    private static List<String> sanitizeControllerEvents(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> events = new ArrayList<>();
+        for (String value : values) {
+            addControllerEvent(events, value);
+            if (events.size() >= MAX_EVENTS_PER_CLIP) {
+                break;
+            }
+        }
+        return events;
+    }
+
+    private static void addControllerEvent(List<String> events, String value) {
+        String safe = safeEventText(value);
+        if (!safe.isEmpty()) {
+            events.add(safe);
+        }
+    }
+
+    private static String blendWeightExpression(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return "1";
+        }
+        if (element.isJsonObject()) {
+            JsonObject object = element.getAsJsonObject();
+            if (object.has("expression")) {
+                return blendWeightExpression(object.get("expression"));
+            }
+            if (object.has("value")) {
+                return blendWeightExpression(object.get("value"));
+            }
+            return "1";
+        }
+        return blendWeightExpression(safeString(element));
+    }
+
+    private static String blendWeightExpression(Object value) {
+        if (value == null) {
+            return "1";
+        }
+        if (value instanceof Number) {
+            return Float.toString(((Number)value).floatValue());
+        }
+        return blendWeightExpression(String.valueOf(value));
+    }
+
+    private static String blendWeightExpression(String value) {
+        String expression = value == null ? "" : value.trim();
+        if (expression.isEmpty() || expression.length() > MAX_BLEND_WEIGHT_EXPRESSION_LENGTH) {
+            return "1";
+        }
+        return expression;
     }
 
     private FunctionControllerDefinition parseFunctionController(String functionName, String script) {
@@ -1367,6 +1512,20 @@ public final class OpenYsmAnimationSet {
         }
     }
 
+    private Map<Float, Float> parseControllerBlendTransitions(JsonElement blendTransition) {
+        if (blendTransition == null || blendTransition.isJsonNull() || !blendTransition.isJsonObject()) {
+            return Collections.emptyMap();
+        }
+        Map<Float, Float> result = new LinkedHashMap<>();
+        for (Map.Entry<String, JsonElement> entry : blendTransition.getAsJsonObject().entrySet()) {
+            try {
+                result.put(Float.parseFloat(entry.getKey()), entry.getValue().getAsFloat());
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return result;
+    }
+
     private static String controllerExpressionString(JsonElement element, String fallback) {
         if (element == null || element.isJsonNull()) {
             return fallback;
@@ -1460,6 +1619,38 @@ public final class OpenYsmAnimationSet {
         return null;
     }
 
+    public float evaluateClipBlendWeight(Clip clip, PlayerStateSnapshot snapshot) {
+        if (clip == null) {
+            return 0.0F;
+        }
+        String expression = clip.blendWeightExpression;
+        if (expression == null || expression.trim().isEmpty() || "1".equals(expression.trim())) {
+            return 1.0F;
+        }
+        try {
+            MolangExpression parsed = MolangParser.parse(expression);
+            Map<String, Double> variables = snapshot == null
+                    ? Collections.emptyMap()
+                    : OpenYsmPlayerAnimationState.getGuiVariables(snapshot.uuid, this.modelId);
+            MolangBindings bindings = new MolangBindings(variables, Collections.emptyMap());
+            MolangContext context = MolangContext.controller(snapshot, this.modelId, "blend_weight", bindings,
+                    false, false);
+            double value = MolangEvaluator.evaluate(parsed, context).asDouble();
+            return Double.isFinite(value) ? Math.max(0.0F, (float)value) : 0.0F;
+        } catch (Exception exception) {
+            debugBlendWeightFailure(clip, expression, exception);
+            return 0.0F;
+        }
+    }
+
+    private static void debugBlendWeightFailure(Clip clip, String expression, Exception exception) {
+        if (!isDebugEnabled()) {
+            return;
+        }
+        YesSteveModel.LOGGER.info("[DEBUG-animation-state] blend_weight failed clip={} expression={} reason={}",
+                clip == null ? "" : clip.name, expression, exception.getMessage());
+    }
+
     private void addHandClip(List<Clip> selected, Clip clip) {
         if (clip != null && !selected.contains(clip)) {
             selected.add(clip);
@@ -1509,7 +1700,7 @@ public final class OpenYsmAnimationSet {
             return null;
         }
         if (frames.size() == 1 || time <= frames.get(0).timestamp) {
-            return frames.get(0).values;
+            return frames.get(0).postValues;
         }
         Keyframe previous = frames.get(0);
         for (int i = 1; i < frames.size(); i++) {
@@ -1517,11 +1708,16 @@ public final class OpenYsmAnimationSet {
             if (time <= next.timestamp) {
                 float span = Math.max(0.0001F, next.timestamp - previous.timestamp);
                 float alpha = Math.max(0.0F, Math.min(1.0F, (time - previous.timestamp) / span));
-                return lerp(previous.values, next.values, alpha);
+                if (previous.interpolationMode == 1 || next.interpolationMode == 1) {
+                    Keyframe before = i > 1 ? frames.get(i - 2) : previous;
+                    Keyframe after = i + 1 < frames.size() ? frames.get(i + 1) : next;
+                    return catmullRom(before.postValues, previous.postValues, next.preValues, after.preValues, alpha);
+                }
+                return lerp(previous.postValues, next.preValues, alpha);
             }
             previous = next;
         }
-        return frames.get(frames.size() - 1).values;
+        return frames.get(frames.size() - 1).postValues;
     }
 
     private static float[] lerp(float[] a, float[] b, float alpha) {
@@ -1530,6 +1726,23 @@ public final class OpenYsmAnimationSet {
                 a[1] + (b[1] - a[1]) * alpha,
                 a[2] + (b[2] - a[2]) * alpha
         };
+    }
+
+    private static float[] catmullRom(float[] p0, float[] p1, float[] p2, float[] p3, float alpha) {
+        float t2 = alpha * alpha;
+        float t3 = t2 * alpha;
+        return new float[]{
+                catmullRom(p0[0], p1[0], p2[0], p3[0], alpha, t2, t3),
+                catmullRom(p0[1], p1[1], p2[1], p3[1], alpha, t2, t3),
+                catmullRom(p0[2], p1[2], p2[2], p3[2], alpha, t2, t3)
+        };
+    }
+
+    private static float catmullRom(float p0, float p1, float p2, float p3, float t, float t2, float t3) {
+        return 0.5F * ((2.0F * p1)
+                + (-p0 + p2) * t
+                + (2.0F * p0 - 5.0F * p1 + 4.0F * p2 - p3) * t2
+                + (-p0 + 3.0F * p1 - 3.0F * p2 + p3) * t3);
     }
 
     private boolean isWheelVisible(Clip clip) {
@@ -1923,6 +2136,7 @@ public final class OpenYsmAnimationSet {
         public ResourceLocation icon;
         public String description = "";
         public boolean globalAction;
+        public String blendWeightExpression = "1";
         public LoopMode loopMode;
         public float length;
 
@@ -1974,11 +2188,19 @@ public final class OpenYsmAnimationSet {
 
     public static final class Keyframe {
         public final float timestamp;
-        public final float[] values;
+        public final float[] preValues;
+        public final float[] postValues;
+        public final int interpolationMode;
 
         private Keyframe(float timestamp, float[] values) {
+            this(timestamp, values, values, 0);
+        }
+
+        private Keyframe(float timestamp, float[] preValues, float[] postValues, int interpolationMode) {
             this.timestamp = timestamp;
-            this.values = values;
+            this.preValues = preValues == null ? postValues : preValues;
+            this.postValues = postValues == null ? preValues : postValues;
+            this.interpolationMode = interpolationMode;
         }
     }
 

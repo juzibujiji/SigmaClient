@@ -43,6 +43,30 @@ public final class OpenYsmBone {
         return this.renderer;
     }
 
+    public float getRotationX() {
+        return this.renderer.rotateAngleX;
+    }
+
+    public float getRotationY() {
+        return this.renderer.rotateAngleY;
+    }
+
+    public float getRotationZ() {
+        return this.renderer.rotateAngleZ;
+    }
+
+    public float getPositionX() {
+        return this.renderer.rotationPointX;
+    }
+
+    public float getPositionY() {
+        return this.renderer.rotationPointY;
+    }
+
+    public float getPositionZ() {
+        return this.renderer.rotationPointZ;
+    }
+
     public OpenYsmBone getParent() {
         return this.parent;
     }

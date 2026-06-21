@@ -1,9 +1,13 @@
 package com.elfmcys.yesstevemodel.client.animation.molang;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmBone;
 import com.elfmcys.yesstevemodel.client.animation.PlayerStateSnapshot;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ActiveRenderInfo;
+import net.minecraft.client.settings.PointOfView;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -15,24 +19,33 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.registry.Registry;
 
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public final class MolangContext {
+    private static final ThreadLocal<Map<String, OpenYsmBone>> BONE_SCOPE = new ThreadLocal<>();
+
     private final PlayerStateSnapshot snapshot;
     private final String modelId;
     private final String controllerName;
     private final MolangBindings bindings;
     private final boolean allAnimationsFinished;
     private final boolean anyAnimationFinished;
+    private final boolean playingExtraAnimation;
+    private final double controllerAnimTimeSeconds;
 
     private MolangContext(PlayerStateSnapshot snapshot, String modelId, String controllerName, MolangBindings bindings,
-                          boolean allAnimationsFinished, boolean anyAnimationFinished) {
+                          boolean allAnimationsFinished, boolean anyAnimationFinished,
+                          boolean playingExtraAnimation, double controllerAnimTimeSeconds) {
         this.snapshot = snapshot;
         this.modelId = modelId == null ? "" : modelId;
         this.controllerName = controllerName == null ? "" : controllerName;
         this.bindings = bindings == null ? MolangBindings.EMPTY : bindings;
         this.allAnimationsFinished = allAnimationsFinished;
         this.anyAnimationFinished = anyAnimationFinished;
+        this.playingExtraAnimation = playingExtraAnimation;
+        this.controllerAnimTimeSeconds = Math.max(0.0D, controllerAnimTimeSeconds);
     }
 
     public static MolangContext controller(PlayerStateSnapshot snapshot, String modelId, String controllerName) {
@@ -42,7 +55,32 @@ public final class MolangContext {
     public static MolangContext controller(PlayerStateSnapshot snapshot, String modelId, String controllerName,
                                            MolangBindings bindings, boolean allAnimationsFinished,
                                            boolean anyAnimationFinished) {
-        return new MolangContext(snapshot, modelId, controllerName, bindings, allAnimationsFinished, anyAnimationFinished);
+        return controller(snapshot, modelId, controllerName, bindings, allAnimationsFinished, anyAnimationFinished,
+                false, snapshot == null ? 0.0D : snapshot.ageInTicks / 20.0D);
+    }
+
+    public static MolangContext controller(PlayerStateSnapshot snapshot, String modelId, String controllerName,
+                                           MolangBindings bindings, boolean allAnimationsFinished,
+                                           boolean anyAnimationFinished, boolean playingExtraAnimation,
+                                           double controllerAnimTimeSeconds) {
+        return new MolangContext(snapshot, modelId, controllerName, bindings, allAnimationsFinished, anyAnimationFinished,
+                playingExtraAnimation, controllerAnimTimeSeconds);
+    }
+
+    public static AutoCloseable pushBones(Map<String, OpenYsmBone> bones) {
+        Map<String, OpenYsmBone> previous = BONE_SCOPE.get();
+        if (bones == null || bones.isEmpty()) {
+            BONE_SCOPE.remove();
+        } else {
+            BONE_SCOPE.set(bones);
+        }
+        return () -> {
+            if (previous == null) {
+                BONE_SCOPE.remove();
+            } else {
+                BONE_SCOPE.set(previous);
+            }
+        };
     }
 
     public MolangValue resolveIdentifier(String identifier) {
@@ -55,7 +93,7 @@ public final class MolangContext {
             return MolangValue.of(queryValue(key.substring(prefixLength)));
         }
         if (key.startsWith("ysm.")) {
-            return MolangValue.of(ysmValue(key.substring("ysm.".length())));
+            return ysmValue(key.substring("ysm.".length()));
         }
         if (key.startsWith("variable.") || key.startsWith("v.")) {
             int prefixLength = key.startsWith("variable.") ? "variable.".length() : "v.".length();
@@ -75,6 +113,27 @@ public final class MolangContext {
         }
         debugUnknown("identifier", key);
         return MolangValue.ZERO;
+    }
+
+    public MolangValue callFunction(String name, List<MolangValue> args) {
+        String key = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        List<MolangValue> safeArgs = args == null ? List.of() : args;
+        return switch (key) {
+            case "query.position", "q.position" -> MolangValue.of(positionFunction(safeArgs));
+            case "query.position_delta", "q.position_delta" -> MolangValue.of(positionDeltaFunction(safeArgs));
+            case "query.rotation_to_camera", "q.rotation_to_camera" -> MolangValue.of(rotationToCameraFunction(safeArgs));
+            case "query.is_item_name_any", "q.is_item_name_any" -> MolangValue.of(isItemNameAnyFunction(safeArgs));
+            case "ysm.bone_rot" -> boneRotationFunction(safeArgs);
+            case "ysm.bone_pos" -> bonePositionFunction(safeArgs);
+            case "ysm.bone_scale" -> boneScaleFunction(safeArgs);
+            case "ysm.bone_pivot_abs" -> bonePivotAbsFunction(safeArgs);
+            case "ysm.first_order" -> MolangValue.of(firstOrderFunction(safeArgs));
+            case "ysm.second_order" -> MolangValue.of(secondOrderFunction(safeArgs));
+            default -> {
+                debugUnknown("function", key);
+                yield MolangValue.ZERO;
+            }
+        };
     }
 
     private double ctrlValue(String key) {
@@ -106,7 +165,8 @@ public final class MolangContext {
             case "hold_mainhand" -> this.snapshot.mainhandEmpty ? 0.0D : 1.0D;
             case "hold_offhand" -> this.snapshot.offhandEmpty ? 0.0D : 1.0D;
             case "attacked" -> this.snapshot.attacked ? 1.0D : 0.0D;
-            case "carryon_is_princess", "playing_extra_animation", "tac_hold_gun" -> 0.0D;
+            case "playing_extra_animation" -> this.playingExtraAnimation ? 1.0D : 0.0D;
+            case "carryon_is_princess", "tac_hold_gun" -> 0.0D;
             default -> {
                 debugUnknown("ctrl", key);
                 yield 0.0D;
@@ -256,7 +316,14 @@ public final class MolangContext {
         }
         return switch (key) {
             case "life_time" -> this.snapshot.ageInTicks / 20.0D;
-            case "anim_time" -> this.snapshot.ageInTicks / 20.0D;
+            case "anim_time" -> this.controllerAnimTimeSeconds;
+            case "head_x_rotation" -> this.snapshot.headYaw;
+            case "head_y_rotation" -> this.snapshot.headPitch;
+            case "time_stamp" -> this.snapshot.world == null ? 0.0D : this.snapshot.world.getDayTime();
+            case "time_of_day" -> this.snapshot.world == null ? 0.0D : normalizeTimeOfDay(this.snapshot.world.getDayTime());
+            case "moon_phase" -> this.snapshot.world == null ? 0.0D : this.snapshot.world.getMoonPhase();
+            case "delta_time" -> 1.0D / 20.0D;
+            case "is_first_person" -> isFirstPerson() ? 1.0D : 0.0D;
             case "modified_move_speed" -> Math.abs(this.snapshot.limbSwingAmount);
             case "ground_speed" -> Math.abs(this.snapshot.limbSwingAmount);
             case "cardinal_facing_2d" -> this.snapshot.cardinalFacing2d;
@@ -340,21 +407,198 @@ public final class MolangContext {
         }
     }
 
-    private double ysmValue(String key) {
+    private MolangValue ysmValue(String key) {
         if (this.snapshot == null) {
-            return 0.0D;
+            return MolangValue.ZERO;
         }
         return switch (key) {
-            case "input_vertical", "move_forward" -> this.snapshot.inputVertical;
-            case "input_horizontal", "move_strafe" -> this.snapshot.inputHorizontal;
-            case "jump", "input_jump" -> this.snapshot.inputJumping ? 1.0D : 0.0D;
-            case "food_level" -> this.snapshot.foodLevel;
-            case "rendering_in_inventory", "is_pause", "is_spectator" -> 0.0D;
+            case "head_yaw" -> MolangValue.of(this.snapshot.headYaw);
+            case "head_pitch" -> MolangValue.of(this.snapshot.headPitch);
+            case "texture_name" -> MolangValue.of(selectedTextureName());
+            case "input_vertical", "move_forward" -> MolangValue.of(this.snapshot.inputVertical);
+            case "input_horizontal", "move_strafe" -> MolangValue.of(this.snapshot.inputHorizontal);
+            case "jump", "input_jump" -> MolangValue.of(this.snapshot.inputJumping);
+            case "food_level" -> MolangValue.of(this.snapshot.foodLevel);
+            case "person_view" -> MolangValue.of(cameraPointOfViewOrdinal());
+            case "rendering_in_inventory" -> MolangValue.of(!isFirstPerson());
+            case "is_pause", "is_spectator" -> MolangValue.ZERO;
             default -> {
                 debugUnknown("ysm", key);
-                yield 0.0D;
+                yield MolangValue.ZERO;
             }
         };
+    }
+
+    private double positionFunction(List<MolangValue> args) {
+        if (this.snapshot == null || args.size() != 1) {
+            return 0.0D;
+        }
+        return switch ((int) args.get(0).asDouble()) {
+            case 0 -> this.snapshot.posX;
+            case 1 -> this.snapshot.posY;
+            case 2 -> this.snapshot.posZ;
+            default -> 0.0D;
+        };
+    }
+
+    private double positionDeltaFunction(List<MolangValue> args) {
+        if (this.snapshot == null || args.size() != 1) {
+            return 0.0D;
+        }
+        return switch ((int) args.get(0).asDouble()) {
+            case 0 -> this.snapshot.deltaX;
+            case 1 -> this.snapshot.deltaY;
+            case 2 -> this.snapshot.deltaZ;
+            default -> 0.0D;
+        };
+    }
+
+    private double rotationToCameraFunction(List<MolangValue> args) {
+        if (args.size() != 1) {
+            return 0.0D;
+        }
+        ActiveRenderInfo camera = Minecraft.getInstance().gameRenderer == null
+                ? null : Minecraft.getInstance().gameRenderer.getActiveRenderInfo();
+        if (camera == null) {
+            return 0.0D;
+        }
+        return switch ((int) args.get(0).asDouble()) {
+            case 0 -> -camera.getPitch();
+            case 1 -> 180.0D + camera.getYaw();
+            default -> 0.0D;
+        };
+    }
+
+    private boolean isItemNameAnyFunction(List<MolangValue> args) {
+        if (this.snapshot == null || args.size() != 2) {
+            return false;
+        }
+        ItemStack stack = switch (args.get(0).asString().toLowerCase(Locale.ROOT)) {
+            case "mainhand", "main_hand", "main" -> this.snapshot.mainhand;
+            case "offhand", "off_hand", "off" -> this.snapshot.offhand;
+            default -> ItemStack.EMPTY;
+        };
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        ResourceLocation id = Registry.ITEM.getKey(stack.getItem());
+        return id != null && id.toString().equals(args.get(1).asString().toLowerCase(Locale.ROOT));
+    }
+
+    private MolangValue boneRotationFunction(List<MolangValue> args) {
+        OpenYsmBone bone = scopedBone(args);
+        if (bone == null) {
+            return MolangValue.ZERO;
+        }
+        return MolangValue.ofVector(-Math.toDegrees(bone.getRotationX()),
+                -Math.toDegrees(bone.getRotationY()),
+                Math.toDegrees(bone.getRotationZ()));
+    }
+
+    private MolangValue bonePositionFunction(List<MolangValue> args) {
+        OpenYsmBone bone = scopedBone(args);
+        if (bone == null) {
+            return MolangValue.ZERO;
+        }
+        return MolangValue.ofVector(bone.getPositionX(), bone.getPositionY(), bone.getPositionZ());
+    }
+
+    private MolangValue boneScaleFunction(List<MolangValue> args) {
+        OpenYsmBone bone = scopedBone(args);
+        if (bone == null) {
+            return MolangValue.ZERO;
+        }
+        return MolangValue.ofVector(bone.getScaleX(), bone.getScaleY(), bone.getScaleZ());
+    }
+
+    private MolangValue bonePivotAbsFunction(List<MolangValue> args) {
+        OpenYsmBone bone = scopedBone(args);
+        if (bone == null) {
+            return MolangValue.ZERO;
+        }
+        double x = 0.0D;
+        double y = 0.0D;
+        double z = 0.0D;
+        OpenYsmBone cursor = bone;
+        int guard = 0;
+        while (cursor != null && guard++ < 128) {
+            x += cursor.getPositionX();
+            y += cursor.getPositionY();
+            z += cursor.getPositionZ();
+            cursor = cursor.getParent();
+        }
+        return MolangValue.ofVector(x, y, z);
+    }
+
+    private OpenYsmBone scopedBone(List<MolangValue> args) {
+        if (args == null || args.size() != 1) {
+            return null;
+        }
+        String boneName = args.get(0).asString();
+        if (boneName == null || boneName.isEmpty() || boneName.length() > 128) {
+            return null;
+        }
+        Map<String, OpenYsmBone> bones = BONE_SCOPE.get();
+        if (bones == null || bones.isEmpty()) {
+            return null;
+        }
+        OpenYsmBone exact = bones.get(boneName);
+        if (exact != null) {
+            return exact;
+        }
+        for (Map.Entry<String, OpenYsmBone> entry : bones.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(boneName)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private double firstOrderFunction(List<MolangValue> args) {
+        if (this.snapshot == null || args.size() < 2) {
+            return 0.0D;
+        }
+        double response = args.size() >= 3 ? args.get(2).asDouble() : 1.0D;
+        return OpenYsmMolangPhysics.firstOrder(physicsScope(), args.get(0).asString(), args.get(1).asDouble(),
+                response, this.snapshot.ageInTicks);
+    }
+
+    private double secondOrderFunction(List<MolangValue> args) {
+        if (this.snapshot == null || args.size() < 2) {
+            return 0.0D;
+        }
+        double frequency = args.size() >= 3 ? args.get(2).asDouble() : 1.0D;
+        double coefficient = args.size() >= 4 ? args.get(3).asDouble() : 1.0D;
+        double response = args.size() >= 5 ? args.get(4).asDouble() : 1.0D;
+        return OpenYsmMolangPhysics.secondOrder(physicsScope(), args.get(0).asString(), args.get(1).asDouble(),
+                frequency, coefficient, response, this.snapshot.ageInTicks);
+    }
+
+    private String physicsScope() {
+        return this.modelId + "|" + this.controllerName;
+    }
+
+    private static String selectedTextureName() {
+        String textureId = YesSteveModel.getClientConfig().getSelectedTextureId();
+        return textureId == null || textureId.isEmpty() ? "default" : textureId;
+    }
+
+    private static boolean isFirstPerson() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft != null && minecraft.gameSettings != null
+                && minecraft.gameSettings.getPointOfView().func_243192_a();
+    }
+
+    private static int cameraPointOfViewOrdinal() {
+        Minecraft minecraft = Minecraft.getInstance();
+        PointOfView pointOfView = minecraft == null || minecraft.gameSettings == null
+                ? PointOfView.FIRST_PERSON : minecraft.gameSettings.getPointOfView();
+        return pointOfView.ordinal();
+    }
+
+    private static double normalizeTimeOfDay(long dayTime) {
+        long wrapped = Math.floorMod(dayTime, 24000L);
+        return wrapped / 24000.0D;
     }
 
     private void debugUnknown(String kind, String name) {

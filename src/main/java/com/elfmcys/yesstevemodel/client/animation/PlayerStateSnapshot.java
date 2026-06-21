@@ -35,7 +35,12 @@ public final class PlayerStateSnapshot {
     public final double posX;
     public final double posY;
     public final double posZ;
+    public final double deltaX;
+    public final double deltaY;
+    public final double deltaZ;
     public final int cardinalFacing2d;
+    public final float headYaw;
+    public final float headPitch;
     public final float inputHorizontal;
     public final float inputVertical;
     public final boolean inputJumping;
@@ -51,7 +56,8 @@ public final class PlayerStateSnapshot {
     public final boolean mainhandEmpty;
     public final boolean offhandEmpty;
 
-    private PlayerStateSnapshot(PlayerEntity player, float limbSwingAmount, float ageInTicks) {
+    private PlayerStateSnapshot(PlayerEntity player, float limbSwingAmount, float ageInTicks,
+                                float headYaw, float headPitch) {
         this.uuid = player.getUniqueID();
         this.onGround = player.isOnGround();
         this.sneaking = player.isSneaking();
@@ -69,7 +75,12 @@ public final class PlayerStateSnapshot {
         this.posX = player.getPosX();
         this.posY = player.getPosY();
         this.posZ = player.getPosZ();
+        this.deltaX = player.getPosX() - player.prevPosX;
+        this.deltaY = player.getPosY() - player.prevPosY;
+        this.deltaZ = player.getPosZ() - player.prevPosZ;
         this.cardinalFacing2d = Direction.fromAngle(player.rotationYaw).getIndex();
+        this.headYaw = headYaw;
+        this.headPitch = headPitch;
         this.inputHorizontal = player instanceof ClientPlayerEntity
                 && ((ClientPlayerEntity) player).movementInput != null
                 ? ((ClientPlayerEntity) player).movementInput.moveStrafe
@@ -95,7 +106,8 @@ public final class PlayerStateSnapshot {
         this.offhandEmpty = this.offhand == null || this.offhand.isEmpty();
     }
 
-    private PlayerStateSnapshot(Entity entity, float limbSwingAmount, float ageInTicks) {
+    private PlayerStateSnapshot(Entity entity, float limbSwingAmount, float ageInTicks,
+                                float headYaw, float headPitch) {
         this.uuid = entity.getUniqueID();
         this.onGround = entity.isOnGround();
         this.sneaking = false;
@@ -113,7 +125,12 @@ public final class PlayerStateSnapshot {
         this.posX = entity.getPosX();
         this.posY = entity.getPosY();
         this.posZ = entity.getPosZ();
+        this.deltaX = entity.getPosX() - entity.prevPosX;
+        this.deltaY = entity.getPosY() - entity.prevPosY;
+        this.deltaZ = entity.getPosZ() - entity.prevPosZ;
         this.cardinalFacing2d = Direction.fromAngle(entity.rotationYaw).getIndex();
+        this.headYaw = headYaw;
+        this.headPitch = headPitch;
         this.inputHorizontal = 0.0F;
         this.inputVertical = 0.0F;
         this.inputJumping = !entity.isOnGround();
@@ -131,8 +148,14 @@ public final class PlayerStateSnapshot {
     }
 
     public static PlayerStateSnapshot capture(LivingEntity entity, float limbSwingAmount, float ageInTicks) {
+        return capture(entity, limbSwingAmount, ageInTicks, entity == null ? 0.0F : entity.rotationYawHead,
+                entity == null ? 0.0F : entity.rotationPitch);
+    }
+
+    public static PlayerStateSnapshot capture(LivingEntity entity, float limbSwingAmount, float ageInTicks,
+                                              float headYaw, float headPitch) {
         if (entity instanceof PlayerEntity) {
-            return new PlayerStateSnapshot((PlayerEntity) entity, limbSwingAmount, ageInTicks);
+            return new PlayerStateSnapshot((PlayerEntity) entity, limbSwingAmount, ageInTicks, headYaw, headPitch);
         }
         return null;
     }
@@ -142,9 +165,16 @@ public final class PlayerStateSnapshot {
             return null;
         }
         if (entity instanceof PlayerEntity) {
-            return new PlayerStateSnapshot((PlayerEntity) entity, limbSwingAmount, ageInTicks);
+            PlayerEntity player = (PlayerEntity) entity;
+            return new PlayerStateSnapshot(player, limbSwingAmount, ageInTicks,
+                    player.rotationYawHead, player.rotationPitch);
         }
-        return new PlayerStateSnapshot(entity, limbSwingAmount, ageInTicks);
+        if (entity instanceof LivingEntity) {
+            LivingEntity living = (LivingEntity) entity;
+            return new PlayerStateSnapshot(entity, limbSwingAmount, ageInTicks,
+                    living.rotationYawHead, living.rotationPitch);
+        }
+        return new PlayerStateSnapshot(entity, limbSwingAmount, ageInTicks, entity.rotationYaw, entity.rotationPitch);
     }
 
     public ItemStack handStack(Hand hand) {

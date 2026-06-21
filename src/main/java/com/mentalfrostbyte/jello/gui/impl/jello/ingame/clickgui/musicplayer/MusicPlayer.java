@@ -24,7 +24,7 @@ import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
-import com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer;
+import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeUtil;
 import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
 import com.mentalfrostbyte.jello.util.system.network.ImageUtil;
@@ -481,7 +481,7 @@ public class MusicPlayer extends AnimatedIconPanel {
         // Render Netease QR code overlay
         // After super.draw(), GL matrix has drawChildren's glTranslatef(getXA(), getYA())
         // so GL rendering uses panel-local coords (0-based).
-        // NanoVG ignores the GL matrix and needs absolute screen coords.
+        // Skija ignores the GL matrix and needs absolute screen coords.
         if (this.showNeteaseQr && this.neteaseQrImage != null) {
             // Panel-local coords for GL
             float overlayWidth = 240.0F;
@@ -492,7 +492,7 @@ public class MusicPlayer extends AnimatedIconPanel {
             float overlayY = (this.getHeightA() - overlayHeight) / 2.0F;
             float localX = overlayX + padding;
             float localY = overlayY + padding;
-            // Absolute coords for NanoVG
+            // Absolute coords for Skija
             float absX = this.getXA() + localX;
             float absY = this.getYA() + localY;
 
@@ -543,22 +543,22 @@ public class MusicPlayer extends AnimatedIconPanel {
             }
             RenderUtil.restoreScissor();
 
-            // NanoVG: draw text hints using absolute screen coords
-            if (NanoVGFontRenderer.isInitialized()) {
+            // Skija: draw text hints using absolute screen coords
+            if (SkijaFontRenderer.isInitialized()) {
                 int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
                 int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
-                NanoVGFontRenderer.beginFrame(sw, sh);
+                SkijaFontRenderer.beginFrame(sw, sh);
                 String qrHint = "\u8bf7\u7528\u7f51\u6613\u4e91\u97f3\u4e50 App \u626b\u7801";
-                float tw = NanoVGFontRenderer.getTextWidth(qrHint, 16f);
-                NanoVGFontRenderer.drawText(qrHint,
+                float tw = SkijaFontRenderer.getTextWidth(qrHint, 16f);
+                SkijaFontRenderer.drawText(qrHint,
                         absX + (qrSize - tw) / 2, absY + 210, 16f,
                         RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks));
                 String closeHint = "\u70b9\u51fb\u4efb\u610f\u4f4d\u7f6e\u5173\u95ed";
-                float tw2 = NanoVGFontRenderer.getTextWidth(closeHint, 14f);
-                NanoVGFontRenderer.drawText(closeHint,
+                float tw2 = SkijaFontRenderer.getTextWidth(closeHint, 14f);
+                SkijaFontRenderer.drawText(closeHint,
                         absX + (qrSize - tw2) / 2, absY + 235, 14f,
                         RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks * 0.7f));
-                NanoVGFontRenderer.endFrame();
+                SkijaFontRenderer.endFrame();
             }
         }
     }
@@ -672,10 +672,10 @@ public class MusicPlayer extends AnimatedIconPanel {
             String primaryText = hasLyric ? lyric : (!titleParts.title.isEmpty() ? titleParts.title : "Jello Music");
             String secondaryText = titleParts.artist;
 
-            this.drawNanoString(var1, primaryText, this.width - var5 * 2, 0, 0);
+            this.drawSkijaString(var1, primaryText, this.width - var5 * 2, 0, 0);
 
             if (secondaryText != null && !secondaryText.isEmpty()) {
-                this.drawNanoString(var1, secondaryText, this.width - var5 * 2, 20, -1000);
+                this.drawSkijaString(var1, secondaryText, this.width - var5 * 2, 20, -1000);
             }
         }
     }
@@ -713,7 +713,7 @@ public class MusicPlayer extends AnimatedIconPanel {
         }
     }
 
-    private void drawNanoString(float var1, String text, int var3, int var4, int var5) {
+    private void drawSkijaString(float var1, String text, int var3, int var4, int var5) {
         Date var8 = new Date();
         float var9 = (float) ((var8.getTime() + (long) var5) % 8500L) / 8500.0F;
         if (!(var9 < 0.4F)) {
@@ -724,14 +724,13 @@ public class MusicPlayer extends AnimatedIconPanel {
         }
 
         var9 = QuadraticEasing.easeInOutQuad(var9, 0.0F, 1.0F, 1.0F);
-        boolean hasNonAscii = MusicPlayerTextHelper.containsNonAscii(text);
-        int var10 = hasNonAscii
-                ? Math.round(MusicPlayerTextHelper.getTabTextWidth(text))
-                : ResourceRegistry.JelloLightFont14.getWidth(text);
+
+        int var10 = Math.round(SkijaFontRenderer.getTextWidth(text, 14f));
         int var11 = Math.min(var3, var10);
-        int var12 = ResourceRegistry.JelloLightFont14.getHeight();
+        int var12 = 14;
         int var13 = this.getXA() + (this.width - var11) / 2;
         int var14 = this.getYA() + this.getHeightA() - 50 + var4;
+
         if (var10 <= var3) {
             var9 = 0.0F;
         }
@@ -742,15 +741,13 @@ public class MusicPlayer extends AnimatedIconPanel {
                 var1 * var1 * Math.min(1.0F, Math.max(0.0F, 1.0F - var9 * 0.75F))
         );
         float textX = (float) var13 - (float) var10 * var9 - 50.0F * var9;
-        if (hasNonAscii) {
-            MusicPlayerTextHelper.drawTabText(
-                    textX,
-                    (float) var14,
-                    text,
-                    dimColor,
-                    FontSizeAdjust.field14488,
-                    FontSizeAdjust.field14488
-            );
+
+        if (SkijaFontRenderer.isInitialized()) {
+            int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+            int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+            SkijaFontRenderer.beginFrame(sw, sh);
+            SkijaFontRenderer.drawText(text, textX, (float) var14, 14f, dimColor);
+            SkijaFontRenderer.endFrame();
         } else {
             RenderUtil.drawString(ResourceRegistry.JelloLightFont14, textX, (float) var14, text, dimColor);
         }
@@ -758,15 +755,13 @@ public class MusicPlayer extends AnimatedIconPanel {
         if (var9 > 0.0F) {
             int color = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1);
             float loopTextX = (float) var13 - (float) var10 * var9 + (float) var10;
-            if (hasNonAscii) {
-                MusicPlayerTextHelper.drawTabText(
-                        loopTextX,
-                        (float) var14,
-                        text,
-                        color,
-                        FontSizeAdjust.field14488,
-                        FontSizeAdjust.field14488
-                );
+
+            if (SkijaFontRenderer.isInitialized()) {
+                int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+                int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+                SkijaFontRenderer.beginFrame(sw, sh);
+                SkijaFontRenderer.drawText(text, loopTextX, (float) var14, 14f, color);
+                SkijaFontRenderer.endFrame();
             } else {
                 RenderUtil.drawString(ResourceRegistry.JelloLightFont14, loopTextX, (float) var14, text, color);
             }
@@ -777,11 +772,10 @@ public class MusicPlayer extends AnimatedIconPanel {
     private void drawLyricString(float var1, String text, int var3, int var4, int var5) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
 
-        // Try to use NanoVG for CJK support
-        if (com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.isInitialized()) {
+        // Use Skija for lyric rendering
+        if (SkijaFontRenderer.isInitialized()) {
             float fontSize = 14.0f;
-            float textWidth = com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.getTextWidth(text,
-                    fontSize);
+            float textWidth = SkijaFontRenderer.getTextWidth(text, fontSize);
             int var11 = Math.min(var3, (int) textWidth);
             int var12 = (int) fontSize;
             int var13 = this.getXA() + (this.width - var11) / 2;
@@ -795,18 +789,16 @@ public class MusicPlayer extends AnimatedIconPanel {
 
             // Draw dim base text
             int dimColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * 0.4f);
-            com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.beginFrame(screenWidth, screenHeight);
-            com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.drawText(text, var13, var14, fontSize,
-                    dimColor);
-            com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.endFrame();
+            SkijaFontRenderer.beginFrame(screenWidth, screenHeight);
+            SkijaFontRenderer.drawText(text, var13, var14, fontSize, dimColor);
+            SkijaFontRenderer.endFrame();
 
             // Draw highlighted portion with scissor
             RenderUtil.startScissor(var13, var14, progressX, var14 + var12, true);
             int brightColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1);
-            com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.beginFrame(screenWidth, screenHeight);
-            com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.drawText(text, var13, var14, fontSize,
-                    brightColor);
-            com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer.endFrame();
+            SkijaFontRenderer.beginFrame(screenWidth, screenHeight);
+            SkijaFontRenderer.drawText(text, var13, var14, fontSize, brightColor);
+            SkijaFontRenderer.endFrame();
             RenderUtil.restoreScissor();
         } else {
             // Fallback to Minecraft font renderer
@@ -869,27 +861,20 @@ public class MusicPlayer extends AnimatedIconPanel {
                 (float) this.field20847,
                 RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), var4 * var1 * 0.6F));
 
-        // Use NanoVG for header title (CJK safe)
-        if (MusicPlayerTextHelper.containsNonAscii(this.field20849)) {
-            MusicPlayerTextHelper.drawTitleText(
-                    (float) ((this.width + this.getWidthA()) / 2),
-                    16.0F + (1.0F - var4) * 14.0F,
-                    this.field20849,
-                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4)
-            );
-        } else if (NanoVGFontRenderer.isInitialized()) {
+        // Use Skija for header title (CJK safe)
+        if (SkijaFontRenderer.isInitialized()) {
             int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
             int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
             float fontSize = 25.0f;
-            float titleWidth = NanoVGFontRenderer.getTextWidth(this.field20849, fontSize);
+            float titleWidth = SkijaFontRenderer.getTextWidth(this.field20849, fontSize);
             float titleX = (float) ((this.getWidthA() - (int) titleWidth + this.width) / 2);
             float titleY = 16.0F + (1.0F - var4) * 14.0F;
-            NanoVGFontRenderer.beginFrame(sw, sh);
-            NanoVGFontRenderer.drawText(this.field20849, titleX, titleY, fontSize,
+            SkijaFontRenderer.beginFrame(sw, sh);
+            SkijaFontRenderer.drawText(this.field20849, titleX, titleY, fontSize,
                     RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4));
-            NanoVGFontRenderer.endFrame();
+            SkijaFontRenderer.endFrame();
         } else {
-            // Use hybrid font rendering to support Chinese song titles
+            // Fallback to hybrid font rendering
             RenderUtil.drawHybridString(
                     ResourceRegistry.JelloLightFont25,
                     (float) ((this.getWidthA() - RenderUtil.getHybridStringWidth(ResourceRegistry.JelloLightFont25, this.field20849) + this.width)

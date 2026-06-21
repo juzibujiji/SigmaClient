@@ -39,12 +39,18 @@ public final class OpenYsmControllerRuntime {
 
     public static Result tick(String modelId, Collection<ControllerDefinition> definitions,
                               Map<String, OpenYsmAnimationSet.Clip> clips, PlayerStateSnapshot snapshot) {
-        return tick(modelId, definitions, clips, snapshot, null);
+        return tick(modelId, definitions, clips, snapshot, null, false);
     }
 
     public static Result tick(String modelId, Collection<ControllerDefinition> definitions,
                               Map<String, OpenYsmAnimationSet.Clip> clips, PlayerStateSnapshot snapshot,
                               Map<String, Double> externalVariables) {
+        return tick(modelId, definitions, clips, snapshot, externalVariables, false);
+    }
+
+    public static Result tick(String modelId, Collection<ControllerDefinition> definitions,
+                              Map<String, OpenYsmAnimationSet.Clip> clips, PlayerStateSnapshot snapshot,
+                              Map<String, Double> externalVariables, boolean playingExtraAnimation) {
         if (snapshot == null || modelId == null || modelId.isEmpty() || definitions == null || definitions.isEmpty()) {
             return Result.EMPTY;
         }
@@ -52,30 +58,43 @@ public final class OpenYsmControllerRuntime {
         String playerKey = key(snapshot.uuid, modelId);
         Map<String, ControllerInstance> playerInstances = INSTANCES.computeIfAbsent(playerKey, ignored -> new ConcurrentHashMap<>());
         List<ActiveControllerAnimation> active = new ArrayList<>();
+        List<ControllerEvent> events = new ArrayList<>();
         for (ControllerDefinition definition : definitions) {
             if (definition == null || !definition.isUsable()) {
                 continue;
             }
+            boolean created = !playerInstances.containsKey(definition.getName());
             ControllerInstance instance = playerInstances.computeIfAbsent(definition.getName(),
                     ignored -> new ControllerInstance(definition.getInitialState(), snapshot.ageInTicks));
             ControllerStateDefinition state = definition.getState(instance.getCurrentState());
             if (state == null) {
                 instance.reset(definition.getInitialState(), snapshot.ageInTicks);
                 state = definition.getState(instance.getCurrentState());
+                appendEntryEvents(events, definition, state);
+                created = false;
             }
             if (state == null) {
                 continue;
             }
+            if (created) {
+                appendEntryEvents(events, definition, state);
+            }
 
             String previousState = instance.getCurrentState();
-            AnimationFinishSummary finishSummary = finishSummary(state, instance.elapsedSeconds(snapshot.ageInTicks), clips);
+            float stateElapsedSeconds = instance.elapsedSeconds(snapshot.ageInTicks);
+            AnimationFinishSummary finishSummary = finishSummary(state, stateElapsedSeconds, clips);
             for (ControllerTransition transition : state.getTransitions()) {
                 boolean result = evaluateCondition(transition.getExpression(), snapshot, modelId,
-                        definition.getName(), transition.getTargetState(), finishSummary, externalVariables);
+                        definition.getName(), transition.getTargetState(), finishSummary, externalVariables,
+                        playingExtraAnimation, stateElapsedSeconds);
                 debugTransition(snapshot, modelId, definition, previousState, transition, result);
-                if (result && definition.getStates().containsKey(transition.getTargetState())) {
-                    instance.transitionTo(transition.getTargetState(), snapshot.ageInTicks, state.getBlendTransitionSeconds());
+                if (result && !transition.getTargetState().equals(instance.getCurrentState())
+                        && definition.getStates().containsKey(transition.getTargetState())) {
+                    ControllerStateDefinition targetState = definition.getState(transition.getTargetState());
+                    appendExitEvents(events, definition, state);
+                    instance.transitionTo(transition.getTargetState(), snapshot.ageInTicks, targetState);
                     state = definition.getState(instance.getCurrentState());
+                    appendEntryEvents(events, definition, state);
                     break;
                 }
             }
@@ -102,13 +121,37 @@ public final class OpenYsmControllerRuntime {
             if (blendedPreviousState != null && previousBlendWeight > 0.0F) {
                 appendStateAnimations(active, activeNames, clips, snapshot, modelId, definition, blendedPreviousState,
                         instance.getPreviousStateElapsedSeconds(), previousBlendWeight, finishSummary(blendedPreviousState,
-                                instance.getPreviousStateElapsedSeconds(), clips), externalVariables);
+                                instance.getPreviousStateElapsedSeconds(), clips), externalVariables,
+                        playingExtraAnimation);
             }
             appendStateAnimations(active, activeNames, clips, snapshot, modelId, definition, state, elapsed,
-                    currentBlendWeight, outputFinishSummary, externalVariables);
+                    currentBlendWeight, outputFinishSummary, externalVariables, playingExtraAnimation);
             debugActive(snapshot, modelId, definition, previousState, instance.getCurrentState(), activeNames);
         }
-        return active.isEmpty() ? Result.EMPTY : new Result(active);
+        return active.isEmpty() && events.isEmpty() ? Result.EMPTY : new Result(active, events);
+    }
+
+    private static void appendEntryEvents(List<ControllerEvent> events, ControllerDefinition definition,
+                                          ControllerStateDefinition state) {
+        if (state == null) {
+            return;
+        }
+        for (String event : state.getOnEntryEvents()) {
+            events.add(ControllerEvent.timeline(definition.getName(), state.getName(), event));
+        }
+        for (String soundEffect : state.getSoundEffects()) {
+            events.add(ControllerEvent.sound(definition.getName(), state.getName(), soundEffect));
+        }
+    }
+
+    private static void appendExitEvents(List<ControllerEvent> events, ControllerDefinition definition,
+                                         ControllerStateDefinition state) {
+        if (state == null) {
+            return;
+        }
+        for (String event : state.getOnExitEvents()) {
+            events.add(ControllerEvent.timeline(definition.getName(), state.getName(), event));
+        }
     }
 
     private static void appendStateAnimations(List<ActiveControllerAnimation> active, List<String> activeNames,
@@ -116,10 +159,12 @@ public final class OpenYsmControllerRuntime {
                                               String modelId, ControllerDefinition definition,
                                               ControllerStateDefinition state, float elapsed, float layerWeight,
                                               AnimationFinishSummary finishSummary,
-                                              Map<String, Double> externalVariables) {
+                                              Map<String, Double> externalVariables,
+                                              boolean playingExtraAnimation) {
         for (ControllerAnimationRef animationRef : state.getAnimations()) {
                 float weight = evaluateWeight(animationRef.getWeightExpression(), snapshot, modelId,
-                        definition.getName(), animationRef.getAnimationName(), finishSummary, externalVariables) * layerWeight;
+                        definition.getName(), animationRef.getAnimationName(), finishSummary, externalVariables,
+                        playingExtraAnimation, elapsed) * layerWeight;
                 OpenYsmAnimationSet.Clip clip = findClip(clips, animationRef.getAnimationName());
                 if (clip == null) {
                     debugSkip(snapshot, modelId, definition, state, animationRef, "clip not found");
@@ -155,12 +200,13 @@ public final class OpenYsmControllerRuntime {
     private static boolean evaluateCondition(String expression, PlayerStateSnapshot snapshot, String modelId,
                                              String controllerName, String targetState,
                                              AnimationFinishSummary finishSummary,
-                                             Map<String, Double> externalVariables) {
+                                             Map<String, Double> externalVariables,
+                                             boolean playingExtraAnimation, float controllerAnimTimeSeconds) {
         if (expression == null || expression.trim().isEmpty()) {
             return false;
         }
         EvaluationResult result = evaluateMolang(expression, snapshot, modelId, controllerName, "transition", targetState,
-                finishSummary, externalVariables);
+                finishSummary, externalVariables, playingExtraAnimation, controllerAnimTimeSeconds);
         if (!result.valid) {
             return false;
         }
@@ -170,9 +216,11 @@ public final class OpenYsmControllerRuntime {
     private static float evaluateWeight(String expression, PlayerStateSnapshot snapshot, String modelId,
                                         String controllerName, String animationName,
                                         AnimationFinishSummary finishSummary,
-                                        Map<String, Double> externalVariables) {
+                                        Map<String, Double> externalVariables,
+                                        boolean playingExtraAnimation, float controllerAnimTimeSeconds) {
         EvaluationResult result = evaluateMolang(expression == null || expression.trim().isEmpty() ? "1" : expression,
-                snapshot, modelId, controllerName, "weight", animationName, finishSummary, externalVariables);
+                snapshot, modelId, controllerName, "weight", animationName, finishSummary, externalVariables,
+                playingExtraAnimation, controllerAnimTimeSeconds);
         if (!result.valid) {
             return 0.0F;
         }
@@ -182,7 +230,8 @@ public final class OpenYsmControllerRuntime {
     private static EvaluationResult evaluateMolang(String expression, PlayerStateSnapshot snapshot, String modelId,
                                                    String controllerName, String expressionKind, String owner,
                                                    AnimationFinishSummary finishSummary,
-                                                   Map<String, Double> externalVariables) {
+                                                   Map<String, Double> externalVariables,
+                                                   boolean playingExtraAnimation, float controllerAnimTimeSeconds) {
         try {
             MolangExpression parsed = MolangParser.parse(expression);
             Map<String, Double> variables = externalVariables == null
@@ -190,7 +239,8 @@ public final class OpenYsmControllerRuntime {
                     : externalVariables;
             MolangBindings bindings = new MolangBindings(variables, Collections.emptyMap());
             MolangContext context = MolangContext.controller(snapshot, modelId, controllerName, bindings,
-                    finishSummary.allFinished, finishSummary.anyFinished);
+                    finishSummary.allFinished, finishSummary.anyFinished, playingExtraAnimation,
+                    controllerAnimTimeSeconds);
             return EvaluationResult.valid((float) MolangEvaluator.evaluate(parsed, context).asDouble());
         } catch (MolangParser.ParseException exception) {
             debugExpressionFailure(snapshot, controllerName, expression, expressionKind, owner, exception.getMessage());
@@ -297,15 +347,21 @@ public final class OpenYsmControllerRuntime {
     }
 
     public static final class Result {
-        private static final Result EMPTY = new Result(Collections.emptyList());
+        private static final Result EMPTY = new Result(Collections.emptyList(), Collections.emptyList());
         private final List<ActiveControllerAnimation> activeAnimations;
+        private final List<ControllerEvent> controllerEvents;
 
-        private Result(List<ActiveControllerAnimation> activeAnimations) {
+        private Result(List<ActiveControllerAnimation> activeAnimations, List<ControllerEvent> controllerEvents) {
             this.activeAnimations = Collections.unmodifiableList(new ArrayList<>(activeAnimations));
+            this.controllerEvents = Collections.unmodifiableList(new ArrayList<>(controllerEvents));
         }
 
         public List<ActiveControllerAnimation> getActiveAnimations() {
             return this.activeAnimations;
+        }
+
+        public List<ControllerEvent> getControllerEvents() {
+            return this.controllerEvents;
         }
 
         public boolean hasMainLayerAnimation() {
@@ -315,6 +371,49 @@ public final class OpenYsmControllerRuntime {
                 }
             }
             return false;
+        }
+    }
+
+    public static final class ControllerEvent {
+        public enum Kind {
+            TIMELINE,
+            SOUND
+        }
+
+        private final Kind kind;
+        private final String controllerName;
+        private final String stateName;
+        private final String value;
+
+        private ControllerEvent(Kind kind, String controllerName, String stateName, String value) {
+            this.kind = kind == null ? Kind.TIMELINE : kind;
+            this.controllerName = controllerName == null ? "" : controllerName;
+            this.stateName = stateName == null ? "" : stateName;
+            this.value = value == null ? "" : value;
+        }
+
+        private static ControllerEvent timeline(String controllerName, String stateName, String value) {
+            return new ControllerEvent(Kind.TIMELINE, controllerName, stateName, value);
+        }
+
+        private static ControllerEvent sound(String controllerName, String stateName, String value) {
+            return new ControllerEvent(Kind.SOUND, controllerName, stateName, value);
+        }
+
+        public Kind getKind() {
+            return this.kind;
+        }
+
+        public String getControllerName() {
+            return this.controllerName;
+        }
+
+        public String getStateName() {
+            return this.stateName;
+        }
+
+        public String getValue() {
+            return this.value;
         }
     }
 

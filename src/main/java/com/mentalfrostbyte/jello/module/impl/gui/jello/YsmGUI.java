@@ -1,6 +1,5 @@
 package com.mentalfrostbyte.jello.module.impl.gui.jello;
 
-import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.gui.OpenYsmScreens;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
@@ -20,8 +19,6 @@ public class YsmGUI extends Module {
     @Override
     public void onEnable() {
         super.onEnable();
-        YesSteveModel.setEnabled(true);
-        YesSteveModel.setRenderPlayers(true);
         OpenYsmScreens.openModelManager();
         this.setEnabledBasic(false);
     }

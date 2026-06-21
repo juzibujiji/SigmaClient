@@ -1,5 +1,7 @@
 package net.minecraft.client.gui.screen.inventory;
 
+import com.elfmcys.yesstevemodel.client.OpenYsmBakedPlayerModel;
+import com.elfmcys.yesstevemodel.client.OpenYsmPlayerModelState;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
@@ -8,6 +10,7 @@ import net.minecraft.client.gui.recipebook.IRecipeShownListener;
 import net.minecraft.client.gui.recipebook.RecipeBookGui;
 import net.minecraft.client.gui.widget.button.ImageButton;
 import net.minecraft.client.renderer.IRenderTypeBuffer;
+import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.entity.EntityRendererManager;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -15,6 +18,7 @@ import net.minecraft.inventory.container.ClickType;
 import net.minecraft.inventory.container.PlayerContainer;
 import net.minecraft.inventory.container.Slot;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.vector.Quaternion;
 import net.minecraft.util.math.vector.Vector3f;
 import net.minecraft.util.text.TranslationTextComponent;
@@ -22,6 +26,8 @@ import net.minecraft.util.text.TranslationTextComponent;
 public class InventoryScreen extends DisplayEffectsScreen<PlayerContainer> implements IRecipeShownListener
 {
     private static final ResourceLocation RECIPE_BUTTON_TEXTURE = new ResourceLocation("textures/gui/recipe_button.png");
+    private static Object ysmPreviewOwner;
+    private static long ysmPreviewStartMillis;
 
     /** The old x position of the mouse pointer */
     private float oldMouseX;
@@ -118,8 +124,14 @@ public class InventoryScreen extends DisplayEffectsScreen<PlayerContainer> imple
 
     public static void drawEntityOnScreen(int posX, int posY, int scale, float mouseX, float mouseY, LivingEntity livingEntity)
     {
-        float f = (float)Math.atan((double)(mouseX / 40.0F));
-        float f1 = (float)Math.atan((double)(mouseY / 40.0F));
+        OpenYsmBakedPlayerModel ysmModel = livingEntity instanceof PlayerEntity
+                ? OpenYsmPlayerModelState.getBakedModelForPlayer((PlayerEntity)livingEntity, Minecraft.getInstance().getResourceManager())
+                : null;
+        boolean disablePreviewRotation = ysmModel != null && ysmModel.isDisablePreviewRotation();
+        boolean guiNoLighting = ysmModel != null && ysmModel.isGuiNoLighting();
+        boolean ysmPreview = ysmModel != null;
+        float f = disablePreviewRotation ? 0.0F : (float)Math.atan((double)(mouseX / 40.0F));
+        float f1 = disablePreviewRotation ? 0.0F : (float)Math.atan((double)(mouseY / 40.0F));
         RenderSystem.pushMatrix();
         RenderSystem.translatef((float)posX, (float)posY, 1050.0F);
         RenderSystem.scalef(1.0F, 1.0F, -1.0F);
@@ -145,11 +157,33 @@ public class InventoryScreen extends DisplayEffectsScreen<PlayerContainer> imple
         entityrenderermanager.setCameraOrientation(quaternion1);
         entityrenderermanager.setRenderShadow(false);
         IRenderTypeBuffer.Impl irendertypebuffer$impl = Minecraft.getInstance().getRenderTypeBuffers().getBufferSource();
-        RenderSystem.runAsFancy(() ->
+        try
         {
-            entityrenderermanager.renderEntityStatic(livingEntity, 0.0D, 0.0D, 0.0D, 0.0F, 1.0F, matrixstack, irendertypebuffer$impl, 15728880);
-        });
-        irendertypebuffer$impl.finish();
+            if (ysmPreview)
+            {
+                OpenYsmPlayerModelState.beginPreviewRender(ysmPreviewAgeInTicks(livingEntity));
+            }
+            RenderSystem.runAsFancy(() ->
+            {
+                if (guiNoLighting)
+                {
+                    RenderHelper.disableStandardItemLighting();
+                }
+                entityrenderermanager.renderEntityStatic(livingEntity, 0.0D, 0.0D, 0.0D, 0.0F, 1.0F, matrixstack, irendertypebuffer$impl, 15728880);
+            });
+        }
+        finally
+        {
+            if (ysmPreview)
+            {
+                OpenYsmPlayerModelState.endPreviewRender();
+            }
+            irendertypebuffer$impl.finish();
+            if (guiNoLighting)
+            {
+                RenderHelper.setupGui3DDiffuseLighting();
+            }
+        }
         entityrenderermanager.setRenderShadow(true);
         livingEntity.renderYawOffset = f2;
         livingEntity.rotationYaw = f3;
@@ -157,6 +191,19 @@ public class InventoryScreen extends DisplayEffectsScreen<PlayerContainer> imple
         livingEntity.prevRotationYawHead = f5;
         livingEntity.rotationYawHead = f6;
         RenderSystem.popMatrix();
+    }
+
+    private static float ysmPreviewAgeInTicks(LivingEntity livingEntity)
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        Object owner = minecraft.currentScreen != null ? minecraft.currentScreen : livingEntity;
+        long now = Util.milliTime();
+        if (owner != ysmPreviewOwner || ysmPreviewStartMillis <= 0L || now < ysmPreviewStartMillis)
+        {
+            ysmPreviewOwner = owner;
+            ysmPreviewStartMillis = now;
+        }
+        return Math.max(0.0F, (now - ysmPreviewStartMillis) / 50.0F);
     }
 
     protected boolean isPointInRegion(int x, int y, int width, int height, double mouseX, double mouseY)

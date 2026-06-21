@@ -78,20 +78,37 @@ public class ResourceRegistry {
         }
 
         private static TrueTypeFont createLyricsFont() {
-                // Generate CJK characters for Chinese lyrics support (U+4E00 to U+9FFF is CJK
-                // Unified Ideographs)
-                StringBuilder sb = new StringBuilder();
-                // Common CJK punctuation using Unicode escapes
-                sb.append("\u300A\u300B\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009");
-                sb.append("\u201C\u201D\u2018\u2019\u2026\u2014\uFF5E\u00B7\u3001\u3002\uFF01\uFF1F\uFF1B\uFF1A");
-                // CJK Unified Ideographs (U+4E00 to U+9FFF)
-                for (char c = 0x4E00; c <= 0x9FFF; c++) {
-                        sb.append(c);
+                try {
+                        InputStream fontFile = Resources.readInputStream("com/mentalfrostbyte/gui/resources/font/HarmonyOS_Sans_SC_Medium.ttf");
+                        Font font = Font.createFont(0, fontFile);
+                        font = font.deriveFont(Font.PLAIN, 18.0F);
+
+                        // Generate CJK characters for Chinese lyrics support (U+4E00 to U+9FFF is CJK
+                        // Unified Ideographs)
+                        StringBuilder sb = new StringBuilder();
+                        // Common CJK punctuation using Unicode escapes
+                        sb.append("\u300A\u300B\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009");
+                        sb.append("\u201C\u201D\u2018\u2019\u2026\u2014\uFF5E\u00B7\u3001\u3002\uFF01\uFF1F\uFF1B\uFF1A");
+                        // CJK Unified Ideographs (U+4E00 to U+9FFF)
+                        for (char c = 0x4E00; c <= 0x9FFF; c++) {
+                                sb.append(c);
+                        }
+                        char[] additionalChars = sb.toString().toCharArray();
+
+                        return new TrueTypeFont(font, true, additionalChars);
+                } catch (Exception ex) {
+                        // Fallback to Microsoft YaHei if HarmonyOS font loading fails
+                        StringBuilder sb = new StringBuilder();
+                        sb.append("\u300A\u300B\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009");
+                        sb.append("\u201C\u201D\u2018\u2019\u2026\u2014\uFF5E\u00B7\u3001\u3002\uFF01\uFF1F\uFF1B\uFF1A");
+                        for (char c = 0x4E00; c <= 0x9FFF; c++) {
+                                sb.append(c);
+                        }
+                        char[] additionalChars = sb.toString().toCharArray();
+                        return new TrueTypeFont(
+                                        new java.awt.Font("Microsoft YaHei", java.awt.Font.PLAIN, 18),
+                                        true,
+                                        additionalChars);
                 }
-                char[] additionalChars = sb.toString().toCharArray();
-                return new TrueTypeFont(
-                                new java.awt.Font("Microsoft YaHei", java.awt.Font.PLAIN, 18),
-                                true,
-                                additionalChars);
         }
 }

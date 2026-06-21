@@ -19,7 +19,7 @@ public final class OpenYsmExtraEntityRenderHelper {
     }
 
     public static OpenYsmExtraEntityModel find(Entity entity, OpenYsmExtraEntityModel.Kind kind, String fallbackId) {
-        if (entity == null || !YesSteveModel.getClientConfig().isRenderPlayers()) {
+        if (entity == null || !YesSteveModel.isEnabled() || !YesSteveModel.getClientConfig().isRenderPlayers()) {
             return null;
         }
 

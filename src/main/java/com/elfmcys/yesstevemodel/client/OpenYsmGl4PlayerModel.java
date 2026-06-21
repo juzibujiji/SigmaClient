@@ -42,6 +42,9 @@ public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlaye
     public void setRotationAngles(AbstractClientPlayerEntity entityIn, float limbSwing, float limbSwingAmount,
                                   float ageInTicks, float netHeadYaw, float headPitch) {
         super.setRotationAngles(entityIn, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
+        AnimationRenderContext context = OpenYsmPlayerModelState.isPreviewRender()
+                ? AnimationRenderContext.PREVIEW : AnimationRenderContext.GAME;
+        float animationAgeInTicks = OpenYsmPlayerModelState.previewAgeInTicks(ageInTicks);
         this.bakedModel.getBones().values().forEach(OpenYsmBone::resetPose);
 
         copyPosePreferControl("Head", "MHead", this.bipedHead);
@@ -51,10 +54,11 @@ public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlaye
         copyPosePreferControl("RightLeg", "MRightLeg", this.bipedRightLeg);
         copyPosePreferControl("LeftLeg", "MLeftLeg", this.bipedLeftLeg);
 
-        PlayerStateSnapshot snapshot = PlayerStateSnapshot.capture(entityIn, limbSwingAmount, ageInTicks);
+        PlayerStateSnapshot snapshot = PlayerStateSnapshot.capture(entityIn, limbSwingAmount, animationAgeInTicks,
+                netHeadYaw, headPitch);
         OpenYsmPlayerAnimationState.State extraState = OpenYsmPlayerAnimationState.get(entityIn);
         ActiveAnimationSet active = this.bakedModel.getAnimations()
-                .resolveActive(snapshot, extraState, AnimationRenderContext.GAME);
+                .resolveActive(snapshot, extraState, context);
         OpenYsmAnimationEventDispatcher.dispatch(this.bakedModel, entityIn, active, snapshot);
         this.bakedModel.getAnimations().apply(this.bakedModel.getBones(), active, 0.0F);
         OpenYsmDebugLogger.logActiveState(this.bakedModel, active);

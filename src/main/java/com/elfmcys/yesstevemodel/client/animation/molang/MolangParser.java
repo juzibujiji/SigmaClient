@@ -24,7 +24,20 @@ public final class MolangParser {
     }
 
     private MolangExpression.Node parseExpression() throws ParseException {
-        return parseOr();
+        return parseConditional();
+    }
+
+    private MolangExpression.Node parseConditional() throws ParseException {
+        MolangExpression.Node condition = parseOr();
+        if (match("?")) {
+            MolangExpression.Node ifTrue = parseExpression();
+            expect(":");
+            MolangExpression.Node ifFalse = parseConditional();
+            return context -> condition.evaluate(context).asBoolean()
+                    ? ifTrue.evaluate(context)
+                    : ifFalse.evaluate(context);
+        }
+        return condition;
     }
 
     private MolangExpression.Node parseOr() throws ParseException {
@@ -53,11 +66,11 @@ public final class MolangParser {
             if (match("==")) {
                 MolangExpression.Node left = node;
                 MolangExpression.Node right = parseComparison();
-                node = context -> MolangValue.of(Math.abs(left.evaluate(context).asDouble() - right.evaluate(context).asDouble()) < 0.000001D);
+                node = context -> MolangValue.of(equalsValue(left.evaluate(context), right.evaluate(context)));
             } else if (match("!=")) {
                 MolangExpression.Node left = node;
                 MolangExpression.Node right = parseComparison();
-                node = context -> MolangValue.of(Math.abs(left.evaluate(context).asDouble() - right.evaluate(context).asDouble()) >= 0.000001D);
+                node = context -> MolangValue.of(!equalsValue(left.evaluate(context), right.evaluate(context)));
             } else {
                 return node;
             }
@@ -149,6 +162,16 @@ public final class MolangParser {
     }
 
     private MolangExpression.Node parsePrimary() throws ParseException {
+        MolangExpression.Node node = parseAtom();
+        while (match(".")) {
+            String property = readSimpleIdentifier().toLowerCase(Locale.ROOT);
+            MolangExpression.Node target = node;
+            node = context -> target.evaluate(context).property(property);
+        }
+        return node;
+    }
+
+    private MolangExpression.Node parseAtom() throws ParseException {
         skipWhitespace();
         if (match("(")) {
             MolangExpression.Node node = parseExpression();
@@ -157,6 +180,9 @@ public final class MolangParser {
         }
         if (isDigit(peek()) || (peek() == '.' && isDigit(peekNext()))) {
             return numberNode(readNumber());
+        }
+        if (peek() == '\'' || peek() == '"') {
+            return stringNode(readString());
         }
         if (isIdentifierStart(peek())) {
             String identifier = readIdentifier();
@@ -236,8 +262,27 @@ public final class MolangParser {
                 return MolangValue.of(ThreadLocalRandom.current().nextInt(min, max + 1));
             });
             case "math.min_angle" -> requireArgs(name, args, 1, context -> MolangValue.of(wrapDegrees(args.get(0).evaluate(context).asDouble())));
+            case "query.position", "q.position",
+                    "query.position_delta", "q.position_delta",
+                    "query.rotation_to_camera", "q.rotation_to_camera" -> requireArgs(name, args, 1, context -> context.callFunction(name,
+                            List.of(args.get(0).evaluate(context))));
+            case "query.is_item_name_any", "q.is_item_name_any" -> requireArgs(name, args, 2, context -> context.callFunction(name,
+                    List.of(args.get(0).evaluate(context), args.get(1).evaluate(context))));
+            case "ysm.bone_rot", "ysm.bone_pos", "ysm.bone_scale", "ysm.bone_pivot_abs" -> requireArgs(name, args, 1,
+                    context -> context.callFunction(name, List.of(args.get(0).evaluate(context))));
+            case "ysm.first_order" -> requireMinArgs(name, args, 2, context -> context.callFunction(name,
+                    evaluatedArgs(args, context)));
+            case "ysm.second_order" -> requireMinArgs(name, args, 2, context -> context.callFunction(name,
+                    evaluatedArgs(args, context)));
             default -> throw error("Unsupported function: " + name);
         };
+    }
+
+    private static boolean equalsValue(MolangValue left, MolangValue right) {
+        if (left.isString() || right.isString()) {
+            return left.asString().equals(right.asString());
+        }
+        return Math.abs(left.asDouble() - right.asDouble()) < 0.000001D;
     }
 
     private static double wrapDegrees(double value) {
@@ -257,6 +302,26 @@ public final class MolangParser {
             throw error("Function " + name + " expects " + count + " args");
         }
         return node;
+    }
+
+    private MolangExpression.Node requireMinArgs(String name, List<MolangExpression.Node> args, int minCount,
+                                                 MolangExpression.Node node) throws ParseException {
+        if (args.size() < minCount) {
+            throw error("Function " + name + " expects at least " + minCount + " args");
+        }
+        return node;
+    }
+
+    private static List<MolangValue> evaluatedArgs(List<MolangExpression.Node> args, MolangContext context) {
+        List<MolangValue> values = new ArrayList<>(args.size());
+        for (MolangExpression.Node arg : args) {
+            values.add(arg.evaluate(context));
+        }
+        return values;
+    }
+
+    private MolangExpression.Node stringNode(String value) {
+        return context -> MolangValue.of(value);
     }
 
     private double readNumber() throws ParseException {
@@ -286,10 +351,50 @@ public final class MolangParser {
         }
     }
 
+    private String readString() throws ParseException {
+        char quote = peek();
+        this.index++;
+        StringBuilder builder = new StringBuilder();
+        while (!isAtEnd()) {
+            char value = this.source.charAt(this.index++);
+            if (value == quote) {
+                return builder.toString();
+            }
+            if (value == '\\' && !isAtEnd()) {
+                char escaped = this.source.charAt(this.index++);
+                builder.append(switch (escaped) {
+                    case 'n' -> '\n';
+                    case 'r' -> '\r';
+                    case 't' -> '\t';
+                    case '\\' -> '\\';
+                    case '\'' -> '\'';
+                    case '"' -> '"';
+                    default -> escaped;
+                });
+            } else {
+                builder.append(value);
+            }
+        }
+        throw error("Unterminated string");
+    }
+
     private String readIdentifier() {
         int start = this.index;
         this.index++;
         while (isIdentifierPart(peek())) {
+            this.index++;
+        }
+        return this.source.substring(start, this.index);
+    }
+
+    private String readSimpleIdentifier() throws ParseException {
+        skipWhitespace();
+        if (!isSimpleIdentifierStart(peek())) {
+            throw error("Expected property name");
+        }
+        int start = this.index;
+        this.index++;
+        while (isSimpleIdentifierPart(peek())) {
             this.index++;
         }
         return this.source.substring(start, this.index);
@@ -343,6 +448,14 @@ public final class MolangParser {
 
     private static boolean isIdentifierPart(char value) {
         return isIdentifierStart(value) || isDigit(value);
+    }
+
+    private static boolean isSimpleIdentifierStart(char value) {
+        return value == '_' || (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z');
+    }
+
+    private static boolean isSimpleIdentifierPart(char value) {
+        return isSimpleIdentifierStart(value) || isDigit(value);
     }
 
     private ParseException error(String message) {

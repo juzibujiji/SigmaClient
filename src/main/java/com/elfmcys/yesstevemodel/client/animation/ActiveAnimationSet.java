@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.animation;
 
 import com.elfmcys.yesstevemodel.client.animation.controller.ControllerLayer;
+import com.elfmcys.yesstevemodel.client.animation.controller.OpenYsmControllerRuntime;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,6 +16,7 @@ public final class ActiveAnimationSet {
     public Optional<OpenYsmAnimationSet.Clip> extraActionClip = Optional.empty();
     public final List<OpenYsmAnimationSet.Clip> controllerClips = new ArrayList<>();
     public final List<ActiveClip> controllerLayerClips = new ArrayList<>();
+    public final List<OpenYsmControllerRuntime.ControllerEvent> controllerEvents = new ArrayList<>();
     public Optional<OpenYsmAnimationSet.Clip> previewClip = Optional.empty();
     public ActionSource actionSource = ActionSource.UNKNOWN;
 

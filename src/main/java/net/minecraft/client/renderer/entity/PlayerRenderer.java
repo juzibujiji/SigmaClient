@@ -77,49 +77,52 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
 
     public void render(AbstractClientPlayerEntity entityIn, float entityYaw, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int packedLightIn)
     {
-        OpenYsmRendererMode rendererMode = OpenYsmRendererSelector.getMode();
-        if (rendererMode.usesGl4Renderer())
+        if (this.isOpenYsmRenderingEnabled())
         {
-            OpenYsmGl4PlayerModel ysmModel = this.getOpenYsmGl4Model(entityIn);
-            if (ysmModel != null)
+            OpenYsmRendererMode rendererMode = OpenYsmRendererSelector.getMode();
+            if (rendererMode.usesGl4Renderer())
             {
-                PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
-                ResourceLocation previousTexture = this.getLocationTextureCustom();
-                this.entityModel = ysmModel;
-                this.setLocationTextureCustom(ysmModel.getTexture());
-                try
+                OpenYsmGl4PlayerModel ysmModel = this.getOpenYsmGl4Model(entityIn);
+                if (ysmModel != null)
                 {
-                    this.setModelVisibilities(entityIn);
-                    super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+                    PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
+                    ResourceLocation previousTexture = this.getLocationTextureCustom();
+                    this.entityModel = ysmModel;
+                    this.setLocationTextureCustom(ysmModel.getTexture());
+                    try
+                    {
+                        this.setModelVisibilities(entityIn);
+                        super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+                    }
+                    finally
+                    {
+                        this.entityModel = previousModel;
+                        this.setLocationTextureCustom(previousTexture);
+                    }
+                    return;
                 }
-                finally
-                {
-                    this.entityModel = previousModel;
-                    this.setLocationTextureCustom(previousTexture);
-                }
-                return;
             }
-        }
-        else if (rendererMode.usesYsm())
-        {
-            OpenYsmPlayerModel ysmModel = this.getOpenYsmModel(entityIn);
-            if (ysmModel != null)
+            else if (rendererMode.usesYsm())
             {
-                PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
-                ResourceLocation previousTexture = this.getLocationTextureCustom();
-                this.entityModel = ysmModel;
-                this.setLocationTextureCustom(ysmModel.getTexture());
-                try
+                OpenYsmPlayerModel ysmModel = this.getOpenYsmModel(entityIn);
+                if (ysmModel != null)
                 {
-                    this.setModelVisibilities(entityIn);
-                    super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+                    PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
+                    ResourceLocation previousTexture = this.getLocationTextureCustom();
+                    this.entityModel = ysmModel;
+                    this.setLocationTextureCustom(ysmModel.getTexture());
+                    try
+                    {
+                        this.setModelVisibilities(entityIn);
+                        super.render(entityIn, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
+                    }
+                    finally
+                    {
+                        this.entityModel = previousModel;
+                        this.setLocationTextureCustom(previousTexture);
+                    }
+                    return;
                 }
-                finally
-                {
-                    this.entityModel = previousModel;
-                    this.setLocationTextureCustom(previousTexture);
-                }
-                return;
             }
         }
 
@@ -339,98 +342,101 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
     private void renderItem(MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int combinedLightIn, AbstractClientPlayerEntity playerIn, ModelRenderer rendererArmIn, ModelRenderer rendererArmwearIn)
     {
         boolean rightArm = rendererArmIn == this.entityModel.bipedRightArm;
-        OpenYsmRendererMode rendererMode = OpenYsmRendererSelector.getMode();
-        if (rendererMode.usesGl4Renderer())
+        if (this.isOpenYsmRenderingEnabled())
         {
-            OpenYsmGl4PlayerModel ysmPlayerModel = this.getOpenYsmGl4Model(playerIn);
-            if (ysmPlayerModel != null)
+            OpenYsmRendererMode rendererMode = OpenYsmRendererSelector.getMode();
+            if (rendererMode.usesGl4Renderer())
             {
-                PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
-                ResourceLocation previousTexture = this.getLocationTextureCustom();
-                this.entityModel = ysmPlayerModel;
-                this.setLocationTextureCustom(ysmPlayerModel.getTexture());
-                try
+                OpenYsmGl4PlayerModel ysmPlayerModel = this.getOpenYsmGl4Model(playerIn);
+                if (ysmPlayerModel != null)
                 {
-                    this.setModelVisibilities(playerIn);
-                    ysmPlayerModel.swingProgress = 0.0F;
-                    ysmPlayerModel.isSneak = false;
-                    ysmPlayerModel.swimAnimation = 0.0F;
-                    float ageInTicks = firstPersonAgeInTicks(playerIn);
-                    ysmPlayerModel.setRotationAngles(playerIn, 0.0F, 0.0F, ageInTicks, 0.0F, 0.0F);
+                    PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
+                    ResourceLocation previousTexture = this.getLocationTextureCustom();
+                    this.entityModel = ysmPlayerModel;
+                    this.setLocationTextureCustom(ysmPlayerModel.getTexture());
+                    try
+                    {
+                        this.setModelVisibilities(playerIn);
+                        ysmPlayerModel.swingProgress = 0.0F;
+                        ysmPlayerModel.isSneak = false;
+                        ysmPlayerModel.swimAnimation = 0.0F;
+                        float ageInTicks = firstPersonAgeInTicks(playerIn);
+                        ysmPlayerModel.setRotationAngles(playerIn, 0.0F, 0.0F, ageInTicks, 0.0F, 0.0F);
 
-                    IVertexBuilder customBuffer = bufferIn.getBuffer(ysmPlayerModel.getRenderType(ysmPlayerModel.getTexture()));
-                    if (ysmPlayerModel.renderFirstPersonArm(playerIn, rightArm, ageInTicks,
-                            matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY,
-                            1.0F, 1.0F, 1.0F, 1.0F))
-                    {
-                        return;
+                        IVertexBuilder customBuffer = bufferIn.getBuffer(ysmPlayerModel.getRenderType(ysmPlayerModel.getTexture()));
+                        if (ysmPlayerModel.renderFirstPersonArm(playerIn, rightArm, ageInTicks,
+                                matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY,
+                                1.0F, 1.0F, 1.0F, 1.0F))
+                        {
+                            return;
+                        }
+                        if (ysmPlayerModel.renderBone(rightArm ? "RightArm" : "LeftArm", rightArm ? "MRightArm" : "MLeftArm",
+                                matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY,
+                                1.0F, 1.0F, 1.0F, 1.0F))
+                        {
+                            return;
+                        }
                     }
-                    if (ysmPlayerModel.renderBone(rightArm ? "RightArm" : "LeftArm", rightArm ? "MRightArm" : "MLeftArm",
-                            matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY,
-                            1.0F, 1.0F, 1.0F, 1.0F))
+                    finally
                     {
-                        return;
+                        this.entityModel = previousModel;
+                        this.setLocationTextureCustom(previousTexture);
                     }
-                }
-                finally
-                {
-                    this.entityModel = previousModel;
-                    this.setLocationTextureCustom(previousTexture);
                 }
             }
-        }
-        else if (rendererMode.usesYsm())
-        {
-            OpenYsmPlayerModel ysmPlayerModel = this.getOpenYsmModel(playerIn);
-            if (ysmPlayerModel != null)
+            else if (rendererMode.usesYsm())
             {
-                PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
-                ResourceLocation previousTexture = this.getLocationTextureCustom();
-                this.entityModel = ysmPlayerModel;
-                this.setLocationTextureCustom(ysmPlayerModel.getTexture());
-                try
+                OpenYsmPlayerModel ysmPlayerModel = this.getOpenYsmModel(playerIn);
+                if (ysmPlayerModel != null)
                 {
-                    this.setModelVisibilities(playerIn);
-                    ysmPlayerModel.swingProgress = 0.0F;
-                    ysmPlayerModel.isSneak = false;
-                    ysmPlayerModel.swimAnimation = 0.0F;
-                    float ageInTicks = firstPersonAgeInTicks(playerIn);
-                    ysmPlayerModel.setRotationAngles(playerIn, 0.0F, 0.0F, ageInTicks, 0.0F, 0.0F);
-
-                    IVertexBuilder customBuffer = bufferIn.getBuffer(ysmPlayerModel.getRenderType(ysmPlayerModel.getTexture()));
-                    if (ysmPlayerModel.renderFirstPersonArm(playerIn, rightArm, ageInTicks,
-                            matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY,
-                            1.0F, 1.0F, 1.0F, 1.0F))
+                    PlayerModel<AbstractClientPlayerEntity> previousModel = this.entityModel;
+                    ResourceLocation previousTexture = this.getLocationTextureCustom();
+                    this.entityModel = ysmPlayerModel;
+                    this.setLocationTextureCustom(ysmPlayerModel.getTexture());
+                    try
                     {
-                        return;
-                    }
-                    OpenYsmBone bone = this.getArmBone(ysmPlayerModel.getBakedModel(), rightArm);
-                    if (bone != null)
-                    {
-                        float prevX = bone.getRenderer().rotateAngleX;
-                        float prevY = bone.getRenderer().rotateAngleY;
-                        float prevZ = bone.getRenderer().rotateAngleZ;
-                        bone.getRenderer().rotateAngleX = 0.0F;
-                        bone.getRenderer().rotateAngleY = 0.0F;
-                        bone.getRenderer().rotateAngleZ = 0.0F;
+                        this.setModelVisibilities(playerIn);
+                        ysmPlayerModel.swingProgress = 0.0F;
+                        ysmPlayerModel.isSneak = false;
+                        ysmPlayerModel.swimAnimation = 0.0F;
+                        float ageInTicks = firstPersonAgeInTicks(playerIn);
+                        ysmPlayerModel.setRotationAngles(playerIn, 0.0F, 0.0F, ageInTicks, 0.0F, 0.0F);
 
-                        try
+                        IVertexBuilder customBuffer = bufferIn.getBuffer(ysmPlayerModel.getRenderType(ysmPlayerModel.getTexture()));
+                        if (ysmPlayerModel.renderFirstPersonArm(playerIn, rightArm, ageInTicks,
+                                matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY,
+                                1.0F, 1.0F, 1.0F, 1.0F))
                         {
-                            bone.getRenderer().render(matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+                            return;
                         }
-                        finally
+                        OpenYsmBone bone = this.getArmBone(ysmPlayerModel.getBakedModel(), rightArm);
+                        if (bone != null)
                         {
-                            bone.getRenderer().rotateAngleX = prevX;
-                            bone.getRenderer().rotateAngleY = prevY;
-                            bone.getRenderer().rotateAngleZ = prevZ;
+                            float prevX = bone.getRenderer().rotateAngleX;
+                            float prevY = bone.getRenderer().rotateAngleY;
+                            float prevZ = bone.getRenderer().rotateAngleZ;
+                            bone.getRenderer().rotateAngleX = 0.0F;
+                            bone.getRenderer().rotateAngleY = 0.0F;
+                            bone.getRenderer().rotateAngleZ = 0.0F;
+
+                            try
+                            {
+                                bone.getRenderer().render(matrixStackIn, customBuffer, combinedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+                            }
+                            finally
+                            {
+                                bone.getRenderer().rotateAngleX = prevX;
+                                bone.getRenderer().rotateAngleY = prevY;
+                                bone.getRenderer().rotateAngleZ = prevZ;
+                            }
+                            return;
                         }
-                        return;
                     }
-                }
-                finally
-                {
-                    this.entityModel = previousModel;
-                    this.setLocationTextureCustom(previousTexture);
+                    finally
+                    {
+                        this.entityModel = previousModel;
+                        this.setLocationTextureCustom(previousTexture);
+                    }
                 }
             }
         }
@@ -541,5 +547,10 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
     private boolean usesOpenYsmModel()
     {
         return this.entityModel instanceof OpenYsmPlayerModel || this.entityModel instanceof OpenYsmGl4PlayerModel;
+    }
+
+    private boolean isOpenYsmRenderingEnabled()
+    {
+        return YesSteveModel.isEnabled() && YesSteveModel.getClientConfig().isRenderPlayers();
     }
 }

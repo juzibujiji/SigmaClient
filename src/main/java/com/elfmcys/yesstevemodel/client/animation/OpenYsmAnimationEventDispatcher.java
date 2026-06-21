@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client.animation;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.OpenYsmPlayerAnimationState;
 import com.elfmcys.yesstevemodel.client.OpenYsmBakedPlayerModel;
+import com.elfmcys.yesstevemodel.client.animation.controller.OpenYsmControllerRuntime;
 import com.elfmcys.yesstevemodel.client.animation.molang.MolangBindings;
 import com.elfmcys.yesstevemodel.client.animation.molang.MolangContext;
 import com.elfmcys.yesstevemodel.client.animation.molang.MolangEvaluator;
@@ -51,6 +52,9 @@ public final class OpenYsmAnimationEventDispatcher {
         }
         dispatchResourceEvents(model, entity, snapshot, "player_init", true);
         dispatchResourceEvents(model, entity, snapshot, "player_update", false);
+        for (OpenYsmControllerRuntime.ControllerEvent event : active.controllerEvents) {
+            dispatchControllerEvent(model, entity, event);
+        }
         for (ActiveAnimationSet.ActiveClip activeClip : active.activeClipsInOrder()) {
             OpenYsmAnimationSet.Clip clip = activeClip.getClip();
             if (clip.soundEffects.isEmpty() && clip.timelineEvents.isEmpty()) {
@@ -72,6 +76,18 @@ public final class OpenYsmAnimationEventDispatcher {
                 }
             }
         }
+    }
+
+    private static void dispatchControllerEvent(OpenYsmBakedPlayerModel model, Entity entity,
+                                                OpenYsmControllerRuntime.ControllerEvent event) {
+        if (event == null || event.getValue().isEmpty()) {
+            return;
+        }
+        if (event.getKind() == OpenYsmControllerRuntime.ControllerEvent.Kind.SOUND) {
+            dispatchSound(model, entity, event.getValue());
+            return;
+        }
+        dispatchTimelineEvent(model, entity, event.getValue());
     }
 
     public static void clearModel(String modelId) {

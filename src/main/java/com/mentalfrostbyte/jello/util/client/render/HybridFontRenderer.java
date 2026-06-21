@@ -5,7 +5,7 @@ import org.newdawn.slick.TrueTypeFont;
 
 /**
  * Hybrid font renderer that uses Jello fonts for ASCII characters (English and numbers)
- * and Microsoft YaHei for non-ASCII characters (Chinese, etc.)
+ * and HarmonyOS Sans SC Medium for non-ASCII characters (Chinese, etc.)
  *
  * This ensures consistent visual style while supporting full Unicode display.
  */
@@ -21,7 +21,7 @@ public class HybridFontRenderer {
 
     /**
      * Check if a character is a CJK character or non-ASCII
-     * These will be rendered with Microsoft YaHei.
+     * These will be rendered with HarmonyOS Sans SC Medium.
      */
     private static boolean isNonAsciiChar(char c) {
         return c > 0x007E; // Beyond ASCII range
@@ -29,10 +29,10 @@ public class HybridFontRenderer {
 
     /**
      * Draw a string using hybrid font rendering.
-     * English and numbers use Jello font, Chinese and other non-ASCII use Microsoft YaHei.
+     * English and numbers use Jello font, Chinese and other non-ASCII use HarmonyOS Sans SC Medium.
      *
      * @param jelloFont The Jello font to use for ASCII characters
-     * @param fallbackFont The fallback font (Microsoft YaHei) for non-ASCII characters
+     * @param fallbackFont The fallback font (HarmonyOS Sans SC Medium) for non-ASCII characters
      * @param x X position
      * @param y Y position
      * @param text Text to draw

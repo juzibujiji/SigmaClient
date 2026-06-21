@@ -3,6 +3,7 @@ package com.mentalfrostbyte.jello.gui.impl.jello.ingame.clickgui.musicplayer.ele
 import com.mentalfrostbyte.jello.gui.base.elements.impl.button.Button;
 import com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen;
 import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
+import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
@@ -11,6 +12,7 @@ import org.newdawn.slick.TrueTypeFont;
 /**
  * Local MusicPlayer button variant that keeps the original Button rendering path
  * while forcing opaque background colors so tabs do not wash out to white.
+ * Uses Skija for font rendering.
  */
 public class MusicTabButton extends Button {
 
@@ -58,15 +60,25 @@ public class MusicTabButton extends Button {
                 ? 0
                 : (this.textColor.method19413() != FontSizeAdjust.HEIGHT_NEGATE ? this.getHeightA() / 2 : this.getHeightA()));
         if (this.getText() != null) {
-            if (MusicPlayerTextHelper.containsNonAscii(this.getText())) {
-                MusicPlayerTextHelper.drawTabText(
-                        (float) (this.method13035() + var10),
-                        (float) var11,
-                        this.getText(),
-                        RenderUtil2.applyAlpha(this.textColor.getTextColor(), partialTicks),
-                        this.textColor.method19411(),
-                        this.textColor.method19413()
-                );
+            if (SkijaFontRenderer.isInitialized()) {
+                int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+                int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+
+                float textX = (float) (this.method13035() + var10);
+                float textY = (float) var11;
+                int textColor = RenderUtil2.applyAlpha(this.textColor.getTextColor(), partialTicks);
+
+                // Apply alignment adjustments
+                float textWidth = SkijaFontRenderer.getTextWidth(this.getText(), 14f);
+                if (this.textColor.method19411() == FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2) {
+                    textX -= textWidth / 2.0f;
+                } else if (this.textColor.method19411() == FontSizeAdjust.WIDTH_NEGATE) {
+                    textX -= textWidth;
+                }
+
+                SkijaFontRenderer.beginFrame(sw, sh);
+                SkijaFontRenderer.drawText(this.getText(), textX, textY, 14f, textColor);
+                SkijaFontRenderer.endFrame();
             } else {
                 RenderUtil.drawString(
                         this.getFont(),

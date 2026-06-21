@@ -26,72 +26,75 @@ public final class OpenYsmExtraEntityAnimationResolver {
         }
 
         float seconds = Math.max(0.0F, entity.ticksExisted + partialTicks) / 20.0F;
+        PlayerStateSnapshot snapshot = PlayerStateSnapshot.captureEntity(entity, 0.0F, entity.ticksExisted + partialTicks);
         OpenYsmControllerRuntime.Result controllerResult = OpenYsmControllerRuntime.tick(
                 model.getAnimations().getModelId(),
                 model.getAnimations().getControllerDefinitions(),
                 model.getAnimations().getClips(),
-                PlayerStateSnapshot.captureEntity(entity, 0.0F, entity.ticksExisted + partialTicks),
+                snapshot,
                 OpenYsmPlayerModelState.getExtraEntityVariables(entity));
         for (OpenYsmControllerRuntime.ActiveControllerAnimation controllerAnimation
                 : controllerResult.getActiveAnimations()) {
+            float clipWeight = model.getAnimations().evaluateClipBlendWeight(controllerAnimation.getClip(), snapshot);
             active.addControllerClip(controllerAnimation.getClip(), controllerAnimation.getLayer(),
-                    controllerAnimation.getTimeSeconds(), controllerAnimation.getWeight(),
+                    controllerAnimation.getTimeSeconds(), controllerAnimation.getWeight() * clipWeight,
                     controllerAnimation.getControllerName(), controllerAnimation.getStateName());
         }
+        active.controllerEvents.addAll(controllerResult.getControllerEvents());
         if (!controllerResult.getActiveAnimations().isEmpty()) {
             return active;
         }
 
         Set<String> added = new LinkedHashSet<>();
         if (model.getKind() == OpenYsmExtraEntityModel.Kind.PROJECTILE) {
-            resolveProjectile(model.getAnimations(), entity, active, added, seconds);
+            resolveProjectile(model.getAnimations(), entity, active, added, seconds, snapshot);
         } else if (model.getKind() == OpenYsmExtraEntityModel.Kind.VEHICLE) {
-            resolveVehicle(model.getAnimations(), entity, active, added, seconds);
+            resolveVehicle(model.getAnimations(), entity, active, added, seconds, snapshot);
         }
         return active;
     }
 
     private static void resolveProjectile(OpenYsmAnimationSet animations, Entity entity, ActiveAnimationSet active,
-                                          Set<String> added, float seconds) {
+                                          Set<String> added, float seconds, PlayerStateSnapshot snapshot) {
         addStateClip(animations, active, added, "pre_main", ControllerLayer.PRE_MAIN,
-                seconds, "projectile.pre_main", "pre_main");
+                seconds, "projectile.pre_main", "pre_main", snapshot);
 
         String state = projectileMainState(entity);
         String clipName = state.equals("air") && findClip(animations, "air") == null
                 ? firstExistingClipName(animations, "fly", "air")
                 : state;
         addStateClip(animations, active, added, clipName, ControllerLayer.MAIN,
-                seconds, "projectile.main", state);
+                seconds, "projectile.main", state, snapshot);
 
         addStateClip(animations, active, added, "post_main", ControllerLayer.POST_MAIN,
-                seconds, "projectile.post_main", "post_main");
+                seconds, "projectile.post_main", "post_main", snapshot);
         addNumberedClips(animations, active, added, "parallel", ControllerLayer.PARALLEL,
-                seconds, "projectile.parallel");
+                seconds, "projectile.parallel", snapshot);
     }
 
     private static void resolveVehicle(OpenYsmAnimationSet animations, Entity entity, ActiveAnimationSet active,
-                                       Set<String> added, float seconds) {
+                                       Set<String> added, float seconds, PlayerStateSnapshot snapshot) {
         addNumberedClips(animations, active, added, "pre_parallel", ControllerLayer.PRE_MAIN,
-                seconds, "vehicle.pre_parallel");
+                seconds, "vehicle.pre_parallel", snapshot);
         addStateClip(animations, active, added, "pre_main", ControllerLayer.PRE_MAIN,
-                seconds, "vehicle.pre_main", "pre_main");
+                seconds, "vehicle.pre_main", "pre_main", snapshot);
 
         String mainState = vehicleMainState(entity);
         addStateClip(animations, active, added, mainState, ControllerLayer.MAIN,
-                seconds, "vehicle.main", mainState);
+                seconds, "vehicle.main", mainState, snapshot);
 
         String moveState = vehicleMoveState(entity);
         addStateClip(animations, active, added, moveState, ControllerLayer.MAIN,
-                seconds, "vehicle.move", moveState);
+                seconds, "vehicle.move", moveState, snapshot);
 
         String rideState = entity.getPassengers().isEmpty() ? "not_ride" : "has_ride";
         addStateClip(animations, active, added, rideState, ControllerLayer.MAIN,
-                seconds, "vehicle.ride", rideState);
+                seconds, "vehicle.ride", rideState, snapshot);
 
         addStateClip(animations, active, added, "post_main", ControllerLayer.POST_MAIN,
-                seconds, "vehicle.post_main", "post_main");
+                seconds, "vehicle.post_main", "post_main", snapshot);
         addNumberedClips(animations, active, added, "parallel", ControllerLayer.PARALLEL,
-                seconds, "vehicle.parallel");
+                seconds, "vehicle.parallel", snapshot);
     }
 
     private static String projectileMainState(Entity entity) {
@@ -132,17 +135,17 @@ public final class OpenYsmExtraEntityAnimationResolver {
 
     private static void addNumberedClips(OpenYsmAnimationSet animations, ActiveAnimationSet active, Set<String> added,
                                          String clipPrefix, ControllerLayer layer, float seconds,
-                                         String controllerPrefix) {
+                                         String controllerPrefix, PlayerStateSnapshot snapshot) {
         for (int index = 0; index <= 7; index++) {
             String clipName = clipPrefix + index;
             addStateClip(animations, active, added, clipName, layer, seconds,
-                    controllerPrefix + "_" + index, clipName);
+                    controllerPrefix + "_" + index, clipName, snapshot);
         }
     }
 
     private static void addStateClip(OpenYsmAnimationSet animations, ActiveAnimationSet active, Set<String> added,
                                      String clipName, ControllerLayer layer, float seconds,
-                                     String controllerName, String stateName) {
+                                     String controllerName, String stateName, PlayerStateSnapshot snapshot) {
         OpenYsmAnimationSet.Clip clip = findClip(animations, clipName);
         if (clip == null || (clip.touchedBones.isEmpty() && clip.boneTracks.isEmpty())) {
             return;
@@ -151,7 +154,8 @@ public final class OpenYsmExtraEntityAnimationResolver {
         if (!added.add(key)) {
             return;
         }
-        active.addControllerClip(clip, layer, seconds, 1.0F, controllerName, stateName);
+        active.addControllerClip(clip, layer, seconds, animations.evaluateClipBlendWeight(clip, snapshot),
+                controllerName, stateName);
     }
 
     private static String firstExistingClipName(OpenYsmAnimationSet animations, String first, String second) {
