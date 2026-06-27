@@ -38,9 +38,9 @@ import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiLogin;
 
 import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiSearch;
 
-import com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer;
-
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
+
+import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
 
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
 
@@ -79,6 +79,8 @@ import org.apache.http.impl.client.HttpClients;
 
 import org.newdawn.slick.opengl.Texture;
 
+import org.newdawn.slick.TrueTypeFont;
+
 import net.minecraft.client.Minecraft;
 
 import net.minecraft.util.Util;
@@ -88,12 +90,6 @@ import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 
 import org.lwjgl.opengl.GL11;
-
-import org.lwjgl.opengl.GL13;
-
-import org.lwjgl.opengl.GL20;
-
-import org.lwjgl.opengl.GL30;
 
 import team.sdhq.eventBus.annotations.EventTarget;
 
@@ -225,12 +221,6 @@ public class MusicManager extends Manager implements MinecraftUtil {
         // 尝试恢复网易云登录状态
 
         NeteaseApiLogin.loadPersistentCookie();
-
-
-
-        // Initialize NanoVG font renderer for CJK lyrics
-
-        NanoVGFontRenderer.init();
 
     }
 
@@ -364,58 +354,63 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
         if (this.playing && !this.visualizerData.isEmpty() && this.spectrum) {
 
-            // Save items not covered by the attrib stack
+            // ── TEMP DIAGNOSTIC (Stage 1): confirm the new path runs + observe leaked GL state ──
+            if (!spectrumPathLogged) {
+                spectrumPathLogged = true;
+                System.out.println("[SkijaFix] NEW spectrum render path ACTIVE (no glPushAttrib). "
+                        + "Seeing this confirms your running build includes the fix.");
+            }
+            boolean diag = (spectrumDiagFrame++ % 60) == 0;
+            if (diag) {
+                logSpectrumGlState("before");
+            }
 
-            int prevProgram   = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-
-            int prevFBO       = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-
-            int prevTex       = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-
-            int prevActiveTex = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
-
-
-
-            GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
-
-            GL11.glPushClientAttrib(GL11.GL_CLIENT_ALL_ATTRIB_BITS);
-
+            // The spectrum HUD now draws exclusively through GlStateManager-consistent
+            // paths (RenderUtil + SkijaFontRenderer via SafeTextureUploader/drawImage).
             try {
 
                 this.renderSpectrum();
 
             } finally {
 
-                GL11.glPopClientAttrib();
-
-                GL11.glPopAttrib();
-
-
-
-                // Restore items outside the attrib stack
-
-                GL20.glUseProgram(prevProgram);
-
-                GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFBO);
-
-                GL13.glActiveTexture(prevActiveTex);
-
-                GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex);
-
-
-
-                // Sync GlStateManager cache
-
+                // Leave a known-good, shadow-consistent state for the rest of the GUI,
+                // mirroring IngameGui.renderIngameGui's own post-event reset.
                 RenderSystem.defaultBlendFunc();
+
+                GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
                 RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
 
                 RenderSystem.clearCurrentColor();
 
+                if (diag) {
+                    logSpectrumGlState("after ");
+                }
+
             }
 
         }
 
+    }
+
+    // ── TEMP DIAGNOSTIC (Stage 1) — remove once the render issue is resolved ──
+    private static boolean spectrumPathLogged = false;
+    private static int spectrumDiagFrame = 0;
+
+    private void logSpectrumGlState(String when) {
+        int err = GL11.glGetError();
+        System.out.println("[SkijaFix][" + when + "]"
+                + " err=0x" + Integer.toHexString(err)
+                + " stencil=" + GL11.glIsEnabled(2960)
+                + " scissor=" + GL11.glIsEnabled(3089)
+                + " blend=" + GL11.glIsEnabled(3042)
+                + " depthTest=" + GL11.glIsEnabled(2929)
+                + " tex2d=" + GL11.glIsEnabled(3553)
+                + " lighting=" + GL11.glIsEnabled(2896)
+                + " alphaTest=" + GL11.glIsEnabled(3008)
+                + " activeTex=0x" + Integer.toHexString(GL11.glGetInteger(0x84E0))
+                + " boundTex=" + GL11.glGetInteger(0x8069)
+                + " program=" + GL11.glGetInteger(0x8B8D));
     }
 
 
@@ -521,97 +516,57 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
 
 
+                    int screenWidth = mc.getMainWindow().getWidth();
+                    int screenHeight = mc.getMainWindow().getHeight();
+
                     TrackTitleParts titleParts = parseTrackTitle(this.songTitle);
 
                     if (titleParts.artist.isEmpty()) {
 
-                        RenderUtil.drawString(
-
+                        drawSpectrumText(
+                                screenWidth, screenHeight,
+                                titleParts.title,
+                                130.0F,
+                                (float) (screenHeight - 70),
+                                18.0F,
+                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F),
+                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F),
                                 ResourceRegistry.JelloLightFont18_1,
-
-                                130.0F,
-
-                                (float) (mc.getMainWindow().getHeight() - 70),
-
-                                titleParts.title,
-
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F));
-
-                        RenderUtil.drawString(
-
-                                ResourceRegistry.JelloLightFont18,
-
-                                130.0F,
-
-                                (float) (mc.getMainWindow().getHeight() - 70),
-
-                                titleParts.title,
-
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F));
+                                ResourceRegistry.JelloLightFont18);
 
                     } else {
 
-                        RenderUtil.drawString(
-
+                        drawSpectrumText(
+                                screenWidth, screenHeight,
+                                titleParts.artist,
+                                130.0F,
+                                (float) (screenHeight - 81),
+                                20.0F,
+                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.4F),
+                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F),
                                 ResourceRegistry.JelloMediumFont20_1,
+                                ResourceRegistry.JelloMediumFont20);
 
+                        drawSpectrumText(
+                                screenWidth, screenHeight,
+                                titleParts.title,
                                 130.0F,
-
-                                (float) (mc.getMainWindow().getHeight() - 81),
-
-                                titleParts.artist,
-
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.4F));
-
-                        RenderUtil.drawString(
-
+                                (float) (screenHeight - 56),
+                                18.0F,
+                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F),
+                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F),
                                 ResourceRegistry.JelloLightFont18_1,
-
-                                130.0F,
-
-                                (float) (mc.getMainWindow().getHeight() - 56),
-
-                                titleParts.title,
-
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F));
-
-                        RenderUtil.drawString(
-
-                                ResourceRegistry.JelloLightFont18,
-
-                                130.0F,
-
-                                (float) (mc.getMainWindow().getHeight() - 56),
-
-                                titleParts.title,
-
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F));
-
-                        RenderUtil.drawString(
-
-                                ResourceRegistry.JelloMediumFont20,
-
-                                130.0F,
-
-                                (float) (mc.getMainWindow().getHeight() - 81),
-
-                                titleParts.artist,
-
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F));
+                                ResourceRegistry.JelloLightFont18);
 
                     }
 
 
 
-                    // Lyrics (NanoVG manages its own colorMask via glPushAttrib/glPopAttrib internally)
+                    // Lyrics
 
                     String lyric = this.getCurrentLyric();
 
-                    if (lyric != null && !lyric.isEmpty() && NanoVGFontRenderer.isInitialized()) {
-
-                        int screenWidth = mc.getMainWindow().getWidth();
-
-                        int screenHeight = mc.getMainWindow().getHeight();
+                    if (lyric != null && !lyric.isEmpty()) {
 
                         float fontSize = 20.0f;
 
@@ -619,21 +574,22 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                         float lyricX = 130.0F;
 
-                        float lyricWidth = NanoVGFontRenderer.getTextWidth(lyric, fontSize);
+                        boolean skijaReady = SkijaFontRenderer.ensureInitialized(screenWidth, screenHeight);
+
+                        float lyricWidth = skijaReady ? SkijaFontRenderer.getTextWidth(lyric, fontSize) : 0.0F;
 
                         float progress = this.getLyricProgress();
 
                         float progressWidth = lyricWidth * progress;
 
 
-
-                        NanoVGFontRenderer.beginFrame(screenWidth, screenHeight);
-
                         int dimColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.35F);
 
-                        NanoVGFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, dimColor);
-
-                        NanoVGFontRenderer.endFrame();
+                        if (skijaReady) {
+                            SkijaFontRenderer.beginFrame(screenWidth, screenHeight);
+                            SkijaFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, dimColor);
+                            SkijaFontRenderer.endFrame();
+                        }
 
 
 
@@ -642,14 +598,13 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 (int) (lyricY + fontSize), true);
 
 
-
-                        NanoVGFontRenderer.beginFrame(screenWidth, screenHeight);
-
                         int brightColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.95F);
 
-                        NanoVGFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, brightColor);
-
-                        NanoVGFontRenderer.endFrame();
+                        if (skijaReady) {
+                            SkijaFontRenderer.beginFrame(screenWidth, screenHeight);
+                            SkijaFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, brightColor);
+                            SkijaFontRenderer.endFrame();
+                        }
 
 
 
@@ -669,6 +624,27 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
         }
 
+    }
+
+
+
+    private void drawSpectrumText(int screenWidth, int screenHeight, String text, float x, float y, float fontSize,
+                                  int shadowColor, int mainColor, TrueTypeFont shadowFallback,
+                                  TrueTypeFont mainFallback) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+
+        if (SkijaFontRenderer.ensureInitialized(screenWidth, screenHeight)) {
+            SkijaFontRenderer.beginFrame(screenWidth, screenHeight);
+            SkijaFontRenderer.drawText(text, x, y, fontSize, shadowColor);
+            SkijaFontRenderer.drawText(text, x, y, fontSize, mainColor);
+            SkijaFontRenderer.endFrame();
+            return;
+        }
+
+        RenderUtil.drawString(shadowFallback, x, y, text, shadowColor);
+        RenderUtil.drawString(mainFallback, x, y, text, mainColor);
     }
 
 

@@ -99,12 +99,38 @@ public class UnitySpriteParser {
         }
     }
 
+    /** Parse a Unity sprite atlas from an InputStream (e.g. a bundled classpath resource). */
+    public static SpriteAtlas loadAtlasData(InputStream jsonStream) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(jsonStream, java.nio.charset.StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
+            return parseAtlas(sb.toString());
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     /**
      * Load an atlas image from a file path.
      */
     public static BufferedImage loadAtlasImage(String imagePath) {
         try {
             return ImageIO.read(new File(imagePath));
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /** Load an atlas image from an InputStream (e.g. a bundled classpath resource). */
+    public static BufferedImage loadAtlasImage(InputStream imageStream) {
+        try {
+            return ImageIO.read(imageStream);
         } catch (IOException e) {
             e.printStackTrace();
             return null;
@@ -156,9 +182,17 @@ public class UnitySpriteParser {
      */
     public static Map<String, Texture> loadSpritesAsTextures(String jsonPath, String imagePath,
             List<String> spriteNames) {
-        SpriteAtlas atlas = loadAtlasData(jsonPath);
-        BufferedImage atlasImage = loadAtlasImage(imagePath);
+        return buildSprites(loadAtlasData(jsonPath), loadAtlasImage(imagePath), spriteNames);
+    }
 
+    /** Same as above, but reads the atlas JSON + image from InputStreams (e.g. classpath resources). */
+    public static Map<String, Texture> loadSpritesAsTextures(InputStream jsonStream, InputStream imageStream,
+            List<String> spriteNames) {
+        return buildSprites(loadAtlasData(jsonStream), loadAtlasImage(imageStream), spriteNames);
+    }
+
+    private static Map<String, Texture> buildSprites(SpriteAtlas atlas, BufferedImage atlasImage,
+            List<String> spriteNames) {
         if (atlas == null || atlasImage == null) {
             return new HashMap<>();
         }

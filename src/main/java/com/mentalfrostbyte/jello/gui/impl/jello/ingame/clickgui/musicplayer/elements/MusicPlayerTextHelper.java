@@ -2,10 +2,9 @@ package com.mentalfrostbyte.jello.gui.impl.jello.ingame.clickgui.musicplayer.ele
 
 import com.mentalfrostbyte.jello.managers.GuiManager;
 import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
-import com.mojang.blaze3d.systems.RenderSystem;
-import org.lwjgl.opengl.GL11;
+import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
+import com.mentalfrostbyte.jello.util.game.render.SafeTextureUploader;
 import org.newdawn.slick.opengl.Texture;
-import org.newdawn.slick.util.BufferedImageUtil;
 
 import java.awt.Color;
 import java.awt.Font;
@@ -14,7 +13,6 @@ import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -155,44 +153,11 @@ public final class MusicPlayerTextHelper {
         float drawX = (float) Math.round(x + offsetX);
         float drawY = (float) Math.round(y + offsetY);
 
-        // ── extract colour components ──
-        float a = (float) (color >> 24 & 0xFF) / 255.0F;
-        float r = (float) (color >> 16 & 0xFF) / 255.0F;
-        float g = (float) (color >> 8 & 0xFF) / 255.0F;
-        float b = (float) (color & 0xFF) / 255.0F;
-
-        // ── draw textured quad (save & restore full GL state to avoid polluting Slick2D) ──
-        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_TEXTURE_BIT | GL11.GL_CURRENT_BIT);
-        try {
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
-            cached.texture.bind();
-
-            // The texture was rendered with white text; tint it via glColor.
-            GL11.glColor4f(r, g, b, a);
-
-            float u = cached.texture.getWidth();   // widthRatio  = imgW / texW
-            float v = cached.texture.getHeight();  // heightRatio = imgH / texH
-
-            GL11.glBegin(GL11.GL_QUADS);
-            GL11.glTexCoord2f(0, 0);
-            GL11.glVertex2f(drawX, drawY);
-            GL11.glTexCoord2f(0, v);
-            GL11.glVertex2f(drawX, drawY + displayHeight);
-            GL11.glTexCoord2f(u, v);
-            GL11.glVertex2f(drawX + displayWidth, drawY + displayHeight);
-            GL11.glTexCoord2f(u, 0);
-            GL11.glVertex2f(drawX + displayWidth, drawY);
-            GL11.glEnd();
-        } finally {
-            GL11.glPopAttrib();
-            // glPopAttrib restores the real GL color, but GlStateManager still
-            // caches our old (r,g,b,a) values.  Invalidate the cache so the next
-            // RenderSystem.color4f / GlStateManager.color4f call actually issues
-            // a GL11.glColor4f instead of being silently skipped.
-            RenderSystem.clearCurrentColor();
-        }
+        // Draw via the client's proven, GlStateManager-consistent texture path. The
+        // texture is white text on transparent; drawImage's default GL_MODULATE tints it
+        // by `color`. No glPushAttrib (which would desync GlStateManager's shadow cache
+        // and corrupt world rendering on later frames).
+        RenderUtil.drawImage(drawX, drawY, displayWidth, displayHeight, cached.texture, color);
     }
 
     private static String buildCacheKey(String text, int fontSize, boolean useHiRes) {
@@ -211,7 +176,7 @@ public final class MusicPlayerTextHelper {
 
     /**
      * Renders the given text into a {@link BufferedImage} using Java2D and uploads
-     * it as a GL texture via Slick's {@link BufferedImageUtil}.
+     * it as a GL texture via {@link SafeTextureUploader}.
      */
     private static CachedText renderToTexture(Font font, String text) {
         // ── measure ──
@@ -240,16 +205,14 @@ public final class MusicPlayerTextHelper {
         g2d.drawString(text, 0, fm.getAscent());
         g2d.dispose();
 
-        // ── upload as GL texture ──
-        try {
-            Texture texture = BufferedImageUtil.getTexture(
-                    "musictext_" + text.hashCode() + "_" + font.getSize(), image);
-            return new CachedText(texture, imgW, imgH);
-        } catch (IOException e) {
+        // ── upload as GL texture via the crash-safe uploader (same path as album art) ──
+        Texture texture = SafeTextureUploader.upload(
+                "musictext_" + text.hashCode() + "_" + font.getSize(), image);
+        if (texture == null) {
             System.err.println("[MusicPlayerTextHelper] Failed to create texture for text: " + text);
-            e.printStackTrace();
             return null;
         }
+        return new CachedText(texture, imgW, imgH);
     }
 
     /**
@@ -287,7 +250,7 @@ public final class MusicPlayerTextHelper {
 
         void dispose() {
             try {
-                GL11.glDeleteTextures(texture.getTextureID());
+                texture.release();
             } catch (Exception ignored) {
                 // best-effort cleanup
             }

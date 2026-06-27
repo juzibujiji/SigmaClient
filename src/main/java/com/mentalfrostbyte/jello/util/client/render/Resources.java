@@ -116,11 +116,13 @@ public class Resources {
         private static java.util.Map<String, Texture> mgwtDialogSprites = null;
         private static java.util.Map<String, Texture> mgwtCommonSprites = null;
 
-        private static final String MGWT_ASSETS = "E:\\.sigma\\Manosaba-Title-Screen-main\\src\\main\\resources\\assets\\";
+        // Bundled under src/main/resources/assets/minecraft/... so the title screen works on any
+        // install (no hardcoded local path). readInputStream() prepends "assets/minecraft/".
+        private static final String MGWT_ASSETS = "com/mentalfrostbyte/gui/resources/mgwt/";
 
         public static Texture getMgwtBackgroundPNG() {
                 if (mgwtBackgroundPNG == null) {
-                        mgwtBackgroundPNG = loadExternalTexture(MGWT_ASSETS + "background_ema.png");
+                        mgwtBackgroundPNG = loadTexture(MGWT_ASSETS + "background_ema.png");
                 }
                 return mgwtBackgroundPNG;
         }
@@ -128,8 +130,8 @@ public class Resources {
         public static java.util.Map<String, Texture> getMgwtTitleSprites() {
                 if (mgwtTitleSprites == null) {
                         mgwtTitleSprites = UnitySpriteParser.loadSpritesAsTextures(
-                                        MGWT_ASSETS + "UI_Title.json",
-                                        MGWT_ASSETS + "UI_Title.png",
+                                        readInputStream(MGWT_ASSETS + "UI_Title.json"),
+                                        readInputStream(MGWT_ASSETS + "UI_Title.png"),
                                         java.util.Arrays.asList(
                                                         "Button_NewGame_Normal", "Button_NewGame_Highlighted",
                                                         "Button_LoadGame_Normal", "Button_LoadGame_Highlighted",
@@ -145,8 +147,8 @@ public class Resources {
         public static java.util.Map<String, Texture> getMgwtDialogSprites() {
                 if (mgwtDialogSprites == null) {
                         mgwtDialogSprites = UnitySpriteParser.loadSpritesAsTextures(
-                                        MGWT_ASSETS + "UI_Dialog.json",
-                                        MGWT_ASSETS + "UI_Dialog.png",
+                                        readInputStream(MGWT_ASSETS + "UI_Dialog.json"),
+                                        readInputStream(MGWT_ASSETS + "UI_Dialog.png"),
                                         java.util.Arrays.asList("DialogBase", "TopFrame", "BottomFrame"));
                 }
                 return mgwtDialogSprites;
@@ -155,8 +157,8 @@ public class Resources {
         public static java.util.Map<String, Texture> getMgwtCommonSprites() {
                 if (mgwtCommonSprites == null) {
                         mgwtCommonSprites = UnitySpriteParser.loadSpritesAsTextures(
-                                        MGWT_ASSETS + "UI_Common.json",
-                                        MGWT_ASSETS + "UI_Common.png",
+                                        readInputStream(MGWT_ASSETS + "UI_Common.json"),
+                                        readInputStream(MGWT_ASSETS + "UI_Common.png"),
                                         java.util.Arrays.asList("ButtonBase_Default", "ButtonBase_Highlighted"));
                 }
                 return mgwtCommonSprites;

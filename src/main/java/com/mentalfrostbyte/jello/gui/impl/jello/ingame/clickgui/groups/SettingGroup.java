@@ -5,6 +5,8 @@ import com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen;
 import com.mentalfrostbyte.jello.gui.base.elements.Element;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.clickgui.panels.SettingPanel;
 import com.mentalfrostbyte.jello.module.Module;
+import com.mentalfrostbyte.jello.module.data.ModuleWithModuleSettings;
+import com.mentalfrostbyte.jello.module.settings.Setting;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
@@ -22,6 +24,8 @@ public class SettingGroup extends Element {
    public SettingPanel field20668;
    public final Module module;
    public boolean field20671 = false;
+   // Rebuilds the settings list live when conditional (isHidden) visibility changes.
+   private String lastVisibilitySignature = "";
 
    public SettingGroup(CustomGuiScreen var1, String var2, int var3, int var4, int var5, int var6, Module var7) {
       super(var1, var2, var3, var4, var5, var6, false);
@@ -39,6 +43,7 @@ public class SettingGroup extends Element {
       );
       this.animation1 = new Animation(200, 120);
       this.animation = new Animation(240, 200);
+      this.lastVisibilitySignature = this.computeVisibilitySignature();
       this.setListening(false);
    }
 
@@ -64,6 +69,14 @@ public class SettingGroup extends Element {
 
    @Override
    public void draw(float partialTicks) {
+      // Live-refresh conditional settings (e.g. Scaffold Mode -> mode-specific options)
+      // without reopening the panel: rebuild whenever the set of isHidden() settings changes.
+      String currentVisibilitySignature = this.computeVisibilitySignature();
+      if (!currentVisibilitySignature.equals(this.lastVisibilitySignature)) {
+         this.lastVisibilitySignature = currentVisibilitySignature;
+         this.rebuildSettingPanel();
+      }
+
       partialTicks = this.animation1.calcPercent();
       float var4 = EasingFunctions.easeOutBack(partialTicks, 0.0F, 1.0F, 1.0F);
       if (this.field20671) {
@@ -104,5 +117,39 @@ public class SettingGroup extends Element {
       );
       RenderUtil.restoreScissor();
       super.draw(partialTicks);
+   }
+
+   /**
+    * Builds a compact signature of which settings are currently hidden, so the panel can
+    * detect when a mode/toggle change alters the visible option set and rebuild in place.
+    */
+   private String computeVisibilitySignature() {
+      StringBuilder signature = new StringBuilder();
+      for (Setting setting : this.module.getSettingMap().values()) {
+         signature.append(setting.isHidden() ? '1' : '0');
+      }
+      if (this.module instanceof ModuleWithModuleSettings moduleWithSettings) {
+         for (Module subModule : moduleWithSettings.moduleArray) {
+            for (Setting setting : subModule.getSettingMap().values()) {
+               signature.append(setting.isHidden() ? '1' : '0');
+            }
+         }
+      }
+      return signature.toString();
+   }
+
+   /** Recreates the inner SettingPanel (same as reopening) so isHidden() is re-evaluated. */
+   private void rebuildSettingPanel() {
+      int padding = 10;
+      int headerHeight = 59;
+      if (this.field20668 != null) {
+         this.removeChildren(this.field20668);
+      }
+      this.addToList(
+         this.field20668 = new SettingPanel(
+            this, "mods", this.x + padding, this.y + headerHeight,
+            this.width - padding * 2, this.height - headerHeight - padding, this.module
+         )
+      );
    }
 }

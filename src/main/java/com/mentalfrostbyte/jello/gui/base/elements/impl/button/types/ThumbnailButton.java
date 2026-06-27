@@ -7,9 +7,9 @@ import com.mentalfrostbyte.jello.gui.impl.jello.buttons.ScrollableContentPanel;
 import com.mentalfrostbyte.jello.gui.combined.AnimatedIconPanel;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
-import com.mentalfrostbyte.jello.util.client.render.NanoVGFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
+import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
@@ -577,52 +577,29 @@ public class ThumbnailButton extends AnimatedIconPanel {
                 // skips ~2 Pattern.compile + ~2..100 NanoVG text shapes per draw() call.
                 ensureTextLayoutCached();
 
-                if (NanoVGFontRenderer.isInitialized() && layoutLine0 != null) {
-                    int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
-                    int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+                int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+                int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+                if (SkijaFontRenderer.ensureInitialized(sw, sh) && layoutLine0 != null) {
                     float fontSize = 12.0f;
-                    int absXBase = getAbsoluteScreenX();
-                    int absYBase = getAbsoluteScreenY();
-
-                    // Scissor rect for the parent ScrollableContentPanel (NanoVG ignores GL matrices).
-                    float clipX = 0, clipY = 0, clipW = sw, clipH = sh;
-                    if (this.getParent() != null && this.getParent().getParent() != null) {
-                        CustomGuiScreen container = this.getParent().getParent();
-                        if (container instanceof ScrollableContentPanel scp) {
-                            int scpAbsX = scp.getXA();
-                            int scpAbsY = scp.getYA();
-                            CustomGuiScreen p = scp.getParent();
-                            while (p != null) {
-                                scpAbsX += p.getXA();
-                                scpAbsY += p.getYA();
-                                p = p.getParent();
-                            }
-                            clipX = scpAbsX;
-                            clipY = scpAbsY;
-                            clipW = scp.getWidthA();
-                            clipH = scp.getHeightA();
-                        }
-                    }
-
-                    NanoVGFontRenderer.beginFrame(sw, sh);
-                    NanoVGFontRenderer.setScissor(clipX, clipY, clipW, clipH);
+                    // SkijaFontRenderer now draws through RenderUtil.drawImage (respecting the GL
+                    // matrix + the parent panel's scissor), so use the same local element
+                    // coordinates as the TTF fallback below instead of absolute screen coords.
                     int color = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), partialTicks);
                     if (layoutLine1 != null) {
-                        NanoVGFontRenderer.drawText(layoutLine1,
-                                absXBase + (this.getWidthA() - layoutWidth1) / 2,
-                                (float) (absYBase + this.getWidthA() - 2),
+                        SkijaFontRenderer.drawText(layoutLine1,
+                                (float) (this.getXA() + (this.getWidthA() - layoutWidth1) / 2),
+                                (float) (this.getYA() + this.getWidthA() - 2),
                                 fontSize, color);
-                        NanoVGFontRenderer.drawText(layoutLine0,
-                                absXBase + (this.getWidthA() - layoutWidth0) / 2,
-                                (float) (absYBase + this.getWidthA() - 2 + 13),
+                        SkijaFontRenderer.drawText(layoutLine0,
+                                (float) (this.getXA() + (this.getWidthA() - layoutWidth0) / 2),
+                                (float) (this.getYA() + this.getWidthA() - 2 + 13),
                                 fontSize, color);
                     } else {
-                        NanoVGFontRenderer.drawText(layoutLine0,
-                                absXBase + (this.getWidthA() - layoutWidth0) / 2,
-                                (float) (absYBase + this.getWidthA() - 2 + 6),
+                        SkijaFontRenderer.drawText(layoutLine0,
+                                (float) (this.getXA() + (this.getWidthA() - layoutWidth0) / 2),
+                                (float) (this.getYA() + this.getWidthA() - 2 + 6),
                                 fontSize, color);
                     }
-                    NanoVGFontRenderer.endFrame();
                 } else if (layoutLine0 != null) {
                     // TTF fallback: cached lines avoid the regex/split, but TTF widths are
                     // measured fresh (Slick's TrueTypeFont width lookup is cheap relative to
@@ -681,14 +658,14 @@ public class ThumbnailButton extends AnimatedIconPanel {
      * the previous O(n) linear scan. For a 50-char title this is ~6 measurements vs ~50.
      */
     private static String truncateToFit(String text, float maxWidth, float fontSize) {
-        if (NanoVGFontRenderer.getTextWidth(text, fontSize) <= maxWidth) return text;
+        if (SkijaFontRenderer.getTextWidth(text, fontSize) <= maxWidth) return text;
         // Search the largest prefix length `lo` such that `text[0..lo] + "..."` fits.
         int lo = 0;
         int hi = text.length();
         while (lo < hi) {
             int mid = (lo + hi + 1) >>> 1;
             String candidate = text.substring(0, mid) + "...";
-            if (NanoVGFontRenderer.getTextWidth(candidate, fontSize) <= maxWidth) {
+            if (SkijaFontRenderer.getTextWidth(candidate, fontSize) <= maxWidth) {
                 lo = mid;
             } else {
                 hi = mid - 1;
@@ -736,25 +713,28 @@ public class ThumbnailButton extends AnimatedIconPanel {
             line1 = null;
         }
 
-        // Truncation requires NanoVG measurements. If NanoVG isn't ready yet (e.g. during
+        // Truncation requires Skija measurements. If Skija isn't ready yet (e.g. during
         // very early init), keep the raw lines — they'll be re-laid-out on the next draw
         // because we leave layoutCachedWidthA tracking the same value (cache stays valid).
         // The TTF fallback path doesn't truncate anyway.
-        if (NanoVGFontRenderer.isInitialized()) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (SkijaFontRenderer.ensureInitialized(
+                mc.getMainWindow().getFramebufferWidth(),
+                mc.getMainWindow().getFramebufferHeight())) {
             float fontSize = 12.0f;
             float maxWidth = currentWidthA - 10;
             if (line1 != null) {
-                float w = NanoVGFontRenderer.getTextWidth(line1, fontSize);
+                float w = SkijaFontRenderer.getTextWidth(line1, fontSize);
                 if (w > maxWidth) {
                     line1 = truncateToFit(line1, maxWidth, fontSize);
-                    w = NanoVGFontRenderer.getTextWidth(line1, fontSize);
+                    w = SkijaFontRenderer.getTextWidth(line1, fontSize);
                 }
                 layoutWidth1 = w;
             }
-            float w0 = NanoVGFontRenderer.getTextWidth(line0, fontSize);
+            float w0 = SkijaFontRenderer.getTextWidth(line0, fontSize);
             if (w0 > maxWidth) {
                 line0 = truncateToFit(line0, maxWidth, fontSize);
-                w0 = NanoVGFontRenderer.getTextWidth(line0, fontSize);
+                w0 = SkijaFontRenderer.getTextWidth(line0, fontSize);
             }
             layoutWidth0 = w0;
         }

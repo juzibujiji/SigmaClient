@@ -145,6 +145,11 @@
         </repository>
 
         <repository>
+            <id>space-maven</id>
+            <url>https://packages.jetbrains.team/maven/p/skija/maven</url>
+        </repository>
+
+        <repository>
             <id>viaversion-everything</id>
             <name>ViaVersion Repository</name>
             <url>https://repo.viaversion.com/everything</url>
@@ -174,6 +179,12 @@
             <groupId>org.jetbrains</groupId>
             <artifactId>annotations</artifactId>
             <version>26.0.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.humbleui</groupId>
+            <artifactId>skija-windows-x64</artifactId>
+            <version>0.116.2</version>
         </dependency>
 
         <dependency>
@@ -444,18 +455,6 @@
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-tinyfd</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
-        </dependency>
-
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-nanovg</artifactId>
-            <version>3.3.6</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.lwjgl</groupId>
-            <artifactId>lwjgl-nanovg</artifactId>
             <classifier>${lwjgl.natives}</classifier>
         </dependency>
 

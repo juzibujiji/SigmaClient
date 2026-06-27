@@ -60,9 +60,9 @@ public class MusicTabButton extends Button {
                 ? 0
                 : (this.textColor.method19413() != FontSizeAdjust.HEIGHT_NEGATE ? this.getHeightA() / 2 : this.getHeightA()));
         if (this.getText() != null) {
-            if (SkijaFontRenderer.isInitialized()) {
-                int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
-                int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+            int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
+            int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
+            if (SkijaFontRenderer.ensureInitialized(sw, sh)) {
 
                 float textX = (float) (this.method13035() + var10);
                 float textY = (float) var11;

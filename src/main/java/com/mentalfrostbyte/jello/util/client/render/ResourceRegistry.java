@@ -79,7 +79,7 @@ public class ResourceRegistry {
 
         private static TrueTypeFont createLyricsFont() {
                 try {
-                        InputStream fontFile = Resources.readInputStream("com/mentalfrostbyte/gui/resources/font/HarmonyOS_Sans_SC_Medium.ttf");
+                        InputStream fontFile = Resources.readInputStream("assets/minecraft/com/mentalfrostbyte/gui/resources/font/HarmonyOS_Sans_SC_Medium.ttf");
                         Font font = Font.createFont(0, fontFile);
                         font = font.deriveFont(Font.PLAIN, 18.0F);
 

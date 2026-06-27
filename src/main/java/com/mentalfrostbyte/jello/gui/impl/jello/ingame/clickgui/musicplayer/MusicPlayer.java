@@ -103,7 +103,7 @@ public class MusicPlayer extends AnimatedIconPanel {
             .method19414(FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2);
 
         // Add Open Folder Button
-        Button openFolderBtn = new Button(this, "openFolder", this.width - 110, 10, 100, 30,
+        Button openFolderBtn = new MusicTabButton(this, "openFolder", this.width - 110, 10, 100, 30,
                 new ColorHelper(ClientColors.DEEP_TEAL.getColor(), ClientColors.DEEP_TEAL.getColor(),
                         ClientColors.DEEP_TEAL.getColor(), ClientColors.LIGHT_GREYISH_BLUE.getColor()),
                 "Open Folder", ResourceRegistry.JelloLightFont14);
@@ -117,7 +117,7 @@ public class MusicPlayer extends AnimatedIconPanel {
         this.addToList(openFolderBtn);
 
         // Add Netease Cloud Music Login Button
-        this.neteaseLoginBtn = new Button(this, "neteaseLogin", this.width - 110, 42, 100, 30,
+        this.neteaseLoginBtn = new MusicTabButton(this, "neteaseLogin", this.width - 110, 42, 100, 30,
                 new ColorHelper(ClientColors.DEEP_TEAL.getColor(), ClientColors.DEEP_TEAL.getColor(),
                         ClientColors.DEEP_TEAL.getColor(), ClientColors.LIGHT_GREYISH_BLUE.getColor()),
             NeteaseApiLogin.isLoggedIn()
@@ -544,7 +544,7 @@ public class MusicPlayer extends AnimatedIconPanel {
             RenderUtil.restoreScissor();
 
             // Skija: draw text hints using absolute screen coords
-            if (SkijaFontRenderer.isInitialized()) {
+            if (this.ensureSkijaReady()) {
                 int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
                 int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
                 SkijaFontRenderer.beginFrame(sw, sh);
@@ -714,6 +714,7 @@ public class MusicPlayer extends AnimatedIconPanel {
     }
 
     private void drawSkijaString(float var1, String text, int var3, int var4, int var5) {
+        boolean skijaReady = this.ensureSkijaReady();
         Date var8 = new Date();
         float var9 = (float) ((var8.getTime() + (long) var5) % 8500L) / 8500.0F;
         if (!(var9 < 0.4F)) {
@@ -725,7 +726,8 @@ public class MusicPlayer extends AnimatedIconPanel {
 
         var9 = QuadraticEasing.easeInOutQuad(var9, 0.0F, 1.0F, 1.0F);
 
-        int var10 = Math.round(SkijaFontRenderer.getTextWidth(text, 14f));
+        int var10 = Math.round(skijaReady ? SkijaFontRenderer.getTextWidth(text, 14f)
+                : ResourceRegistry.JelloLightFont14.getWidth(text));
         int var11 = Math.min(var3, var10);
         int var12 = 14;
         int var13 = this.getXA() + (this.width - var11) / 2;
@@ -742,7 +744,7 @@ public class MusicPlayer extends AnimatedIconPanel {
         );
         float textX = (float) var13 - (float) var10 * var9 - 50.0F * var9;
 
-        if (SkijaFontRenderer.isInitialized()) {
+        if (skijaReady) {
             int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
             int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
             SkijaFontRenderer.beginFrame(sw, sh);
@@ -756,7 +758,7 @@ public class MusicPlayer extends AnimatedIconPanel {
             int color = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1);
             float loopTextX = (float) var13 - (float) var10 * var9 + (float) var10;
 
-            if (SkijaFontRenderer.isInitialized()) {
+            if (skijaReady) {
                 int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
                 int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
                 SkijaFontRenderer.beginFrame(sw, sh);
@@ -771,9 +773,10 @@ public class MusicPlayer extends AnimatedIconPanel {
 
     private void drawLyricString(float var1, String text, int var3, int var4, int var5) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        boolean skijaReady = this.ensureSkijaReady();
 
         // Use Skija for lyric rendering
-        if (SkijaFontRenderer.isInitialized()) {
+        if (skijaReady) {
             float fontSize = 14.0f;
             float textWidth = SkijaFontRenderer.getTextWidth(text, fontSize);
             int var11 = Math.min(var3, (int) textWidth);
@@ -862,7 +865,7 @@ public class MusicPlayer extends AnimatedIconPanel {
                 RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), var4 * var1 * 0.6F));
 
         // Use Skija for header title (CJK safe)
-        if (SkijaFontRenderer.isInitialized()) {
+        if (this.ensureSkijaReady()) {
             int sw = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferWidth();
             int sh = net.minecraft.client.Minecraft.getInstance().getMainWindow().getFramebufferHeight();
             float fontSize = 25.0f;
@@ -898,6 +901,13 @@ public class MusicPlayer extends AnimatedIconPanel {
                 Resources.shadowBottomPNG,
                 RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var4 * var1 * 0.5F));
         this.field20863 = this.field20852.method13513();
+    }
+
+    private boolean ensureSkijaReady() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        return SkijaFontRenderer.ensureInitialized(
+                mc.getMainWindow().getFramebufferWidth(),
+                mc.getMainWindow().getFramebufferHeight());
     }
 
     @Override

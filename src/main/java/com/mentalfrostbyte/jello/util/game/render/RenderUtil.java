@@ -10,6 +10,7 @@ import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
 import com.mentalfrostbyte.jello.util.client.render.HybridFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
+import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
 import com.mentalfrostbyte.jello.util.game.player.PlayerUtil;
@@ -653,6 +654,13 @@ public class RenderUtil implements MinecraftUtil {
     }
 
     public static void drawString(TrueTypeFont font, float x, float y, String text, int color, FontSizeAdjust widthAdjust, FontSizeAdjust heightAdjust, boolean var7) {
+        // CJK-aware routing: render non-English runs via Skija (HarmonyOS); English keeps the
+        // original TrueTypeFont. Pure-ASCII text and unmapped fonts fall through unchanged.
+        GuiFontSpec hybridSpec = guiFontSpec(font);
+        if (hybridSpec != null && text != null && containsNonAscii(text) && SkijaFontRenderer.ensureInitialized()) {
+            drawHybridString(font, hybridSpec, x, y, text, color, widthAdjust, heightAdjust, var7);
+            return;
+        }
         RenderSystem.color4f(0.0F, 0.0F, 0.0F, 1.0F);
         GL11.glColor4f(0.0F, 0.0F, 0.0F, 0.0F);
         int adjustedWidth = 0;
@@ -719,6 +727,147 @@ public class RenderUtil implements MinecraftUtil {
 
         RenderSystem.disableBlend();
         GL11.glPopMatrix();
+    }
+
+    // ── CJK-aware GUI text: English via the original TrueTypeFont, non-English via Skija ──
+
+    private static final class GuiFontSpec {
+        final SkijaFontRenderer.FontWeight weight;
+        final int size;
+
+        GuiFontSpec(SkijaFontRenderer.FontWeight weight, int size) {
+            this.weight = weight;
+            this.size = size;
+        }
+    }
+
+    private static java.util.Map<TrueTypeFont, GuiFontSpec> guiFontSpecs;
+
+    /** Maps a known client GUI font instance to (HarmonyOS weight, px size); null if unmapped. */
+    private static GuiFontSpec guiFontSpec(TrueTypeFont font) {
+        if (font == null) {
+            return null;
+        }
+        java.util.Map<TrueTypeFont, GuiFontSpec> specs = guiFontSpecs;
+        if (specs == null) {
+            SkijaFontRenderer.FontWeight l = SkijaFontRenderer.FontWeight.LIGHT;
+            SkijaFontRenderer.FontWeight m = SkijaFontRenderer.FontWeight.MEDIUM;
+            SkijaFontRenderer.FontWeight r = SkijaFontRenderer.FontWeight.REGULAR;
+            specs = new java.util.IdentityHashMap<>();
+            specs.put(ResourceRegistry.JelloLightFont12, new GuiFontSpec(l, 12));
+            specs.put(ResourceRegistry.JelloLightFont14, new GuiFontSpec(l, 14));
+            specs.put(ResourceRegistry.JelloLightFont18, new GuiFontSpec(l, 18));
+            specs.put(ResourceRegistry.JelloLightFont20, new GuiFontSpec(l, 20));
+            specs.put(ResourceRegistry.JelloLightFont24, new GuiFontSpec(l, 24));
+            specs.put(ResourceRegistry.JelloLightFont25, new GuiFontSpec(l, 25));
+            specs.put(ResourceRegistry.JelloLightFont28, new GuiFontSpec(l, 28));
+            specs.put(ResourceRegistry.JelloLightFont36, new GuiFontSpec(l, 36));
+            specs.put(ResourceRegistry.JelloLightFont40, new GuiFontSpec(l, 40));
+            specs.put(ResourceRegistry.JelloLightFont50, new GuiFontSpec(l, 50));
+            specs.put(ResourceRegistry.JelloLightFont18_1, new GuiFontSpec(l, 18));
+            specs.put(ResourceRegistry.JelloMediumFont14, new GuiFontSpec(m, 14));
+            specs.put(ResourceRegistry.JelloMediumFont20, new GuiFontSpec(m, 20));
+            specs.put(ResourceRegistry.JelloMediumFont25, new GuiFontSpec(m, 25));
+            specs.put(ResourceRegistry.JelloMediumFont28, new GuiFontSpec(m, 28));
+            specs.put(ResourceRegistry.JelloMediumFont40, new GuiFontSpec(m, 40));
+            specs.put(ResourceRegistry.JelloMediumFont50, new GuiFontSpec(m, 50));
+            specs.put(ResourceRegistry.JelloMediumFont20_1, new GuiFontSpec(m, 20));
+            specs.put(ResourceRegistry.RegularFont20, new GuiFontSpec(r, 20));
+            specs.put(ResourceRegistry.RegularFont40, new GuiFontSpec(r, 40));
+            specs.put(ResourceRegistry.LyricsFont, new GuiFontSpec(m, 18));
+            guiFontSpecs = specs;
+        }
+        return specs.get(font);
+    }
+
+    private static boolean isAsciiPrintable(char c) {
+        return c >= 0x20 && c <= 0x7E;
+    }
+
+    private static boolean containsNonAscii(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            if (!isAsciiPrintable(text.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static float hybridWidth(TrueTypeFont font, GuiFontSpec spec, String text) {
+        float total = 0.0F;
+        int i = 0;
+        int n = text.length();
+        while (i < n) {
+            boolean ascii = isAsciiPrintable(text.charAt(i));
+            int j = i;
+            while (j < n && isAsciiPrintable(text.charAt(j)) == ascii) {
+                j++;
+            }
+            String run = text.substring(i, j);
+            total += ascii ? font.getWidth(run) : SkijaFontRenderer.getTextWidth(run, spec.size, spec.weight);
+            i = j;
+        }
+        return total;
+    }
+
+    private static void drawHybridString(TrueTypeFont font, GuiFontSpec spec, float x, float y, String text,
+                                         int color, FontSizeAdjust widthAdjust, FontSizeAdjust heightAdjust, boolean shadow) {
+        float totalWidth = hybridWidth(font, spec, text);
+        int totalHeight = font.getHeight(text);
+
+        float adjustX = switch (widthAdjust) {
+            case NEGATE_AND_DIVIDE_BY_2 -> -totalWidth / 2.0F;
+            case WIDTH_NEGATE -> -totalWidth;
+            default -> 0.0F;
+        };
+        float adjustY = switch (heightAdjust) {
+            case NEGATE_AND_DIVIDE_BY_2 -> -(float) totalHeight / 2.0F;
+            case HEIGHT_NEGATE -> -(float) totalHeight;
+            default -> 0.0F;
+        };
+
+        float drawX = (float) Math.round(x + adjustX);
+        float drawY = (float) Math.round(y + adjustY);
+
+        if (shadow) {
+            drawHybridRuns(font, spec, drawX, drawY + 2.0F, text, 0x59000000);
+        }
+        drawHybridRuns(font, spec, drawX, drawY, text, color);
+
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
+    private static void drawHybridRuns(TrueTypeFont font, GuiFontSpec spec, float x, float y, String text, int color) {
+        float a = (float) (color >> 24 & 0xFF) / 255.0F;
+        float r = (float) (color >> 16 & 0xFF) / 255.0F;
+        float g = (float) (color >> 8 & 0xFF) / 255.0F;
+        float b = (float) (color & 0xFF) / 255.0F;
+        Color slickColor = new Color(r, g, b, a);
+
+        float cursorX = x;
+        int i = 0;
+        int n = text.length();
+        while (i < n) {
+            boolean ascii = isAsciiPrintable(text.charAt(i));
+            int j = i;
+            while (j < n && isAsciiPrintable(text.charAt(j)) == ascii) {
+                j++;
+            }
+            String run = text.substring(i, j);
+            if (ascii) {
+                // Skija's drawImage leaves blend disabled afterwards, so re-arm it each ASCII run.
+                RenderSystem.enableBlend();
+                GL11.glEnable(GL11.GL_BLEND);
+                GL11.glBlendFunc(770, 771);
+                font.drawString((float) Math.round(cursorX), (float) Math.round(y), run, slickColor);
+                cursorX += font.getWidth(run);
+            } else {
+                SkijaFontRenderer.drawGuiText(run, cursorX, y, spec.size, color, spec.weight);
+                cursorX += SkijaFontRenderer.getTextWidth(run, spec.size, spec.weight);
+            }
+            i = j;
+        }
     }
 
     public static void method11415(CustomGuiScreen var0) {
@@ -1569,6 +1718,13 @@ public class RenderUtil implements MinecraftUtil {
             return;
         }
 
+        // Known GUI fonts: route through the Skija-backed hybrid path (full Unicode, no
+        // 1024x512 atlas limit that left CJK and CJK brackets as white tofu blocks).
+        if (guiFontSpec(jelloFont) != null) {
+            drawString(jelloFont, x, y, text, color, widthAdjust, heightAdjust, shadow);
+            return;
+        }
+
         // Use LyricsFont as fallback for non-ASCII characters
         TrueTypeFont fallbackFont = ResourceRegistry.LyricsFont;
 
@@ -1626,6 +1782,10 @@ public class RenderUtil implements MinecraftUtil {
      * @return Width in pixels
      */
     public static int getHybridStringWidth(TrueTypeFont jelloFont, String text) {
+        GuiFontSpec spec = guiFontSpec(jelloFont);
+        if (spec != null && text != null && SkijaFontRenderer.ensureInitialized()) {
+            return Math.round(hybridWidth(jelloFont, spec, text));
+        }
         return HybridFontRenderer.getWidth(jelloFont, ResourceRegistry.LyricsFont, text);
     }
 
@@ -1637,6 +1797,9 @@ public class RenderUtil implements MinecraftUtil {
      * @return Height in pixels
      */
     public static int getHybridStringHeight(TrueTypeFont jelloFont, String text) {
+        if (guiFontSpec(jelloFont) != null) {
+            return jelloFont.getHeight(text);
+        }
         return HybridFontRenderer.getHeight(jelloFont, ResourceRegistry.LyricsFont, text);
     }
 }

@@ -154,6 +154,7 @@ public class Scaffold extends Module {
     public Rotation lastRots = new Rotation(0.0F, 0.0F);
 
     public final ModeSetting modeSetting;
+    public final BooleanSetting whileRightClick;
     public final BooleanSetting eagle;
     public final BooleanSetting sneakSetting;
     public final BooleanSetting snap;
@@ -167,12 +168,17 @@ public class Scaffold extends Module {
     private BlockPosWithFacing pos;
     private int lastSneakTicks;
     public int baseY = -1;
+    // While Right Click: whether Scaffold is currently allowed to act (right mouse held).
+    private boolean active = false;
 
     public Scaffold() {
         super(ModuleCategory.MOVEMENT, "Scaffold", "Automatically places blocks under you");
         this.registerSetting(this.modeSetting = new ModeSetting(
                 "Mode", "Bridge style.", 0,
                 "Normal", "Telly Bridge", "Keep Y"));
+        this.registerSetting(this.whileRightClick = new BooleanSetting(
+                "While Right Click",
+                "On: only place while right-click is held. Off: place automatically.", true));
         this.registerSetting(this.eagle = new BooleanSetting(
                 "Eagle", "Auto-sneak on block edges in Normal mode.", true) {
             @Override
@@ -455,6 +461,7 @@ public class Scaffold extends Module {
         // Naven seeds baseY to 10000 so the first tick reseats it from
         // floor(player.y) - 1.
         this.baseY = 10000;
+        this.active = false;
     }
 
     @Override
@@ -480,6 +487,25 @@ public class Scaffold extends Module {
         return GLFW.glfwGetKey(
                 mc.getMainWindow().getHandle(),
                 keyBinding.keyCode.getKeyCode()) == GLFW.GLFW_PRESS;
+    }
+
+    /** Physical right mouse button state (the placement trigger; a mouse button, not a key). */
+    private static boolean isRightClickHeld() {
+        return GLFW.glfwGetMouseButton(
+                mc.getMainWindow().getHandle(),
+                GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+    }
+
+    /** Restores the keys Scaffold pulses (sneak/jump) and releases the use key on deactivation. */
+    private void releaseScaffoldKeys() {
+        if (mc.player == null) {
+            return;
+        }
+        mc.gameSettings.keyBindJump.setPressed(isPhysicallyHeld(mc.gameSettings.keyBindJump));
+        mc.gameSettings.keyBindSneak.setPressed(isPhysicallyHeld(mc.gameSettings.keyBindSneak));
+        mc.gameSettings.keyBindUseItem.setPressed(false);
+        this.lastSneakTicks = 0;
+        this.baseY = -1;
     }
 
     // -----------------------------------------------------------------
@@ -510,6 +536,22 @@ public class Scaffold extends Module {
         if (!this.isEnabled() || !e.isPre() || mc.currentScreen != null || mc.player == null) {
             return;
         }
+
+        // While Right Click on: stay fully inert (no rotation, key pulses, or placement) until
+        // the right mouse button is physically held, so the module never steers your aim otherwise.
+        if (this.whileRightClick.getCurrentValue() && !isRightClickHeld()) {
+            if (this.active) {
+                this.releaseScaffoldKeys();
+                this.active = false;
+            }
+            this.pos = null;
+            // Glue the visible/packet rotation to the player's real look so nothing is steered.
+            this.rots = new Rotation(mc.player.rotationYaw, mc.player.rotationPitch);
+            this.lastRots = new Rotation(this.rots.yaw, this.rots.pitch);
+            RotationManager.setRotations(mc.player.rotationYaw, mc.player.rotationPitch);
+            return;
+        }
+        this.active = true;
 
         int slotID = -1;
         for (int i = 0; i < 9; i++) {
@@ -601,6 +643,12 @@ public class Scaffold extends Module {
 
         this.lastRots = new Rotation(this.rots.yaw, this.rots.pitch);
         this.publishVisibleRotation();
+
+        // Auto-placement: when While Right Click is off, place once per tick after
+        // pos/rotation are fresh (mirrors the right-click path without the use key).
+        if (!this.whileRightClick.getCurrentValue()) {
+            this.tryAutoPlace();
+        }
     }
 
     /**
@@ -653,6 +701,10 @@ public class Scaffold extends Module {
         if (!this.isEnabled() || !event.isPre() || mc.player == null) {
             return;
         }
+        // While Right Click on: don't inject the back-place yaw unless right-click is held.
+        if (this.whileRightClick.getCurrentValue() && !isRightClickHeld()) {
+            return;
+        }
         // Always send the back-place yaw to the server, regardless of what
         // the visible (hideSnap) rotation is.
         event.setYaw(this.rots.yaw);
@@ -676,12 +728,35 @@ public class Scaffold extends Module {
         if (!this.isEnabled()) {
             return;
         }
+        // While Right Click off => auto-placement runs in the tick handler instead;
+        // don't consume the use key here so right-click stays free for normal use.
+        if (!this.whileRightClick.getCurrentValue()) {
+            return;
+        }
         // Naven cancels EventClick unconditionally - we match for the RIGHT
         // button only (Sigma's EventClick is per-button, Naven's isn't).
         if (e.getButton() != EventClick.Button.RIGHT) {
             return;
         }
         e.cancelled = true;
+        if (mc.currentScreen != null || mc.player == null || this.pos == null) {
+            return;
+        }
+        if (this.modeIs("Telly Bridge") && this.offGroundTicks < 1) {
+            return;
+        }
+        if (!this.checkPlace(this.pos)) {
+            return;
+        }
+        this.placeBlock();
+    }
+
+    /**
+     * Auto-placement path used when {@code While Right Click} is disabled: runs the
+     * same guards as {@link #onClick} (minus the click-cancel) once per tick after
+     * pos/rotation are computed, so blocks place without the use key held.
+     */
+    private void tryAutoPlace() {
         if (mc.currentScreen != null || mc.player == null || this.pos == null) {
             return;
         }

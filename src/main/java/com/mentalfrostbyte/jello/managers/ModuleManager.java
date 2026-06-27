@@ -73,6 +73,7 @@ public class ModuleManager {
             this.register(new YsmActionsGUI());
             this.register(new com.mentalfrostbyte.jello.module.impl.render.jello.NameTags());
             this.register(new com.mentalfrostbyte.jello.module.impl.render.jello.Waypoints());
+            this.register(new com.mentalfrostbyte.jello.module.impl.render.jello.CustomFont());
         }
 
         if (clientMode == ClientMode.CLASSIC) {

@@ -1,303 +1,467 @@
 package com.mentalfrostbyte.jello.util.client.render;
 
-import io.github.humbleui.skija.*;
-import io.github.humbleui.types.Rect;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
+import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
+import com.mentalfrostbyte.jello.util.game.render.SafeTextureUploader;
+import io.github.humbleui.skija.Bitmap;
+import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.Color;
+import io.github.humbleui.skija.ColorAlphaType;
+import io.github.humbleui.skija.ColorType;
+import io.github.humbleui.skija.Data;
+import io.github.humbleui.skija.Font;
+import io.github.humbleui.skija.FontMetrics;
+import io.github.humbleui.skija.FontStyle;
+import io.github.humbleui.skija.ImageInfo;
+import io.github.humbleui.skija.Paint;
+import io.github.humbleui.skija.Typeface;
+import org.newdawn.slick.opengl.Texture;
 
-import java.io.File;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Skija-based font renderer for MusicPlayer
- * Replaces NanoVG with Skija for superior font rendering quality
+ * Skija-backed text renderer for MusicPlayer.
+ *
+ * Text is rasterized by Skija into CPU memory, uploaded as regular GL textures,
+ * and then drawn through the existing GUI renderer. This avoids Skija's OpenGL
+ * backend taking over Minecraft's framebuffer state mid-GUI render.
  */
-public class SkijaFontRenderer {
-    private static Surface surface;
-    private static Canvas canvas;
-    private static DirectContext context;
-    private static BackendRenderTarget renderTarget;
+public final class SkijaFontRenderer {
+    private static final int MAX_CACHE_SIZE = 256;
+    private static final String ENGLISH_FONT_RESOURCE =
+            "assets/minecraft/com/mentalfrostbyte/gui/resources/font/helvetica-neue-light.ttf";
+    private static final String NON_ENGLISH_FONT_RESOURCE =
+            "assets/minecraft/com/mentalfrostbyte/gui/resources/font/HarmonyOS_Sans_SC_Medium.ttf";
+    private static final String NON_ENGLISH_LIGHT_FONT_RESOURCE =
+            "assets/minecraft/com/mentalfrostbyte/gui/resources/font/HarmonyOS_Sans_SC_Light.ttf";
+    private static final String NON_ENGLISH_REGULAR_FONT_RESOURCE =
+            "assets/minecraft/com/mentalfrostbyte/gui/resources/font/HarmonyOS_Sans_SC_Regular.ttf";
+
+    /** GUI text weight; only non-English text is routed to Skija, mapped to a HarmonyOS weight. */
+    public enum FontWeight { LIGHT, MEDIUM, REGULAR }
 
     private static Typeface englishTypeface;
-    private static Typeface chineseTypeface;
-    private static Font englishFont;
-    private static Font chineseFont;
-
-    private static final Map<String, Integer> textureCache = new HashMap<>();
+    private static Typeface nonEnglishLightTypeface;
+    private static Typeface nonEnglishMediumTypeface;
+    private static Typeface nonEnglishRegularTypeface;
+    private static Typeface systemNonEnglishTypeface;
     private static boolean initialized = false;
-
     private static int currentWidth = 0;
     private static int currentHeight = 0;
+    // TEMP DIAGNOSTIC (Stage 1): logs once when the new upload+draw path first runs.
+    private static boolean uploadPathLogged = false;
 
-    /**
-     * Initialize Skija rendering context
-     */
+    private static final Map<String, CachedText> textCache =
+            new LinkedHashMap<String, CachedText>(MAX_CACHE_SIZE, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedText> eldest) {
+                    if (size() > MAX_CACHE_SIZE) {
+                        eldest.getValue().dispose();
+                        return true;
+                    }
+                    return false;
+                }
+            };
+
+    private SkijaFontRenderer() {
+    }
+
     public static void init(int width, int height) {
-        if (initialized && width == currentWidth && height == currentHeight) {
-            return;
-        }
-
-        cleanup();
-
-        try {
-            currentWidth = width;
-            currentHeight = height;
-
-            // Create DirectContext for OpenGL backend
-            context = DirectContext.makeGL();
-
-            // Create backend render target
-            int fbId = GL11.glGetInteger(GL11.GL_FRAMEBUFFER_BINDING);
-            renderTarget = BackendRenderTarget.makeGL(
-                width, height,
-                0, 8,
-                fbId,
-                FramebufferFormat.GR_GL_RGBA8
-            );
-
-            // Create surface
-            surface = Surface.makeFromBackendRenderTarget(
-                context,
-                renderTarget,
-                SurfaceOrigin.BOTTOM_LEFT,
-                SurfaceColorFormat.RGBA_8888,
-                ColorSpace.getSRGB()
-            );
-
-            if (surface == null) {
-                throw new RuntimeException("Failed to create Skija surface");
-            }
-
-            canvas = surface.getCanvas();
-
-            // Load fonts
-            loadFonts();
-
-            initialized = true;
-        } catch (Exception e) {
-            System.err.println("[SkijaFontRenderer] Initialization failed: " + e.getMessage());
-            e.printStackTrace();
-            cleanup();
-        }
+        currentWidth = width;
+        currentHeight = height;
+        loadFonts();
+        initialized = englishTypeface != null || nonEnglishLightTypeface != null
+                || nonEnglishMediumTypeface != null || systemNonEnglishTypeface != null;
     }
 
-    private static void loadFonts() {
-        try {
-            // Load English font (Helvetica Neue Light from resources)
-            englishTypeface = loadTypefaceFromResources("assets/minecraft/com/mentalfrostbyte/gui/resources/font/helvetica-neue-light.ttf");
-
-            // Load Chinese font (HarmonyOS Sans from resources)
-            chineseTypeface = loadTypefaceFromResources("assets/minecraft/com/mentalfrostbyte/gui/resources/font/HarmonyOS_Sans_SC_Medium.ttf");
-
-            // Fallbacks
-            if (englishTypeface == null) {
-                englishTypeface = Typeface.makeFromName("Arial", FontStyle.NORMAL);
-            }
-            if (chineseTypeface == null) {
-                // Try system font as fallback
-                chineseTypeface = Typeface.makeFromName("Microsoft YaHei", FontStyle.NORMAL);
-            }
-
-        } catch (Exception e) {
-            System.err.println("[SkijaFontRenderer] Font loading failed: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    private static Typeface loadTypefaceFromResources(String path) {
-        try {
-            java.io.InputStream is = SkijaFontRenderer.class.getClassLoader().getResourceAsStream(path);
-            if (is != null) {
-                byte[] fontData = is.readAllBytes();
-                is.close();
-                return Typeface.makeFromData(Data.makeFromBytes(fontData));
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-
-    /**
-     * Begin a new frame
-     */
-    public static void beginFrame(int width, int height) {
+    public static boolean ensureInitialized(int width, int height) {
         if (!initialized || width != currentWidth || height != currentHeight) {
             init(width, height);
         }
-
-        if (canvas != null) {
-            canvas.save();
-            canvas.clear(0x00000000); // Transparent
-        }
+        return initialized;
     }
 
-    /**
-     * End the current frame and flush
-     */
+    /** Lazily loads fonts (CPU-only, render-thread safe) without needing screen dimensions. */
+    public static boolean ensureInitialized() {
+        if (!initialized) {
+            init(currentWidth, currentHeight);
+        }
+        return initialized;
+    }
+
+    public static void beginFrame(int width, int height) {
+        ensureInitialized(width, height);
+    }
+
     public static void endFrame() {
-        if (canvas != null) {
-            canvas.restore();
-        }
-        if (surface != null) {
-            surface.flushAndSubmit();
-        }
-        if (context != null) {
-            context.flush();
-        }
+        // Raster-backed renderer: no Skija GL surface to flush.
     }
 
-    /**
-     * Draw text with hybrid font support (ASCII uses English font, CJK uses Chinese font)
-     */
     public static void drawText(String text, float x, float y, float fontSize, int color) {
-        if (!initialized || canvas == null || text == null || text.isEmpty()) {
+        drawTextInternal(text, x, y, fontSize, color, englishTypeface, null, false);
+    }
+
+    /** GUI text: weight-aware faces, top-aligned at {@code yTop} to match the legacy TrueTypeFont layout. */
+    public static void drawGuiText(String text, float x, float yTop, float fontSize, int color, FontWeight weight) {
+        // Skija only renders non-English (HarmonyOS); English stays on the original TrueTypeFont.
+        Typeface face = cjkFaceFor(weight);
+        drawTextInternal(text, x, yTop, fontSize, color, face, face, true);
+    }
+
+    private static void drawTextInternal(String text, float x, float y, float fontSize, int color,
+                                         Typeface asciiFace, Typeface fixedCjkFace, boolean topAligned) {
+        if (!initialized || text == null || text.isEmpty()) {
             return;
         }
 
-        // Extract color components
-        float a = ((color >> 24) & 0xFF) / 255.0f;
-        float r = ((color >> 16) & 0xFF) / 255.0f;
-        float g = ((color >> 8) & 0xFF) / 255.0f;
-        float b = (color & 0xFF) / 255.0f;
-
-        try (Paint paint = new Paint()) {
-            paint.setColor(Color.makeARGB((int)(a * 255), (int)(r * 255), (int)(g * 255), (int)(b * 255)));
-            paint.setAntiAlias(true);
-
-            float currentX = x;
-            StringBuilder asciiBuffer = new StringBuilder();
-            StringBuilder cjkBuffer = new StringBuilder();
-
-            for (int i = 0; i < text.length(); i++) {
-                char c = text.charAt(i);
-                boolean isAscii = c >= 0x20 && c <= 0x7E;
-
-                if (isAscii) {
-                    // Flush CJK buffer
-                    if (cjkBuffer.length() > 0) {
-                        currentX = drawTextSegment(cjkBuffer.toString(), currentX, y, fontSize, paint, chineseTypeface);
-                        cjkBuffer.setLength(0);
-                    }
-                    asciiBuffer.append(c);
-                } else {
-                    // Flush ASCII buffer
-                    if (asciiBuffer.length() > 0) {
-                        currentX = drawTextSegment(asciiBuffer.toString(), currentX, y, fontSize, paint, englishTypeface);
-                        asciiBuffer.setLength(0);
-                    }
-                    cjkBuffer.append(c);
-                }
-            }
-
-            // Flush remaining buffers
-            if (asciiBuffer.length() > 0) {
-                drawTextSegment(asciiBuffer.toString(), currentX, y, fontSize, paint, englishTypeface);
-            }
-            if (cjkBuffer.length() > 0) {
-                drawTextSegment(cjkBuffer.toString(), currentX, y, fontSize, paint, chineseTypeface);
-            }
-        }
-    }
-
-    private static float drawTextSegment(String text, float x, float y, float fontSize, Paint paint, Typeface typeface) {
-        if (typeface == null) return x;
-
-        try (Font font = new Font(typeface, fontSize)) {
-            canvas.drawString(text, x, y + fontSize * 0.8f, font, paint);
-            return x + font.measureTextWidth(text);
-        }
-    }
-
-    /**
-     * Get text width with hybrid font support
-     */
-    public static float getTextWidth(String text, float fontSize) {
-        if (!initialized || text == null || text.isEmpty()) {
-            return 0;
-        }
-
-        float totalWidth = 0;
+        float currentX = x;
         StringBuilder asciiBuffer = new StringBuilder();
-        StringBuilder cjkBuffer = new StringBuilder();
+        StringBuilder nonEnglishBuffer = new StringBuilder();
 
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
-            boolean isAscii = c >= 0x20 && c <= 0x7E;
-
-            if (isAscii) {
-                if (cjkBuffer.length() > 0) {
-                    totalWidth += measureTextSegment(cjkBuffer.toString(), fontSize, chineseTypeface);
-                    cjkBuffer.setLength(0);
+            if (isAscii(c)) {
+                if (nonEnglishBuffer.length() > 0) {
+                    currentX = drawTextSegment(nonEnglishBuffer.toString(), currentX, y, fontSize, color,
+                            resolveCjkFace(fixedCjkFace, nonEnglishBuffer.toString()), "cjk", topAligned);
+                    nonEnglishBuffer.setLength(0);
                 }
                 asciiBuffer.append(c);
             } else {
                 if (asciiBuffer.length() > 0) {
-                    totalWidth += measureTextSegment(asciiBuffer.toString(), fontSize, englishTypeface);
+                    currentX = drawTextSegment(asciiBuffer.toString(), currentX, y, fontSize, color, asciiFace, "ascii", topAligned);
                     asciiBuffer.setLength(0);
                 }
-                cjkBuffer.append(c);
+                nonEnglishBuffer.append(c);
             }
         }
 
         if (asciiBuffer.length() > 0) {
-            totalWidth += measureTextSegment(asciiBuffer.toString(), fontSize, englishTypeface);
+            drawTextSegment(asciiBuffer.toString(), currentX, y, fontSize, color, asciiFace, "ascii", topAligned);
         }
-        if (cjkBuffer.length() > 0) {
-            totalWidth += measureTextSegment(cjkBuffer.toString(), fontSize, chineseTypeface);
+        if (nonEnglishBuffer.length() > 0) {
+            drawTextSegment(nonEnglishBuffer.toString(), currentX, y, fontSize, color,
+                    resolveCjkFace(fixedCjkFace, nonEnglishBuffer.toString()), "cjk", topAligned);
+        }
+    }
+
+    public static float getTextWidth(String text, float fontSize) {
+        return getTextWidthInternal(text, fontSize, englishTypeface, null);
+    }
+
+    public static float getTextWidth(String text, float fontSize, FontWeight weight) {
+        Typeface face = cjkFaceFor(weight);
+        return getTextWidthInternal(text, fontSize, face, face);
+    }
+
+    private static float getTextWidthInternal(String text, float fontSize, Typeface asciiFace, Typeface fixedCjkFace) {
+        if (!initialized || text == null || text.isEmpty()) {
+            return 0.0f;
+        }
+
+        float totalWidth = 0.0f;
+        StringBuilder asciiBuffer = new StringBuilder();
+        StringBuilder nonEnglishBuffer = new StringBuilder();
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (isAscii(c)) {
+                if (nonEnglishBuffer.length() > 0) {
+                    totalWidth += measureTextSegment(nonEnglishBuffer.toString(), fontSize,
+                            resolveCjkFace(fixedCjkFace, nonEnglishBuffer.toString()));
+                    nonEnglishBuffer.setLength(0);
+                }
+                asciiBuffer.append(c);
+            } else {
+                if (asciiBuffer.length() > 0) {
+                    totalWidth += measureTextSegment(asciiBuffer.toString(), fontSize, asciiFace);
+                    asciiBuffer.setLength(0);
+                }
+                nonEnglishBuffer.append(c);
+            }
+        }
+
+        if (asciiBuffer.length() > 0) {
+            totalWidth += measureTextSegment(asciiBuffer.toString(), fontSize, asciiFace);
+        }
+        if (nonEnglishBuffer.length() > 0) {
+            totalWidth += measureTextSegment(nonEnglishBuffer.toString(), fontSize,
+                    resolveCjkFace(fixedCjkFace, nonEnglishBuffer.toString()));
         }
 
         return totalWidth;
     }
 
+    public static boolean isInitialized() {
+        return initialized;
+    }
+
+    public static void cleanup() {
+        synchronized (textCache) {
+            for (CachedText cachedText : textCache.values()) {
+                cachedText.dispose();
+            }
+            textCache.clear();
+        }
+        englishTypeface = null;
+        nonEnglishLightTypeface = null;
+        nonEnglishMediumTypeface = null;
+        nonEnglishRegularTypeface = null;
+        systemNonEnglishTypeface = null;
+        initialized = false;
+        currentWidth = 0;
+        currentHeight = 0;
+    }
+
+    /** Transparent padding above the caps baked into each glyph block (see rasterizeText). */
+    private static final float GLYPH_TOP_PADDING = 2.0f;
+
+    private static float drawTextSegment(String text, float x, float y, float fontSize, int color,
+                                         Typeface typeface, String fontKey, boolean topAligned) {
+        CachedText cachedText = getCachedText(text, fontSize, typeface, fontKey);
+        if (cachedText == null) {
+            return x;
+        }
+
+        // topAligned (GUI): put the glyph block's top at y so CJK sits on the same line as the
+        // legacy TrueTypeFont ASCII run. Otherwise (music) keep the original baseline anchor.
+        float drawY = topAligned
+                ? y - GLYPH_TOP_PADDING
+                : y + fontSize * 0.8f - cachedText.baseline;
+        // Draw through the client's proven, GlStateManager-consistent texture path.
+        // The glyph texture is white with per-pixel coverage alpha; drawImage's default
+        // GL_MODULATE tints it by `color`, so text renders in the requested colour.
+        RenderUtil.drawImage(x, drawY, cachedText.imageWidth, cachedText.imageHeight, cachedText.texture, color);
+        return x + cachedText.advanceWidth;
+    }
+
+    private static CachedText getCachedText(String text, float fontSize, Typeface typeface, String fontKey) {
+        if (typeface == null || text == null || text.isEmpty()) {
+            return null;
+        }
+
+        String cacheKey = fontKey + "_" + System.identityHashCode(typeface) + "|"
+                + Math.round(fontSize * 100.0f) + "|" + text;
+        synchronized (textCache) {
+            CachedText cached = textCache.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+
+            cached = rasterizeText(text, fontSize, typeface, cacheKey);
+            if (cached != null) {
+                textCache.put(cacheKey, cached);
+            }
+            return cached;
+        }
+    }
+
+    private static CachedText rasterizeText(String text, float fontSize, Typeface typeface, String cacheKey) {
+        try (Font font = new Font(typeface, fontSize); Paint paint = new Paint()) {
+            paint.setAntiAlias(true);
+            paint.setColor(Color.makeARGB(255, 255, 255, 255));
+
+            FontMetrics metrics = font.getMetrics();
+            float advanceWidth = Math.max(1.0f, font.measureTextWidth(text, paint));
+            int imageWidth = Math.max(1, (int) Math.ceil(advanceWidth) + 4);
+            int imageHeight = Math.max(1, (int) Math.ceil(metrics.getDescent() - metrics.getAscent()) + 4);
+            float baseline = -metrics.getAscent() + 2.0f;
+
+            // Rasterize white text on black, then repackage as a straight-alpha ARGB image:
+            // RGB = white, A = glyph coverage. Uploading white+alpha lets RenderUtil.drawImage's
+            // GL_MODULATE tint the text to any colour at draw time (one texture, any colour).
+            BufferedImage image = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB);
+            Bitmap bitmap = new Bitmap();
+            try {
+                if (!bitmap.allocPixels(new ImageInfo(imageWidth, imageHeight, ColorType.RGBA_8888, ColorAlphaType.OPAQUE))) {
+                    return null;
+                }
+
+                Canvas canvas = new Canvas(bitmap);
+                try {
+                    canvas.clear(Color.makeARGB(255, 0, 0, 0));
+                    canvas.drawString(text, 2.0f, baseline, font, paint);
+                    byte[] rgba = bitmap.readPixels(
+                            new ImageInfo(imageWidth, imageHeight, ColorType.RGBA_8888, ColorAlphaType.OPAQUE),
+                            (long) imageWidth * 4L,
+                            0,
+                            0);
+                    if (rgba == null) {
+                        return null;
+                    }
+
+                    int src = 0;
+                    for (int y = 0; y < imageHeight; y++) {
+                        for (int x = 0; x < imageWidth; x++) {
+                            int r = rgba[src++] & 0xFF;
+                            int g = rgba[src++] & 0xFF;
+                            int b = rgba[src++] & 0xFF;
+                            src++; // alpha channel is opaque; coverage comes from luminance
+                            int coverage = Math.max(r, Math.max(g, b));
+                            image.setRGB(x, y, (coverage << 24) | 0x00FFFFFF);
+                        }
+                    }
+                } finally {
+                    canvas.close();
+                }
+            } finally {
+                bitmap.close();
+            }
+
+            // Upload via the same crash-safe path used for album art (raw native pointer,
+            // generic GL_RGBA, glFinish), returning a Slick Texture with correct UV ratios.
+            Texture texture = SafeTextureUploader.upload("skija_text_" + cacheKey.hashCode(), image);
+            if (texture == null) {
+                System.out.println("[SkijaFix] SafeTextureUploader returned NULL for text: '" + text + "'");
+                return null;
+            }
+
+            if (!uploadPathLogged) {
+                uploadPathLogged = true;
+                System.out.println("[SkijaFix] SkijaFontRenderer NEW upload+draw path active "
+                        + "(SafeTextureUploader + RenderUtil.drawImage). First text: '" + text + "'");
+            }
+
+            return new CachedText(texture, advanceWidth, imageWidth, imageHeight, baseline);
+        } catch (Exception e) {
+            System.err.println("[SkijaFontRenderer] Failed to rasterize text: " + text);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     private static float measureTextSegment(String text, float fontSize, Typeface typeface) {
-        if (typeface == null) return 0;
+        if (typeface == null || text == null || text.isEmpty()) {
+            return 0.0f;
+        }
 
         try (Font font = new Font(typeface, fontSize)) {
             return font.measureTextWidth(text);
         }
     }
 
-    /**
-     * Check if Skija is initialized
-     */
-    public static boolean isInitialized() {
-        return initialized;
+    private static void loadFonts() {
+        if (englishTypeface == null) {
+            englishTypeface = loadTypefaceFromResources(ENGLISH_FONT_RESOURCE);
+            if (englishTypeface == null) {
+                englishTypeface = Typeface.makeFromName("Arial", FontStyle.NORMAL);
+            }
+        }
+
+        if (nonEnglishLightTypeface == null) {
+            nonEnglishLightTypeface = loadTypefaceFromResources(NON_ENGLISH_LIGHT_FONT_RESOURCE);
+        }
+
+        if (nonEnglishMediumTypeface == null) {
+            nonEnglishMediumTypeface = loadTypefaceFromResources(NON_ENGLISH_FONT_RESOURCE);
+        }
+
+        if (nonEnglishRegularTypeface == null) {
+            nonEnglishRegularTypeface = loadTypefaceFromResources(NON_ENGLISH_REGULAR_FONT_RESOURCE);
+            if (nonEnglishRegularTypeface == null) {
+                nonEnglishRegularTypeface = nonEnglishMediumTypeface;
+            }
+        }
+
+        if (systemNonEnglishTypeface == null) {
+            systemNonEnglishTypeface = Typeface.makeFromName("Microsoft YaHei", FontStyle.NORMAL);
+        }
     }
 
-    /**
-     * Cleanup resources
-     */
-    public static void cleanup() {
-        textureCache.clear();
+    private static Typeface loadTypefaceFromResources(String path) {
+        try (java.io.InputStream is = SkijaFontRenderer.class.getClassLoader().getResourceAsStream(path)) {
+            if (is == null) {
+                return null;
+            }
+            return Typeface.makeFromData(Data.makeFromBytes(is.readAllBytes()));
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 
-        if (englishFont != null) {
-            englishFont.close();
-            englishFont = null;
+    private static boolean isAscii(char c) {
+        return c >= 0x20 && c <= 0x7E;
+    }
+
+    private static Typeface selectNonEnglishTypeface(String text) {
+        if (canRender(nonEnglishLightTypeface, text)) {
+            return nonEnglishLightTypeface;
         }
-        if (chineseFont != null) {
-            chineseFont.close();
-            chineseFont = null;
+        if (canRender(nonEnglishMediumTypeface, text)) {
+            return nonEnglishMediumTypeface;
         }
-        if (surface != null) {
-            surface.close();
-            surface = null;
+        if (canRender(systemNonEnglishTypeface, text)) {
+            return systemNonEnglishTypeface;
         }
-        if (renderTarget != null) {
-            renderTarget.close();
-            renderTarget = null;
+        return nonEnglishLightTypeface != null ? nonEnglishLightTypeface
+                : (nonEnglishMediumTypeface != null ? nonEnglishMediumTypeface : systemNonEnglishTypeface);
+    }
+
+    /** Maps a GUI weight to the matching HarmonyOS face, falling back through the loaded weights. */
+    private static Typeface cjkFaceFor(FontWeight weight) {
+        if (weight == FontWeight.LIGHT && nonEnglishLightTypeface != null) {
+            return nonEnglishLightTypeface;
         }
-        if (context != null) {
-            context.close();
-            context = null;
+        if (weight == FontWeight.REGULAR && nonEnglishRegularTypeface != null) {
+            return nonEnglishRegularTypeface;
+        }
+        if (nonEnglishMediumTypeface != null) {
+            return nonEnglishMediumTypeface;
+        }
+        if (nonEnglishLightTypeface != null) {
+            return nonEnglishLightTypeface;
+        }
+        if (nonEnglishRegularTypeface != null) {
+            return nonEnglishRegularTypeface;
+        }
+        return systemNonEnglishTypeface;
+    }
+
+    /** A fixed CJK face (GUI weight path) or the per-segment auto-selected face (music path). */
+    private static Typeface resolveCjkFace(Typeface fixedCjkFace, String segment) {
+        return fixedCjkFace != null ? fixedCjkFace : selectNonEnglishTypeface(segment);
+    }
+
+    private static boolean canRender(Typeface typeface, String text) {
+        if (typeface == null || text == null || text.isEmpty()) {
+            return false;
         }
 
-        canvas = null;
-        initialized = false;
-        currentWidth = 0;
-        currentHeight = 0;
+        try (Font font = new Font(typeface, 12.0f)) {
+            for (int i = 0; i < text.length(); ) {
+                int codePoint = text.codePointAt(i);
+                if (!Character.isWhitespace(codePoint) && font.getUTF32Glyph(codePoint) == 0) {
+                    return false;
+                }
+                i += Character.charCount(codePoint);
+            }
+            return true;
+        }
+    }
+
+    private static final class CachedText {
+        private final Texture texture;
+        private final float advanceWidth;
+        private final int imageWidth;
+        private final int imageHeight;
+        private final float baseline;
+
+        private CachedText(Texture texture, float advanceWidth, int imageWidth, int imageHeight, float baseline) {
+            this.texture = texture;
+            this.advanceWidth = advanceWidth;
+            this.imageWidth = imageWidth;
+            this.imageHeight = imageHeight;
+            this.baseline = baseline;
+        }
+
+        private void dispose() {
+            try {
+                this.texture.release();
+            } catch (Exception ignored) {
+            }
+        }
     }
 }
