@@ -15,11 +15,14 @@ public class IRCClientConnection implements PacketHandler {
     private Socket socket;
     private DataInputStream input;
     private DataOutputStream output;
-    private boolean connected;
+    private volatile boolean connected;
     private Thread receiveThread;
+    private Thread heartbeatThread;
     private String serverAddress;
     private int serverPort;
     private String username;
+
+    private static final int HEARTBEAT_INTERVAL_MS = 10000; // 每10秒发一次心跳
 
     public IRCClientConnection(String serverAddress, int serverPort, String username) {
         this.serverAddress = serverAddress;
@@ -41,12 +44,12 @@ public class IRCClientConnection implements PacketHandler {
         Thread connectThread = new Thread(() -> {
             try {
                 IRCUtlis.printMessage("[IRC] Connecting to " + serverAddress + ":" + serverPort + "...");
-                
+
                 // 创建Socket并设置超时
                 socket = new Socket();
                 socket.connect(new java.net.InetSocketAddress(serverAddress, serverPort), 5000); // 5秒超时
                 socket.setSoTimeout(30000); // 读取超时30秒
-                
+
                 input = new DataInputStream(socket.getInputStream());
                 output = new DataOutputStream(socket.getOutputStream());
                 connected = true;
@@ -59,6 +62,7 @@ public class IRCClientConnection implements PacketHandler {
 
                 // 启动接收消息的线程
                 startReceiving();
+                startHeartbeat(); // 关键修复：启动主动心跳，避免读超时误判断线
 
             } catch (java.net.SocketTimeoutException e) {
                 IRCUtlis.printMessage("[IRC] Connection timeout - server not responding");
@@ -92,6 +96,11 @@ public class IRCClientConnection implements PacketHandler {
                         packet.handle(this);
                     }
                 }
+            } catch (java.net.SocketTimeoutException e) {
+                // 正常情况下心跳会刷新读取，真正走到这里说明确实长时间没有任何数据（包括心跳）
+                if (connected) {
+                    IRCUtlis.printMessage("[IRC] Connection timed out (no data/heartbeat received)");
+                }
             } catch (IOException e) {
                 if (connected) {
                     IRCUtlis.printMessage("[IRC] Error receiving packet: " + e.getMessage());
@@ -100,16 +109,36 @@ public class IRCClientConnection implements PacketHandler {
                 disconnect();
             }
         });
+        receiveThread.setDaemon(true);
         receiveThread.start();
     }
 
     /**
-     * 发送包
+     * 主动发送心跳，防止连接因长时间无数据而被读超时判定为断开
      */
+    private void startHeartbeat() {
+        heartbeatThread = new Thread(() -> {
+            while (connected) {
+                try {
+                    Thread.sleep(HEARTBEAT_INTERVAL_MS);
+                    if (connected) {
+                        sendPacket(new PacketKeepAlive());
+                    }
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+        });
+        heartbeatThread.setDaemon(true);
+        heartbeatThread.start();
+    }
+
     public void sendPacket(IRCPacket packet) {
         try {
             if (output != null && connected) {
-                PacketRegistry.sendPacket(packet, output);
+                synchronized (output) {
+                    PacketRegistry.sendPacket(packet, output);
+                }
             }
         } catch (IOException e) {
             IRCUtlis.printMessage("[IRC] Error sending packet: " + e.getMessage());
@@ -140,28 +169,36 @@ public class IRCClientConnection implements PacketHandler {
      */
     public void disconnect() {
         if (!connected) return;
-        
-        connected = false;
+
         try {
-            // 发送登出包
+            // 关键修复：必须在 connected 仍为 true 时发送登出包，
+            // 否则 sendPacket() 内部判断 connected 会导致包发不出去
             PacketLogout logoutPacket = new PacketLogout(username, "User disconnect");
             sendPacket(logoutPacket);
-            
+
             Thread.sleep(100); // 等待包发送
-            
-            if (input != null) input.close();
-            if (output != null) output.close();
-            if (socket != null) socket.close();
-            
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            connected = false;
+
+            if (heartbeatThread != null) {
+                heartbeatThread.interrupt();
+                heartbeatThread = null;
+            }
+
+            try {
+                if (input != null) input.close();
+                if (output != null) output.close();
+                if (socket != null) socket.close();
+            } catch (IOException e) {
+                IRCUtlis.printMessage("[IRC] Error closing socket: " + e.getMessage());
+            }
+
             IRCUtlis.printMessage("[IRC] Disconnected from server");
-        } catch (Exception e) {
-            IRCUtlis.printMessage("[IRC] Error disconnecting: " + e.getMessage());
         }
     }
 
-    /**
-     * 检查是否已连接
-     */
     public boolean isConnected() {
         return connected && socket != null && !socket.isClosed();
     }
@@ -181,7 +218,7 @@ public class IRCClientConnection implements PacketHandler {
     }
 
     // PacketHandler实现
-    
+
     @Override
     public void handleChatMessage(PacketChatMessage packet) {
         IRCChatHistory.Entry entry = IRCChatHistory.addChat(packet.getUsername(), packet.getMessage(), packet.getTimestamp());
@@ -205,9 +242,10 @@ public class IRCClientConnection implements PacketHandler {
 
     @Override
     public void handleKeepAlive(PacketKeepAlive packet) {
-        // 自动响应心跳包
-        sendPacket(new PacketKeepAlive());
+        // 收到对方心跳，不需要再额外回复，避免双方无限互相回应
+        // （我们已经有自己的定时心跳线程在主动发送）
     }
+<<<<<<< Updated upstream
 
     private static String shorten(String text, int maxLength) {
         if (text == null || text.length() <= maxLength) {
@@ -217,3 +255,6 @@ public class IRCClientConnection implements PacketHandler {
         return text.substring(0, Math.max(0, maxLength - 3)) + "...";
     }
 }
+=======
+}
+>>>>>>> Stashed changes

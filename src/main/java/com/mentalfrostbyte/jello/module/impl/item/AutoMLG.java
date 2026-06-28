@@ -1,6 +1,7 @@
 package com.mentalfrostbyte.jello.module.impl.item;
 
 import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.event.impl.game.world.EventTick;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
@@ -170,7 +171,7 @@ public class AutoMLG extends Module {
 
     private BlockPos method16425() {
         double var3 = mc.player.getMotion().x;
-        double var5 = mc.player.getMotion().y;
+        double var5 = mc.player.getMotion().y + mc.player.getMotion().y;//不知道为什么原来是mc.player.getMotion().y的但是平地落下速度过快时有时候来不及放水 变成他的两倍又好了 改下面的var5 = mc.player.getMotion().y - 1.0;也可以但是会提前转头过多
         double var7 = mc.player.getMotion().z;
         AxisAlignedBB var9 = mc.player.getBoundingBox().expand(var3, 0.0, var7).offset(0.0, var5, 0.0);
         Stream var10 = mc.world.getCollisionShapes(mc.player, var9);
@@ -197,7 +198,7 @@ public class AutoMLG extends Module {
         if (var12 != null) {
             return var12;
         } else {
-            var5 = mc.player.getMotion().y - 1.0;
+            var5 = mc.player.getMotion().y - 1.0; //这里应该是提前多少放水
             var9 = mc.player.getBoundingBox().expand(var3, 0.0, var7).offset(0.0, var5, 0.0);
             var10 = mc.world.getCollisionShapes(mc.player, var9);
             var11 = var10.iterator();

@@ -87,7 +87,7 @@ public class IRCServerConnection {
      */
     private void broadcastPacket(IRCPacket packet, ClientHandler sender) {
         for (ClientHandler client : clients) {
-            if (client != sender && client.isConnected()) {
+            if (/*client != sender && */client.isConnected()) {
                 client.sendPacket(packet);
             }
         }
@@ -97,6 +97,8 @@ public class IRCServerConnection {
      * 客户端处理器
      */
     private class ClientHandler implements Runnable, PacketHandler {
+        private Thread heartbeatThread;
+        private static final int HEARTBEAT_INTERVAL_MS = 10000;
         private Socket socket;
         private DataInputStream input;
         private DataOutputStream output;
@@ -115,6 +117,8 @@ public class IRCServerConnection {
                 input = new DataInputStream(socket.getInputStream());
                 output = new DataOutputStream(socket.getOutputStream());
 
+                startHeartbeat(); // 新增：服务端也主动发心跳
+
                 while (connected) {
                     IRCPacket packet = PacketRegistry.receivePacket(input);
                     if (packet != null) {
@@ -130,10 +134,29 @@ public class IRCServerConnection {
             }
         }
 
+        private void startHeartbeat() {
+            heartbeatThread = new Thread(() -> {
+                while (connected) {
+                    try {
+                        Thread.sleep(HEARTBEAT_INTERVAL_MS);
+                        if (connected) {
+                            sendPacket(new PacketKeepAlive());
+                        }
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                }
+            });
+            heartbeatThread.setDaemon(true);
+            heartbeatThread.start();
+        }
+
         public void sendPacket(IRCPacket packet) {
             try {
                 if (output != null && connected) {
-                    PacketRegistry.sendPacket(packet, output);
+                    synchronized (output) {
+                        PacketRegistry.sendPacket(packet, output);
+                    }
                 }
             } catch (IOException e) {
                 IRCUtlis.printMessage("[IRC] Error sending packet: " + e.getMessage());
@@ -143,18 +166,22 @@ public class IRCServerConnection {
 
         public void disconnect() {
             if (!connected) return;
-            
+
             connected = false;
+            if (heartbeatThread != null) {
+                heartbeatThread.interrupt();
+                heartbeatThread = null;
+            }
             try {
                 if (input != null) input.close();
                 if (output != null) output.close();
                 if (socket != null) socket.close();
                 clients.remove(this);
-                
+
                 // 广播用户离开
                 PacketLogout logoutPacket = new PacketLogout(username, "Disconnected");
                 broadcastPacket(logoutPacket, this);
-                
+
                 IRCUtlis.printMessage("[IRC] Client disconnected: " + username);
             } catch (IOException e) {
                 IRCUtlis.printMessage("[IRC] Error disconnecting: " + e.getMessage());
@@ -194,8 +221,7 @@ public class IRCServerConnection {
 
         @Override
         public void handleKeepAlive(PacketKeepAlive packet) {
-            // 响应心跳包
-            sendPacket(new PacketKeepAlive());
+            // 收到客户端心跳即可，不必再回应，服务端自己有独立心跳线程
         }
     }
 }
