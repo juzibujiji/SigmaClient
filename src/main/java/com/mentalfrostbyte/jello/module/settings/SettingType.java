@@ -10,5 +10,6 @@ public enum SettingType {
     TEXTBOX,
     BOOLEAN2,
     COLOR,
-    SPEEDRAMP
+    SPEEDRAMP,
+    FONT_SWITCH
 }

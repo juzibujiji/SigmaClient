@@ -1,21 +1,30 @@
 package com.mentalfrostbyte.jello.module.impl.movement;
 
+import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.event.impl.game.render.EventRender2DOffset;
 import com.mentalfrostbyte.jello.event.impl.game.action.EventClick;
 import com.mentalfrostbyte.jello.event.impl.player.EventGetFovModifier;
 import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdateHeldItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveInput;
+import com.mentalfrostbyte.jello.gui.base.animations.Animation;
 import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.ModeSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
+import com.mentalfrostbyte.jello.util.client.ClientMode;
+import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
+import com.mentalfrostbyte.jello.util.client.render.Resources;
+import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
 import com.mentalfrostbyte.jello.util.game.player.prediction.FallingPlayer;
 import com.mentalfrostbyte.jello.util.game.player.rotation.util.RotationUtils;
+import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import net.minecraft.block.AirBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -43,6 +52,7 @@ import net.minecraft.util.math.vector.Vector3d;
 import net.minecraft.util.math.vector.Vector3i;
 import org.apache.commons.lang3.RandomUtils;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.opengl.GL11;
 import team.sdhq.eventBus.annotations.EventTarget;
 import team.sdhq.eventBus.annotations.priority.HigherPriority;
 import team.sdhq.eventBus.annotations.priority.LowestPriority;
@@ -152,6 +162,8 @@ public class Scaffold extends Module {
     public Rotation correctRotation = new Rotation(0.0F, 0.0F);
     public Rotation rots = new Rotation(0.0F, 0.0F);
     public Rotation lastRots = new Rotation(0.0F, 0.0F);
+    public Animation animation = new Animation(114, 114, Animation.Direction.BACKWARDS);
+    public int blockCount = 0;
 
     public final ModeSetting modeSetting;
     public final BooleanSetting whileRightClick;
@@ -161,6 +173,7 @@ public class Scaffold extends Module {
     public final BooleanSetting hideSnap;
     public final BooleanSetting renderItemSpoof;
     public final BooleanSetting keepFoV;
+    public final BooleanSetting showBlockAmount;
     public final NumberSetting<Float> fov;
 
     private int offGroundTicks = 0;
@@ -207,6 +220,8 @@ public class Scaffold extends Module {
         this.registerSetting(this.renderItemSpoof = new BooleanSetting(
                 "Render Item Spoof",
                 "Render the pre-scaffold hotbar item while blocks are selected.", true));
+        this.registerSetting(this.showBlockAmount = new BooleanSetting(
+                "Show Block Amount", "Shows the amount of blocks in your inventory.", true));
         this.registerSetting(this.keepFoV = new BooleanSetting(
                 "Keep FoV", "Lock movement FoV while scaffolding.", true));
         this.registerSetting(this.fov = new NumberSetting<>(
@@ -298,6 +313,23 @@ public class Scaffold extends Module {
             }
         }
         return true;
+    }
+
+    public int getValidItemCount() {
+        if (mc.player == null || mc.player.container == null) {
+            return 0;
+        }
+
+        int totalItemCount = 0;
+        for (int containerSlot = 0; containerSlot < 45; containerSlot++) {
+            if (mc.player.container.getSlot(containerSlot).getHasStack()) {
+                ItemStack stack = mc.player.container.getSlot(containerSlot).getStack();
+                if (isValidStack(stack)) {
+                    totalItemCount += stack.getCount();
+                }
+            }
+        }
+        return totalItemCount;
     }
 
     /**
@@ -441,6 +473,81 @@ public class Scaffold extends Module {
         }
     }
 
+    @EventTarget
+    public void onTick(EventUpdate event) {
+        if (this.isEnabled() && this.showBlockAmount.getCurrentValue()) {
+            this.blockCount = this.getValidItemCount();
+        }
+    }
+
+    @EventTarget
+    public void onRender(EventRender2DOffset render) {
+        this.animation.changeDirection(Animation.Direction.FORWARDS);
+        if (this.animation.calcPercent() != 0.0F) {
+            if (this.showBlockAmount.getCurrentValue()) {
+                if (Client.getInstance().clientMode != ClientMode.JELLO) {
+                    this.renderClassicBlockCount(
+                            mc.getMainWindow().getWidth() / 2,
+                            mc.getMainWindow().getHeight() / 2 + 15 - (int) (10.0F * this.animation.calcPercent()),
+                            this.animation.calcPercent());
+                } else {
+                    this.renderJelloBlockCount(
+                            mc.getMainWindow().getWidth() / 2,
+                            mc.getMainWindow().getHeight() - 138
+                                    - (int) (25.0F * com.mentalfrostbyte.jello.util.system.math.MathHelper
+                                    .calculateTransition(this.animation.calcPercent(), 0.0F, 1.0F, 1.0F)),
+                            this.animation.calcPercent());
+                }
+            }
+        }
+    }
+
+    public void renderClassicBlockCount(int x, int y, float alpha) {
+        alpha = (float) (0.5 + 0.5 * (double) alpha);
+        GL11.glAlphaFunc(518, 0.1F);
+        RenderUtil.drawString(
+                Resources.medium17,
+                (float) (x + 10),
+                (float) (y + 5),
+                this.blockCount + " Blocks",
+                RenderUtil.applyAlpha(ClientColors.DEEP_TEAL.getColor(), alpha * 0.3F));
+        RenderUtil.drawString(
+                Resources.medium17,
+                (float) (x + 10),
+                (float) (y + 4),
+                this.blockCount + " Blocks",
+                RenderUtil.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), alpha * 0.8F));
+        GL11.glAlphaFunc(519, 0.0F);
+    }
+
+    public void renderJelloBlockCount(int var1, int var2, float var3) {
+        int var6 = 0;
+        int var7 = ResourceRegistry.JelloLightFont18.getWidth(this.blockCount + "") + 3;
+        var6 += var7;
+        var6 += ResourceRegistry.JelloLightFont14.getWidth("Blocks");
+        int var8 = var6 + 20;
+        int var9 = 32;
+        var1 -= var8 / 2;
+        GL11.glPushMatrix();
+        RenderUtil.method11465(var1, var2, var8, var9, RenderUtil.applyAlpha(-15461356, 0.8F * var3));
+        RenderUtil.drawString(
+                ResourceRegistry.JelloLightFont18, (float) (var1 + 10), (float) (var2 + 4), this.blockCount + "",
+                RenderUtil.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var3));
+        RenderUtil.drawString(
+                ResourceRegistry.JelloLightFont14, (float) (var1 + 10 + var7), (float) (var2 + 8), "Blocks",
+                RenderUtil.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F * var3));
+        var1 += 11 + var8 / 2;
+        var2 += var9;
+        GL11.glPushMatrix();
+        GL11.glTranslatef((float) var1, (float) var2, 0.0F);
+        GL11.glRotatef(90.0F, 0.0F, 0.0F, 1.0F);
+        GL11.glTranslatef((float) (-var1), (float) (-var2), 0.0F);
+        RenderUtil.drawImage((float) var1, (float) var2, 9.0F, 23.0F, Resources.selectPNG,
+                RenderUtil.applyAlpha(-15461356, 0.8F * var3));
+        GL11.glPopMatrix();
+        GL11.glPopMatrix();
+    }
+
     // -----------------------------------------------------------------
     // Lifecycle - mirror of Naven's onEnable / onDisable
     // -----------------------------------------------------------------
@@ -466,6 +573,7 @@ public class Scaffold extends Module {
 
     @Override
     public void onDisable() {
+        this.animation.changeDirection(Animation.Direction.BACKWARDS);
         super.onDisable();
         if (mc.player == null) {
             return;

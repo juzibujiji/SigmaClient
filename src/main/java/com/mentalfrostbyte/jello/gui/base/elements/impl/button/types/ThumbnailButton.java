@@ -124,6 +124,7 @@ public class ThumbnailButton extends AnimatedIconPanel {
     private Texture field20775;
     private Texture field20776;
     private final Animation animation;
+    private boolean activelyHoveredForBlur = false;
     // Per-button visibility debounce counter. Increments each draw() while the card is
     // in view, resets to 0 when the card scrolls out. We only kick off an HTTP load once
     // this reaches IN_VIEW_STABLE_FRAMES_REQUIRED so that cards which flash past the
@@ -158,18 +159,37 @@ public class ThumbnailButton extends AnimatedIconPanel {
     // budget; sharp uploads spread across subsequent frames, which is exactly the UX we want.
     private static final int MAX_UPLOADS_PER_FRAME = 2;
     private static volatile int uploadsThisFrame = 0;
+    private static volatile int hoverBlurUploadsThisFrame = 0;
     private static volatile long uploadFrameStartNs = 0L;
     private static final long UPLOAD_FRAME_NS = 14_000_000L; // ~71fps frame budget
 
-    private static boolean tryReserveUpload() {
-        long now = System.nanoTime();
+    private static void resetUploadBudgetIfNeeded(long now) {
         if (now - uploadFrameStartNs > UPLOAD_FRAME_NS) {
             uploadFrameStartNs = now;
             uploadsThisFrame = 0;
+            hoverBlurUploadsThisFrame = 0;
         }
+    }
+
+    private static boolean tryReserveUpload() {
+        long now = System.nanoTime();
+        resetUploadBudgetIfNeeded(now);
         if (uploadsThisFrame >= MAX_UPLOADS_PER_FRAME) return false;
         uploadsThisFrame++;
         return true;
+    }
+
+    private static boolean tryReserveHoverBlurUpload() {
+        long now = System.nanoTime();
+        resetUploadBudgetIfNeeded(now);
+        if (hoverBlurUploadsThisFrame >= 1 || uploadsThisFrame >= MAX_UPLOADS_PER_FRAME) return false;
+        hoverBlurUploadsThisFrame++;
+        uploadsThisFrame++;
+        return true;
+    }
+
+    private static int getUploadsThisFrame() {
+        return uploadsThisFrame;
     }
 
     // === Text-layout cache ===
@@ -229,6 +249,7 @@ public class ThumbnailButton extends AnimatedIconPanel {
     @Override
     public void updatePanelDimensions(int newHeight, int newWidth) {
         boolean var5 = this.method13298() && this.getParent().getParent().method13114(newHeight, newWidth);
+        this.activelyHoveredForBlur = var5;
         this.animation.changeDirection(!var5 ? Animation.Direction.BACKWARDS : Animation.Direction.FORWARDS);
 
         super.updatePanelDimensions(newHeight, newWidth);
@@ -504,11 +525,20 @@ public class ThumbnailButton extends AnimatedIconPanel {
                 }
             }
 
-            // Hover blur stays eager — only one card is hovered at a time, so it's never a burst.
-            if (this.field20776 == null && var4 > 0.0F && localBlurred != null) {
+            // Hover blur is decorative: creation is throttled and only the active hover may do it.
+            boolean hoverAnimating = var4 > 0.0F;
+            boolean activelyHovered = this.activelyHoveredForBlur;
+
+            if (this.field20776 == null && hoverAnimating && activelyHovered && localBlurred != null) {
                 String texName = "thumb_blur_" + System.identityHashCode(this) + "_" + System.nanoTime();
-                this.field20776 = SafeTextureUploader.upload(texName, localBlurred);
-            } else if (var4 == 0.0F && this.field20776 != null) {
+                boolean reserved = tryReserveHoverBlurUpload();
+                if (reserved) {
+                    this.field20776 = SafeTextureUploader.upload(
+                            texName, localBlurred, false, true, getUploadsThisFrame());
+                } else {
+                    SafeTextureUploader.logUploadSkipped(texName, localBlurred, false, getUploadsThisFrame());
+                }
+            } else if (!hoverAnimating && this.field20776 != null) {
                 try { this.field20776.release(); } catch (Exception ignored) {}
                 this.field20776 = null;
             }

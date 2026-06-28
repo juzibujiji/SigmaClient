@@ -69,6 +69,8 @@ import java.awt.image.BufferedImage;
  * thread that owns the GL context.
  */
 public final class SafeTextureUploader {
+    private static final boolean DEBUG_THUMBNAIL_UPLOAD =
+            Boolean.getBoolean("jello.debugThumbnailUpload");
 
     private SafeTextureUploader() {}
 
@@ -77,12 +79,36 @@ public final class SafeTextureUploader {
         return upload(name, image, GL11.GL_LINEAR, GL11.GL_LINEAR);
     }
 
+    /** Convenience overload that lets low-priority callers avoid a full pipeline finish. */
+    public static Texture upload(String name, BufferedImage image, boolean forceFinish) {
+        return upload(name, image, GL11.GL_LINEAR, GL11.GL_LINEAR, forceFinish);
+    }
+
+    /** Same as {@link #upload(String, BufferedImage, boolean)} with debug context. */
+    public static Texture upload(String name, BufferedImage image, boolean forceFinish,
+                                 Boolean uploadReserved, int frameUploadCount) {
+        return upload(name, image, GL11.GL_LINEAR, GL11.GL_LINEAR,
+                forceFinish, uploadReserved, frameUploadCount);
+    }
+
     /**
      * Upload {@code image} as a 2D texture and return a Slick {@link Texture}
      * wrapper. Returns {@code null} if {@code image} is {@code null} or if any
      * failure occurs (failure prints a stack trace; it does not propagate).
      */
     public static Texture upload(String name, BufferedImage image, int minFilter, int magFilter) {
+        return upload(name, image, minFilter, magFilter, true);
+    }
+
+    public static Texture upload(String name, BufferedImage image, int minFilter, int magFilter,
+                                 boolean forceFinish) {
+        return upload(name, image, minFilter, magFilter, forceFinish, null, -1);
+    }
+
+    public static Texture upload(String name, BufferedImage image, int minFilter, int magFilter,
+                                 boolean forceFinish, Boolean uploadReserved, int frameUploadCount) {
+        long startedNs = shouldLogUpload(name) ? System.nanoTime() : 0L;
+        boolean success = false;
         if (image == null) return null;
 
         final int origW = image.getWidth();
@@ -224,10 +250,16 @@ public final class SafeTextureUploader {
                         GL11.GL_UNSIGNED_BYTE,
                         ptr);
 
-                // Block until the GL pipeline has fully consumed `ptr`.
-                // After this returns, freeing the memory cannot race with
-                // any in-flight DMA.
-                GL11.glFinish();
+                if (forceFinish) {
+                    // Block until the GL pipeline has fully consumed `ptr`.
+                    // After this returns, freeing the memory cannot race with
+                    // any in-flight DMA.
+                    GL11.glFinish();
+                } else {
+                    // Low-priority decorative uploads can choose a lighter
+                    // barrier. Existing callers keep forceFinish=true.
+                    GL11.glFlush();
+                }
             } finally {
                 GL11.glPixelStorei(GL11.GL_UNPACK_SWAP_BYTES, prevUnpackSwapBytes);
                 GL11.glPixelStorei(GL11.GL_UNPACK_LSB_FIRST, prevUnpackLsbFirst);
@@ -237,6 +269,7 @@ public final class SafeTextureUploader {
                 GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, prevUnpackAlign);
             }
 
+            success = true;
             return texture;
         } catch (Throwable t) {
             // Catch Throwable: native driver paths may surface as Error / RuntimeException.
@@ -247,10 +280,59 @@ public final class SafeTextureUploader {
             return null;
         } finally {
             // Manual free. Safe here because:
-            //   - On success: glFinish above already drained the pipeline.
+            //   - On normal callers: glFinish above already drained the pipeline.
+            //   - On forceFinish=false callers: OpenGL client-memory uploads must consume
+            //     the source pointer before the call returns; glFlush just nudges the queue.
             //   - On exception: no further GL command will reference `ptr`
             //     (the texture has been deleted or never bound).
             MemoryUtil.nmemFree(ptr);
+            logUpload(name, origW, origH, startedNs, forceFinish, uploadReserved,
+                    frameUploadCount, success, false);
         }
+    }
+
+    public static void logUploadSkipped(String name, BufferedImage image,
+                                        Boolean uploadReserved, int frameUploadCount) {
+        if (!shouldLogUpload(name)) {
+            return;
+        }
+
+        int width = image == null ? 0 : image.getWidth();
+        int height = image == null ? 0 : image.getHeight();
+        logUpload(name, width, height, 0L, false, uploadReserved,
+                frameUploadCount, false, true);
+    }
+
+    private static boolean shouldLogUpload(String name) {
+        if (!DEBUG_THUMBNAIL_UPLOAD || name == null) {
+            return false;
+        }
+
+        return name.startsWith("thumb_")
+                || name.startsWith("music_bg")
+                || name.startsWith("music_cover");
+    }
+
+    private static void logUpload(String name, int width, int height, long startedNs,
+                                  boolean forceFinish, Boolean uploadReserved,
+                                  int frameUploadCount, boolean success, boolean skipped) {
+        if (!shouldLogUpload(name)) {
+            return;
+        }
+
+        double elapsedMs = startedNs == 0L ? 0.0 : (System.nanoTime() - startedNs) / 1_000_000.0;
+        System.out.printf(
+                "[MusicThumbnailUpload] tex=%s size=%dx%d thumbBlur=%s ms=%.3f thread=%s reserved=%s frameUploads=%d finish=%s success=%s skipped=%s%n",
+                name,
+                width,
+                height,
+                name.startsWith("thumb_blur_"),
+                elapsedMs,
+                Thread.currentThread().getName(),
+                uploadReserved == null ? "n/a" : uploadReserved.toString(),
+                frameUploadCount,
+                forceFinish,
+                success,
+                skipped);
     }
 }

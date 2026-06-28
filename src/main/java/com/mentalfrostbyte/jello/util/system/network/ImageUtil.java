@@ -47,6 +47,45 @@ public class ImageUtil {
         }
     }
 
+    public static BufferedImage resizeCover(BufferedImage source, int size) {
+        return resizeCover(source, size, size);
+    }
+
+    public static BufferedImage resizeCover(BufferedImage source, int targetWidth, int targetHeight) {
+        if (source == null || targetWidth <= 0 || targetHeight <= 0
+                || source.getWidth() <= 0 || source.getHeight() <= 0) {
+            return null;
+        }
+
+        int sourceWidth = source.getWidth();
+        int sourceHeight = source.getHeight();
+        double targetRatio = (double) targetWidth / (double) targetHeight;
+        double sourceRatio = (double) sourceWidth / (double) sourceHeight;
+
+        int cropWidth = sourceWidth;
+        int cropHeight = sourceHeight;
+        if (sourceRatio > targetRatio) {
+            cropWidth = Math.max(1, (int) Math.round(sourceHeight * targetRatio));
+        } else if (sourceRatio < targetRatio) {
+            cropHeight = Math.max(1, (int) Math.round(sourceWidth / targetRatio));
+        }
+
+        int cropX = Math.max(0, (sourceWidth - cropWidth) / 2);
+        int cropY = Math.max(0, (sourceHeight - cropHeight) / 2);
+
+        BufferedImage output = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = output.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.drawImage(source,
+                0, 0, targetWidth, targetHeight,
+                cropX, cropY, cropX + cropWidth, cropY + cropHeight,
+                null);
+        g.dispose();
+        return output;
+    }
+
     public static BufferedImage addPadding(BufferedImage var0, int var1) {
         int var4 = var0.getWidth() + var1 * 2;
         int var5 = var0.getHeight() + var1 * 2;

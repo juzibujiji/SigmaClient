@@ -1,10 +1,16 @@
 package com.mentalfrostbyte.jello.module.impl.render.jello;
 
+import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
+import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
+import com.mentalfrostbyte.jello.module.settings.impl.ColorSetting;
+import com.mentalfrostbyte.jello.module.settings.impl.FontSwitch;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
+import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
+import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.fonts.Font;
 import net.minecraft.client.gui.fonts.FontResourceManager;
@@ -12,27 +18,35 @@ import net.minecraft.client.gui.fonts.providers.IGlyphProvider;
 import net.minecraft.client.gui.fonts.providers.TrueTypeGlyphProvider;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.Util;
+import org.newdawn.slick.TrueTypeFont;
 import org.lwjgl.stb.STBTTFontinfo;
 import org.lwjgl.stb.STBTruetype;
 import org.lwjgl.system.MemoryUtil;
 import team.sdhq.eventBus.annotations.EventTarget;
 
+import java.awt.FontFormatException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Hot-swaps the vanilla Minecraft font (chat / F3 / GUI text) between the default
- * providers and a bundled HarmonyOS TTF, giving the whole game proper CJK coverage.
+ * providers and your prefer font, giving the whole game proper CJK coverage.
  *
  * <p>Mechanism: the {@code minecraft:default} {@link Font} keeps an ordered
  * {@code List<IGlyphProvider>}; the first provider that has a glyph for a code point
- * wins. On enable we insert a HarmonyOS {@link TrueTypeGlyphProvider} at the front
- * (vanilla providers stay as fallback for anything HarmonyOS lacks). On disable we
+ * wins. On enable we insert the selected {@link TrueTypeGlyphProvider} at the front
+ * (vanilla providers stay as fallback for anything the selected font lacks). On disable we
  * put the original list back.</p>
  *
  * <p>{@link Font#setGlyphProviders(List)} closes the font's current providers, so to
@@ -44,6 +58,8 @@ public class CustomFont extends Module {
 
     private static final String HARMONY_FONT_RESOURCE =
             "com/mentalfrostbyte/gui/resources/font/HarmonyOS_Sans_SC_Regular.ttf";
+    private static final String BUNDLED_FONT_NAME = "内置鸿蒙";
+    private static final String CUSTOM_FONT_FOLDER = "custom-fonts";
 
     // Cached reflection handles (mapped 1.16 names).
     private static Field minecraftFontManagerField;
@@ -52,26 +68,49 @@ public class CustomFont extends Module {
 
     private final NumberSetting<Float> sizeSetting;
     private final NumberSetting<Float> sharpnessSetting;
+    private final BooleanSetting spectrumSetting;
+    private final ColorSetting spectrumColorSetting;
+    private final FontSwitch fontSwitch;
+    private TrueTypeFont previewFont;
+    private String spectrumTypefaceKey = "";
 
     /** The font we currently own (null when not applied). Used to detect resource reloads. */
     private Font appliedFont;
     /** The vanilla providers we displaced, kept alive so we can restore them. */
     private List<IGlyphProvider> savedOriginals;
-    /** Our HarmonyOS provider (we own its native memory; close exactly once). */
+    /** Our selected provider (we own its native memory; close exactly once). */
     private IGlyphProvider harmonyProvider;
     private boolean applied;
 
     public CustomFont() {
         super(ModuleCategory.RENDER, "CustomFont",
-                "Replace the vanilla Minecraft font with HarmonyOS (full CJK support).");
+                "Replace the vanilla Minecraft font with your prefer font.");
         this.registerSetting(this.sizeSetting = new NumberSetting<>(
                 "Size", "Rasterized glyph height; tweak until it matches the vanilla size.",
                 9.0F, 6.0F, 20.0F, 0.5F));
         this.registerSetting(this.sharpnessSetting = new NumberSetting<>(
                 "Sharpness", "Supersampling factor (higher = crisper, slower to build).",
                 2.0F, 1.0F, 4.0F, 1.0F));
-        this.sizeSetting.addObserver(s -> this.reapplyIfEnabled());
-        this.sharpnessSetting.addObserver(s -> this.reapplyIfEnabled());
+        this.registerSetting(this.spectrumSetting = new BooleanSetting(
+                "Spectrum", "Apply your prefer font to the music spectrum text.", true));
+        this.registerSetting(this.spectrumColorSetting = new ColorSetting(
+                "Color", "The music spectrum text color.", ClientColors.LIGHT_GREYISH_BLUE.getColor()));
+        this.registerSetting(this.fontSwitch = new FontSwitch(
+                "Import",
+                "Open the custom font folder, then refresh to load the first .ttf/.otf inside it.",
+                BUNDLED_FONT_NAME,
+                this::openCustomFontFolder,
+                this::refreshCustomFont,
+                this::listAvailableFontNames,
+                this::selectFont,
+                this::getPreviewFont));
+        this.sizeSetting.addObserver(s -> this.invalidatePreviewAndReapply());
+        this.sharpnessSetting.addObserver(s -> this.invalidatePreviewAndReapply());
+        this.spectrumSetting.addObserver(s -> {
+            if (!this.spectrumSetting.getCurrentValue()) {
+                this.invalidateSpectrumTypeface();
+            }
+        });
         this.setAvailableOnClassic(false);
     }
 
@@ -84,6 +123,7 @@ public class CustomFont extends Module {
     @Override
     public void onDisable() {
         super.onDisable();
+        this.invalidateSpectrumTypeface();
         this.restore();
     }
 
@@ -110,11 +150,58 @@ public class CustomFont extends Module {
         this.tryApply();
     }
 
+    private void invalidatePreviewAndReapply() {
+        this.previewFont = null;
+        this.fontSwitch.notifyObservers();
+        this.reapplyIfEnabled();
+    }
+
     private void reapplyIfEnabled() {
         if (this.isEnabled()) {
             this.restore();
             this.tryApply();
         }
+    }
+
+    public boolean shouldApplyToSpectrum() {
+        return this.isEnabled() && this.spectrumSetting.getCurrentValue();
+    }
+
+    public int getSpectrumTextColor() {
+        return this.spectrumColorSetting.getCurrentValue();
+    }
+
+    public float getSpectrumFontScale() {
+        return Math.max(0.65F, Math.min(2.25F, this.sizeSetting.getCurrentValue() / 9.0F));
+    }
+
+    public boolean ensureSpectrumTypeface() {
+        if (!this.shouldApplyToSpectrum()) {
+            return false;
+        }
+
+        String key = this.getSpectrumTypefaceKey();
+        if (SkijaFontRenderer.hasCustomTypeface(key)) {
+            return true;
+        }
+
+        try {
+            byte[] fontBytes = this.readSelectedFontBytes();
+            boolean loaded = SkijaFontRenderer.setCustomTypeface(fontBytes, key);
+            if (loaded) {
+                this.spectrumTypefaceKey = key;
+            }
+            return loaded;
+        } catch (Throwable t) {
+            System.err.println("[CustomFont] Failed to load spectrum font: " + t.getMessage());
+            t.printStackTrace();
+            return false;
+        }
+    }
+
+    private void invalidateSpectrumTypeface() {
+        this.spectrumTypefaceKey = "";
+        SkijaFontRenderer.clearCustomTypeface();
     }
 
     private void tryApply() {
@@ -126,7 +213,7 @@ public class CustomFont extends Module {
             if (font == null) {
                 return; // font system not ready yet; the tick handler retries.
             }
-            IGlyphProvider provider = this.buildHarmonyProvider();
+            IGlyphProvider provider = this.buildSelectedProvider();
             if (provider == null) {
                 return;
             }
@@ -145,7 +232,7 @@ public class CustomFont extends Module {
             this.harmonyProvider = provider;
             this.applied = true;
         } catch (Throwable t) {
-            System.err.println("[CustomFont] Failed to apply HarmonyOS font: " + t.getMessage());
+            System.err.println("[CustomFont] Failed to apply selected font: " + t.getMessage());
             t.printStackTrace();
         }
     }
@@ -176,23 +263,52 @@ public class CustomFont extends Module {
         }
     }
 
-    private IGlyphProvider buildHarmonyProvider() {
+    private IGlyphProvider buildSelectedProvider() {
+        File customFont = this.getSelectedCustomFont();
+        if (customFont != null) {
+            IGlyphProvider provider = this.buildProvider(customFont);
+            if (provider != null) {
+                return provider;
+            }
+        }
+        return this.buildProvider(HARMONY_FONT_RESOURCE);
+    }
+
+    private IGlyphProvider buildProvider(String resourcePath) {
+        try (InputStream is = Resources.readInputStream(resourcePath)) {
+            return this.buildProvider(is, resourcePath);
+        } catch (Throwable t) {
+            System.err.println("[CustomFont] Failed to build bundled glyph provider: " + t.getMessage());
+            t.printStackTrace();
+            return null;
+        }
+    }
+
+    private IGlyphProvider buildProvider(File fontFile) {
+        try (InputStream is = new FileInputStream(fontFile)) {
+            return this.buildProvider(is, fontFile.getAbsolutePath());
+        } catch (Throwable t) {
+            System.err.println("[CustomFont] Failed to build custom glyph provider: " + t.getMessage());
+            t.printStackTrace();
+            return null;
+        }
+    }
+
+    private IGlyphProvider buildProvider(InputStream inputStream, String sourceName) throws IOException {
         ByteBuffer buffer = null;
         STBTTFontinfo info = null;
-        try (InputStream is = Resources.readInputStream(HARMONY_FONT_RESOURCE)) {
-            buffer = TextureUtil.readToBuffer(is);
+        try {
+            buffer = TextureUtil.readToBuffer(inputStream);
             ((Buffer) buffer).flip();
             info = STBTTFontinfo.malloc();
             if (!STBTruetype.stbtt_InitFont(info, buffer)) {
-                throw new IllegalStateException("stbtt_InitFont failed for HarmonyOS font");
+                throw new IllegalStateException("stbtt_InitFont failed for " + sourceName);
             }
             float size = this.sizeSetting.getCurrentValue();
             float oversample = this.sharpnessSetting.getCurrentValue();
             // Provider takes ownership of buffer + info and frees them in close().
             return new TrueTypeGlyphProvider(buffer, info, size, oversample, 0.0F, 0.0F, "");
         } catch (Throwable t) {
-            System.err.println("[CustomFont] Failed to build HarmonyOS glyph provider: " + t.getMessage());
-            t.printStackTrace();
             if (info != null) {
                 try { info.free(); } catch (Throwable ignored) {
                 }
@@ -201,8 +317,171 @@ public class CustomFont extends Module {
                 try { MemoryUtil.memFree(buffer); } catch (Throwable ignored) {
                 }
             }
+            if (t instanceof IOException) {
+                throw (IOException) t;
+            }
+            throw new IllegalStateException(t);
+        }
+    }
+
+    private void openCustomFontFolder() {
+        File folder = this.ensureCustomFontDirectory();
+        if (folder == null) {
+            return;
+        }
+        try {
+            Util.getOSType().openFile(folder);
+        } catch (Throwable t) {
+            System.err.println("[CustomFont] Failed to open custom font folder: " + t.getMessage());
+            t.printStackTrace();
+        }
+    }
+
+    private void refreshCustomFont() {
+        this.invalidateSpectrumTypeface();
+        if (!this.listAvailableFontNames().contains(this.fontSwitch.getCurrentValue())) {
+            this.previewFont = null;
+            this.fontSwitch.setCurrentValue(BUNDLED_FONT_NAME);
+        } else {
+            this.fontSwitch.notifyObservers();
+        }
+        this.reapplyIfEnabled();
+    }
+
+    private List<String> listAvailableFontNames() {
+        List<String> fonts = new ArrayList<>();
+        fonts.add(BUNDLED_FONT_NAME);
+        for (File font : this.listCustomFonts()) {
+            fonts.add(font.getName());
+        }
+        return fonts;
+    }
+
+    private void selectFont(String fontName) {
+        if (!this.listAvailableFontNames().contains(fontName)) {
+            fontName = BUNDLED_FONT_NAME;
+        }
+        this.invalidateSpectrumTypeface();
+        this.previewFont = null;
+        this.fontSwitch.updateCurrentValue(fontName, false);
+        this.fontSwitch.notifyObservers();
+        this.reapplyIfEnabled();
+    }
+
+    private File getSelectedCustomFont() {
+        String selectedName = this.fontSwitch.getCurrentValue();
+        if (selectedName == null || selectedName.equals(BUNDLED_FONT_NAME)) {
             return null;
         }
+        for (File font : this.listCustomFonts()) {
+            if (font.getName().equals(selectedName)) {
+                return font;
+            }
+        }
+        return null;
+    }
+
+    private String getSpectrumTypefaceKey() {
+        File selected = this.getSelectedCustomFont();
+        if (selected == null) {
+            return HARMONY_FONT_RESOURCE;
+        }
+        return selected.getAbsolutePath() + ":" + selected.length() + ":" + selected.lastModified();
+    }
+
+    private byte[] readSelectedFontBytes() throws IOException {
+        File selected = this.getSelectedCustomFont();
+        if (selected == null) {
+            try (InputStream inputStream = Resources.readInputStream(HARMONY_FONT_RESOURCE)) {
+                return inputStream.readAllBytes();
+            }
+        }
+        try (InputStream inputStream = new FileInputStream(selected)) {
+            return inputStream.readAllBytes();
+        }
+    }
+
+    private File[] listCustomFonts() {
+        File folder = this.ensureCustomFontDirectory();
+        if (folder == null) {
+            return new File[0];
+        }
+        File[] fonts = folder.listFiles(file -> file.isFile() && isSupportedFontFile(file));
+        if (fonts == null) {
+            return new File[0];
+        }
+        Arrays.sort(fonts, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
+        return fonts;
+    }
+
+    private File ensureCustomFontDirectory() {
+        try {
+            File folder = new File(Client.getInstance().file, CUSTOM_FONT_FOLDER);
+            if (!folder.exists() && !folder.mkdirs()) {
+                throw new IOException("Unable to create " + folder.getAbsolutePath());
+            }
+            return folder;
+        } catch (Throwable t) {
+            System.err.println("[CustomFont] Failed to prepare custom font folder: " + t.getMessage());
+            t.printStackTrace();
+            return null;
+        }
+    }
+
+    private static boolean isSupportedFontFile(File file) {
+        String name = file.getName().toLowerCase();
+        return name.endsWith(".ttf") || name.endsWith(".otf");
+    }
+
+    private TrueTypeFont getPreviewFont() {
+        File selected = this.getSelectedCustomFont();
+        if (this.previewFont == null) {
+            this.previewFont = selected == null
+                    ? this.buildPreviewFont(HARMONY_FONT_RESOURCE)
+                    : this.buildPreviewFont(selected);
+        }
+        return this.previewFont;
+    }
+
+    private TrueTypeFont buildPreviewFont(String resourcePath) {
+        try (InputStream inputStream = Resources.readInputStream(resourcePath)) {
+            java.awt.Font font = java.awt.Font.createFont(java.awt.Font.TRUETYPE_FONT, inputStream)
+                    .deriveFont(java.awt.Font.PLAIN, this.getPreviewPointSize());
+            return new TrueTypeFont(font, true, previewCharacters(), this.getPreviewPadding());
+        } catch (IOException | FontFormatException t) {
+            System.err.println("[CustomFont] Failed to build preview font: " + t.getMessage());
+            t.printStackTrace();
+            return null;
+        }
+    }
+
+    private TrueTypeFont buildPreviewFont(File fontFile) {
+        try (InputStream inputStream = new FileInputStream(fontFile)) {
+            java.awt.Font font = java.awt.Font.createFont(java.awt.Font.TRUETYPE_FONT, inputStream)
+                    .deriveFont(java.awt.Font.PLAIN, this.getPreviewPointSize());
+            return new TrueTypeFont(font, true, previewCharacters(), this.getPreviewPadding());
+        } catch (IOException | FontFormatException t) {
+            System.err.println("[CustomFont] Failed to build preview font: " + t.getMessage());
+            t.printStackTrace();
+            return null;
+        }
+    }
+
+    private float getPreviewPointSize() {
+        // Size ONLY controls the preview point size. Sharpness must never change the glyph
+        // size — it only affects smoothing (see SkijaFontRenderer.configureSmoothing /
+        // supersample, and the STB oversample path).
+        float size = this.sizeSetting.getCurrentValue();
+        return Math.max(1.0F, size * 2.0F);
+    }
+
+    private int getPreviewPadding() {
+        return Math.max(1, Math.round(this.sharpnessSetting.getCurrentValue()));
+    }
+
+    private static char[] previewCharacters() {
+        return ("\u4E2D\u56FD\u667A\u9020\uFF0C\u60E0\u53CA\u5168\u7403"
+                + "The quick brown fox jumps over the lazy dog.").toCharArray();
     }
 
     private static Font getDefaultFont() {

@@ -9,6 +9,8 @@ import io.github.humbleui.skija.ColorAlphaType;
 import io.github.humbleui.skija.ColorType;
 import io.github.humbleui.skija.Data;
 import io.github.humbleui.skija.Font;
+import io.github.humbleui.skija.FontEdging;
+import io.github.humbleui.skija.FontHinting;
 import io.github.humbleui.skija.FontMetrics;
 import io.github.humbleui.skija.FontStyle;
 import io.github.humbleui.skija.ImageInfo;
@@ -47,6 +49,8 @@ public final class SkijaFontRenderer {
     private static Typeface nonEnglishMediumTypeface;
     private static Typeface nonEnglishRegularTypeface;
     private static Typeface systemNonEnglishTypeface;
+    private static Typeface customTypeface;
+    private static String customTypefaceKey = "";
     private static boolean initialized = false;
     private static int currentWidth = 0;
     private static int currentHeight = 0;
@@ -99,8 +103,48 @@ public final class SkijaFontRenderer {
         // Raster-backed renderer: no Skija GL surface to flush.
     }
 
+    public static boolean setCustomTypeface(byte[] fontBytes, String key) {
+        if (fontBytes == null || fontBytes.length == 0 || key == null || key.isEmpty()) {
+            return false;
+        }
+        if (customTypeface != null && key.equals(customTypefaceKey)) {
+            return true;
+        }
+
+        Typeface newTypeface = Typeface.makeFromData(Data.makeFromBytes(fontBytes));
+        if (newTypeface == null) {
+            return false;
+        }
+
+        customTypeface = newTypeface;
+        customTypefaceKey = key;
+        clearTextCache();
+        return true;
+    }
+
+    public static void clearCustomTypeface() {
+        if (customTypeface == null && customTypefaceKey.isEmpty()) {
+            return;
+        }
+        customTypeface = null;
+        customTypefaceKey = "";
+        clearTextCache();
+    }
+
+    public static boolean hasCustomTypeface(String key) {
+        return customTypeface != null && key != null && key.equals(customTypefaceKey);
+    }
+
+    public static boolean hasCustomTypeface() {
+        return customTypeface != null;
+    }
+
     public static void drawText(String text, float x, float y, float fontSize, int color) {
         drawTextInternal(text, x, y, fontSize, color, englishTypeface, null, false);
+    }
+
+    public static void drawCustomText(String text, float x, float y, float fontSize, int color) {
+        drawTextInternal(text, x, y, fontSize, color, customTypeface, customTypeface, false);
     }
 
     /** GUI text: weight-aware faces, top-aligned at {@code yTop} to match the legacy TrueTypeFont layout. */
@@ -156,6 +200,10 @@ public final class SkijaFontRenderer {
         return getTextWidthInternal(text, fontSize, face, face);
     }
 
+    public static float getCustomTextWidth(String text, float fontSize) {
+        return getTextWidthInternal(text, fontSize, customTypeface, customTypeface);
+    }
+
     private static float getTextWidthInternal(String text, float fontSize, Typeface asciiFace, Typeface fixedCjkFace) {
         if (!initialized || text == null || text.isEmpty()) {
             return 0.0f;
@@ -199,24 +247,52 @@ public final class SkijaFontRenderer {
     }
 
     public static void cleanup() {
+        clearTextCache();
+        englishTypeface = null;
+        nonEnglishLightTypeface = null;
+        nonEnglishMediumTypeface = null;
+        nonEnglishRegularTypeface = null;
+        systemNonEnglishTypeface = null;
+        customTypeface = null;
+        customTypefaceKey = "";
+        initialized = false;
+        currentWidth = 0;
+        currentHeight = 0;
+    }
+
+    private static void clearTextCache() {
         synchronized (textCache) {
             for (CachedText cachedText : textCache.values()) {
                 cachedText.dispose();
             }
             textCache.clear();
         }
-        englishTypeface = null;
-        nonEnglishLightTypeface = null;
-        nonEnglishMediumTypeface = null;
-        nonEnglishRegularTypeface = null;
-        systemNonEnglishTypeface = null;
-        initialized = false;
-        currentWidth = 0;
-        currentHeight = 0;
     }
 
     /** Transparent padding above the caps baked into each glyph block (see rasterizeText). */
     private static final float GLYPH_TOP_PADDING = 2.0f;
+
+    /**
+     * Supersample (oversample) factor for glyph rasterization, decoupled from the user's GUI scale.
+     *
+     * <p>Baking at 1:1 with the GUI scale still looks soft: GL_LINEAR sampling, POT-padding edge
+     * bleed and the integer position rounding in {@code RenderUtil.drawImage} each shave a little
+     * crispness. Empirically the text only becomes crisp once it is baked at ~4x the logical size
+     * (which a user only got "for free" by setting GUI scale to 4). So we bake at {@code ~2x the
+     * GUI scale, capped at 4}, oversampling those losses away — text is crisp at the common GUI
+     * scale of 2 with NO need for the user to change their GUI scale. Oversampling higher never
+     * blurs (it just anti-aliases the minified result); only under-sampling blurs. The cap of 4
+     * bounds the glyph texture size / upload cost.</p>
+     */
+    private static int supersample() {
+        try {
+            double guiScale = net.minecraft.client.Minecraft.getInstance().getMainWindow().getGuiScaleFactor();
+            int target = 2 * (int) Math.ceil(guiScale);
+            return Math.max(2, Math.min(4, target));
+        } catch (Throwable t) {
+            return 4;
+        }
+    }
 
     private static float drawTextSegment(String text, float x, float y, float fontSize, int color,
                                          Typeface typeface, String fontKey, boolean topAligned) {
@@ -233,7 +309,14 @@ public final class SkijaFontRenderer {
         // Draw through the client's proven, GlStateManager-consistent texture path.
         // The glyph texture is white with per-pixel coverage alpha; drawImage's default
         // GL_MODULATE tints it by `color`, so text renders in the requested colour.
-        RenderUtil.drawImage(x, drawY, cachedText.imageWidth, cachedText.imageHeight, cachedText.texture, color);
+        //
+        // The texture is rasterized at supersample x the display size (see rasterizeText) and
+        // drawn here into a display-sized rectangle, so it is MINIFIED. We force GL_LINEAR
+        // sampling for that minification — smooth edges instead of the jagged GL_NEAREST.
+        // NOTE: RenderUtil.drawImage's boolean is inverted (true -> GL_NEAREST, false ->
+        // GL_LINEAR), so we pass false to get linear filtering.
+        RenderUtil.drawImage(x, drawY, cachedText.displayWidth, cachedText.displayHeight,
+                cachedText.texture, color, false);
         return x + cachedText.advanceWidth;
     }
 
@@ -242,15 +325,16 @@ public final class SkijaFontRenderer {
             return null;
         }
 
+        int supersample = supersample();
         String cacheKey = fontKey + "_" + System.identityHashCode(typeface) + "|"
-                + Math.round(fontSize * 100.0f) + "|" + text;
+                + Math.round(fontSize * 100.0f) + "|x" + supersample + "|" + text;
         synchronized (textCache) {
             CachedText cached = textCache.get(cacheKey);
             if (cached != null) {
                 return cached;
             }
 
-            cached = rasterizeText(text, fontSize, typeface, cacheKey);
+            cached = rasterizeText(text, fontSize, typeface, cacheKey, supersample);
             if (cached != null) {
                 textCache.put(cacheKey, cached);
             }
@@ -258,16 +342,31 @@ public final class SkijaFontRenderer {
         }
     }
 
-    private static CachedText rasterizeText(String text, float fontSize, Typeface typeface, String cacheKey) {
-        try (Font font = new Font(typeface, fontSize); Paint paint = new Paint()) {
+    private static CachedText rasterizeText(String text, float fontSize, Typeface typeface, String cacheKey, int supersample) {
+        // Rasterize the glyphs at supersample x the requested size, then draw the resulting
+        // texture minified (with GL_LINEAR) back down to the display size. This is what makes
+        // Skija text smooth: the extra resolution gives the linear minification real coverage
+        // gradients to interpolate, instead of hard 1:1 jagged edges. Higher supersample
+        // (= higher Sharpness) -> softer edges, matching the STB TrueType path's oversample.
+        int ss = Math.max(1, supersample);
+        float rasterSize = fontSize * ss;
+        try (Font font = new Font(typeface, rasterSize); Paint paint = new Paint()) {
             paint.setAntiAlias(true);
             paint.setColor(Color.makeARGB(255, 255, 255, 255));
+            configureSmoothing(font);
 
             FontMetrics metrics = font.getMetrics();
-            float advanceWidth = Math.max(1.0f, font.measureTextWidth(text, paint));
-            int imageWidth = Math.max(1, (int) Math.ceil(advanceWidth) + 4);
-            int imageHeight = Math.max(1, (int) Math.ceil(metrics.getDescent() - metrics.getAscent()) + 4);
-            float baseline = -metrics.getAscent() + 2.0f;
+            // Padding is in supersampled pixels so it scales down to a constant display margin.
+            int pad = 2 * ss;
+            float advanceWidthRaster = Math.max(1.0f, font.measureTextWidth(text, paint));
+            int imageWidth = Math.max(1, (int) Math.ceil(advanceWidthRaster) + pad * 2);
+            int imageHeight = Math.max(1, (int) Math.ceil(metrics.getDescent() - metrics.getAscent()) + pad * 2);
+            float baseline = -metrics.getAscent() + pad;
+
+            // Display-space geometry: divide the supersampled measurements back down by ss.
+            float advanceWidth = advanceWidthRaster / ss;
+            float displayWidth = imageWidth / (float) ss;
+            float displayHeight = imageHeight / (float) ss;
 
             // Rasterize white text on black, then repackage as a straight-alpha ARGB image:
             // RGB = white, A = glyph coverage. Uploading white+alpha lets RenderUtil.drawImage's
@@ -282,7 +381,7 @@ public final class SkijaFontRenderer {
                 Canvas canvas = new Canvas(bitmap);
                 try {
                     canvas.clear(Color.makeARGB(255, 0, 0, 0));
-                    canvas.drawString(text, 2.0f, baseline, font, paint);
+                    canvas.drawString(text, pad, baseline, font, paint);
                     byte[] rgba = bitmap.readPixels(
                             new ImageInfo(imageWidth, imageHeight, ColorType.RGBA_8888, ColorAlphaType.OPAQUE),
                             (long) imageWidth * 4L,
@@ -324,7 +423,7 @@ public final class SkijaFontRenderer {
                         + "(SafeTextureUploader + RenderUtil.drawImage). First text: '" + text + "'");
             }
 
-            return new CachedText(texture, advanceWidth, imageWidth, imageHeight, baseline);
+            return new CachedText(texture, advanceWidth, displayWidth, displayHeight, baseline / ss);
         } catch (Exception e) {
             System.err.println("[SkijaFontRenderer] Failed to rasterize text: " + text);
             e.printStackTrace();
@@ -338,8 +437,21 @@ public final class SkijaFontRenderer {
         }
 
         try (Font font = new Font(typeface, fontSize)) {
+            configureSmoothing(font);
             return font.measureTextWidth(text);
         }
+    }
+
+    /**
+     * Ported verbatim from the reference FontRenderer.setupFont (known-good smooth result):
+     * subpixel positioning + FULL hinting + SUBPIXEL_ANTI_ALIAS edging. The RGB subpixel
+     * coverage is collapsed to a single alpha channel (max(r,g,b)) and the colour is forced
+     * white before tinting, so no colour fringing appears in this bake-to-texture pipeline.
+     */
+    private static void configureSmoothing(Font font) {
+        font.setSubpixel(true);
+        font.setHinting(FontHinting.FULL);
+        font.setEdging(FontEdging.SUBPIXEL_ANTI_ALIAS);
     }
 
     private static void loadFonts() {
@@ -445,15 +557,15 @@ public final class SkijaFontRenderer {
     private static final class CachedText {
         private final Texture texture;
         private final float advanceWidth;
-        private final int imageWidth;
-        private final int imageHeight;
+        private final float displayWidth;
+        private final float displayHeight;
         private final float baseline;
 
-        private CachedText(Texture texture, float advanceWidth, int imageWidth, int imageHeight, float baseline) {
+        private CachedText(Texture texture, float advanceWidth, float displayWidth, float displayHeight, float baseline) {
             this.texture = texture;
             this.advanceWidth = advanceWidth;
-            this.imageWidth = imageWidth;
-            this.imageHeight = imageHeight;
+            this.displayWidth = displayWidth;
+            this.displayHeight = displayHeight;
             this.baseline = baseline;
         }
 

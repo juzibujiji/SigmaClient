@@ -5,6 +5,7 @@ import com.mentalfrostbyte.jello.gui.base.animations.Animation;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.button.Button;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.button.types.ChangingButton;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.button.types.SpectrumButton;
+import com.mentalfrostbyte.jello.gui.base.elements.impl.button.types.ThumbnailButton;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.image.types.SmallImage;
 import com.mentalfrostbyte.jello.gui.combined.AnimatedIconPanel;
 import com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen;
@@ -17,6 +18,7 @@ import com.mentalfrostbyte.jello.gui.impl.jello.buttons.ScrollableContentPanel;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.clickgui.ClickGuiScreen;
 import com.mentalfrostbyte.jello.managers.MusicManager;
 import com.mentalfrostbyte.jello.managers.util.Thumbnails;
+import com.mentalfrostbyte.jello.managers.util.notifs.Notification;
 import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiLogin;
 import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseRequestApi;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeContentType;
@@ -38,6 +40,9 @@ import java.util.*;
 
 public class MusicPlayer extends AnimatedIconPanel {
     private static final String NETEASE_PLAYLIST_PREFIX = "netease_playlist:";
+    private static final String MID_FAVOR_ID = "mid_favor";
+    private static final String MID_FAVOR_NAME = "mid favor";
+    private static final Thumbnails MID_FAVOR_THUMBNAILS = createMidFavorThumbnails();
     private final int width = 250;
     private final int height = 40;
     private final int field20847 = 64;
@@ -45,6 +50,7 @@ public class MusicPlayer extends AnimatedIconPanel {
     private String field20849 = "Music Player";
     private final ScrollableContentPanel musicTabs;
     private ScrollableContentPanel field20852;
+    private ScrollableContentPanel midFavorQueue;
     private final CustomGuiScreen musicControls;
     private final MusicManager musicManager = Client.getInstance().musicManager;
     public static Map<String, Thumbnails> videoMap = new LinkedHashMap<>();
@@ -74,18 +80,33 @@ public class MusicPlayer extends AnimatedIconPanel {
 
     public ClickGuiScreen parent;
 
+    private static Thumbnails createMidFavorThumbnails() {
+        Thumbnails thumbnails = new Thumbnails(MID_FAVOR_NAME, MID_FAVOR_ID, YoutubeContentType.SEARCH);
+        thumbnails.isUpdated = true;
+        return thumbnails;
+    }
+
+    private static synchronized void ensureBaseVideoSources() {
+        addVideoSourceIfMissing(new Thumbnails("Bundled Music", "bundled_music", YoutubeContentType.BUNDLED));
+        addVideoSourceIfMissing(new Thumbnails("Local Music", "local_music", YoutubeContentType.LOCAL));
+        addVideoSourceIfMissing(new Thumbnails("\u7f51\u6613\u4e91\u70ed\u6b4c", "netease_hot", YoutubeContentType.NETEASE));
+        addVideoSourceIfMissing(new Thumbnails("\u7f51\u6613\u4e91\u65b0\u6b4c", "netease_new", YoutubeContentType.NETEASE));
+        addVideoSourceIfMissing(MID_FAVOR_THUMBNAILS);
+        getMidFavorThumbnails().isUpdated = true;
+    }
+
+    private static void addVideoSourceIfMissing(Thumbnails thumbnails) {
+        if (!hasVideo(thumbnails.videoId)) {
+            videos.add(thumbnails);
+        }
+    }
+
     public MusicPlayer(ClickGuiScreen parent, String var2) {
         super(parent, var2, 875, 55, 800, 600, false);
         this.parent = parent;
 
-        // Only initialize the default video sources once; preserve loaded Thumbnails on re-open
-        if (videos.size() < 4) {
-            videos.clear();
-            videos.add(new Thumbnails("Bundled Music", "bundled_music", YoutubeContentType.BUNDLED));
-            videos.add(new Thumbnails("Local Music", "local_music", YoutubeContentType.LOCAL));
-            videos.add(new Thumbnails("\u7f51\u6613\u4e91\u70ed\u6b4c", "netease_hot", YoutubeContentType.NETEASE));
-            videos.add(new Thumbnails("\u7f51\u6613\u4e91\u65b0\u6b4c", "netease_new", YoutubeContentType.NETEASE));
-        }
+        // Only initialize default sources once; preserve loaded Thumbnails on re-open.
+        ensureBaseVideoSources();
 
         time = System.nanoTime();
         this.setWidthA(800);
@@ -335,6 +356,130 @@ public class MusicPlayer extends AnimatedIconPanel {
 
     private void playSong(Thumbnails manager, YoutubeVideoData video) {
         this.musicManager.playSong(manager, video);
+    }
+
+    public void addMidFavor(YoutubeVideoData song) {
+        if (song == null || song.videoId == null) {
+            return;
+        }
+
+        Thumbnails midFavor = getMidFavorThumbnails();
+        boolean added = addMidFavorSongIfMissing(midFavor, song);
+        if (added) {
+            this.appendMidFavorButton(song, midFavor.videoList.size() - 1);
+        }
+
+        Client.getInstance().notificationManager.send(
+                new Notification(
+                        MID_FAVOR_NAME,
+                        (added ? "Added: " : "Already in mid favor: ") + notificationSongTitle(song),
+                        3000));
+    }
+
+    public static void registerQueue(MusicPlayer player, Thumbnails thumbnail, ScrollableContentPanel queue) {
+        if (player != null && isMidFavor(thumbnail)) {
+            player.midFavorQueue = queue;
+        }
+    }
+
+    public static ThumbnailButton addTrackButton(
+            MusicPlayer player,
+            ScrollableContentPanel queue,
+            Thumbnails manager,
+            YoutubeVideoData song,
+            int index) {
+        if (player == null || queue == null || song == null) {
+            return null;
+        }
+        if (song.videoId != null && queue.isntQueue(song.videoId)) {
+            return null;
+        }
+
+        int x = 65;
+        int y = 10;
+        ThumbnailButton thumbnail = new ThumbnailButton(
+                queue,
+                y + index % 3 * 183 - (index % 3 <= 0 ? 0 : y) - (index % 3 <= 1 ? 0 : y),
+                x + y + (index - index % 3) / 3 * 210,
+                183,
+                220,
+                song);
+        queue.addToList(thumbnail);
+        thumbnail.onClick((parent, mouseButton) -> {
+            if (mouseButton == 2) {
+                player.addMidFavor(song);
+                return;
+            }
+
+            MusicPlayer.playSong(player, manager, song);
+        });
+        return thumbnail;
+    }
+
+    private void appendMidFavorButton(YoutubeVideoData song, int index) {
+        if (this.midFavorQueue == null || this.midFavorQueue.isntQueue(song.videoId)) {
+            return;
+        }
+
+        addTrackButton(this, this.midFavorQueue, getMidFavorThumbnails(), song, index);
+    }
+
+    private static synchronized boolean addMidFavorSongIfMissing(Thumbnails midFavor, YoutubeVideoData song) {
+        String songKey = midFavorSongKey(song);
+        for (YoutubeVideoData existing : midFavor.videoList) {
+            if (songKey.equals(midFavorSongKey(existing))) {
+                return false;
+            }
+        }
+
+        midFavor.videoList.add(song);
+        return true;
+    }
+
+    private static boolean isMidFavor(Thumbnails thumbnail) {
+        return thumbnail != null && MID_FAVOR_ID.equals(thumbnail.videoId);
+    }
+
+    private static Thumbnails getMidFavorThumbnails() {
+        for (Thumbnails existing : videos) {
+            if (MID_FAVOR_ID.equals(existing.videoId)) {
+                return existing;
+            }
+        }
+
+        return MID_FAVOR_THUMBNAILS;
+    }
+
+    private static String midFavorSongKey(YoutubeVideoData song) {
+        if (song == null) {
+            return "";
+        }
+
+        if (song.neteaseSongId > 0) {
+            return "netease:" + song.neteaseSongId;
+        }
+
+        String videoId = normalizeMidFavorKeyPart(song.videoId);
+        if (!videoId.isEmpty()) {
+            return videoId;
+        }
+
+        String fullUrl = normalizeMidFavorKeyPart(song.fullUrl);
+        if (!fullUrl.isEmpty()) {
+            return fullUrl;
+        }
+
+        return normalizeMidFavorKeyPart(song.title);
+    }
+
+    private static String normalizeMidFavorKeyPart(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String notificationSongTitle(YoutubeVideoData song) {
+        String title = song.title == null || song.title.trim().isEmpty() ? "Unknown track" : song.title.trim();
+        title = title.replace('\n', ' ').replace('\r', ' ');
+        return title.length() <= 60 ? title : title.substring(0, 57) + "...";
     }
 
     @Override

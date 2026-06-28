@@ -22,6 +22,8 @@ import com.mentalfrostbyte.jello.managers.util.Thumbnails;
 
 import com.mentalfrostbyte.jello.managers.util.notifs.Notification;
 
+import com.mentalfrostbyte.jello.module.impl.render.jello.CustomFont;
+
 import com.mentalfrostbyte.jello.util.client.ClientMode;
 
 import com.mentalfrostbyte.jello.util.client.music.JavaFFT;
@@ -109,18 +111,75 @@ import java.awt.image.BufferedImage;
 
 import java.io.*;
 
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 public class MusicManager extends Manager implements MinecraftUtil {
     // Use a neutral pink fallback instead of green when artwork color extraction fails.
     private static final int DEFAULT_COVER_ACCENT_COLOR = 0xFFFF85C2;
+    private static final int COVER_CONNECT_TIMEOUT_MS = 3000;
+    private static final int COVER_READ_TIMEOUT_MS = 5000;
+    private static final int COVER_PROCESS_SIZE = 256;
+    private static final int COVER_NOTIFICATION_SIZE = 114;
+    private static final int PROCESSED_COVER_CACHE_MAX = 24;
+
+    private static final LinkedHashMap<String, ProcessedCoverImages> PROCESSED_COVER_CACHE =
+            new LinkedHashMap<String, ProcessedCoverImages>(32, 0.75F, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, ProcessedCoverImages> eldest) {
+                    return size() > PROCESSED_COVER_CACHE_MAX;
+                }
+            };
+
+    private static final class ProcessedCoverImages {
+        final BufferedImage backgroundStrip;
+        final BufferedImage notificationCover;
+        final int accentColor;
+
+        private ProcessedCoverImages(BufferedImage backgroundStrip,
+                                     BufferedImage notificationCover,
+                                     int accentColor) {
+            this.backgroundStrip = backgroundStrip;
+            this.notificationCover = notificationCover;
+            this.accentColor = accentColor;
+        }
+    }
+
+    private static final class ProcessedCoverResult {
+        final String title;
+        final String coverKey;
+        final int generation;
+        final ProcessedCoverImages images;
+
+        private ProcessedCoverResult(String title, String coverKey, int generation,
+                                     ProcessedCoverImages images) {
+            this.title = title;
+            this.coverKey = coverKey;
+            this.generation = generation;
+            this.images = images;
+        }
+    }
+
+    private static final class PendingCoverUpload {
+        final ProcessedCoverResult result;
+        Texture songThumbnail;
+        Texture notificationImage;
+        int step;
+
+        private PendingCoverUpload(ProcessedCoverResult result) {
+            this.result = result;
+        }
+    }
+
     public BufferedImage scaledThumbnail;
     public String songTitle = "";
     public List<double[]> visualizerData = new ArrayList<double[]>();
@@ -143,7 +202,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     private Texture songThumbnail;
 
-    private boolean processing = false;
+    private volatile boolean processing = false;
 
     private transient volatile Thread audioThread = null;
 
@@ -153,7 +212,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     private int currentVideoIndex;
 
-    private YoutubeVideoData currentVideo;
+    private volatile YoutubeVideoData currentVideo;
 
     private boolean spectrum = true;
 
@@ -183,15 +242,15 @@ public class MusicManager extends Manager implements MinecraftUtil {
     /** The song title for which the cached textures were created */
 
     private String cachedTextureSongTitle = null;
+    private String cachedTextureCoverKey = null;
 
-    /** Pending BufferedImage from worker thread, to be uploaded on render thread */
-    private volatile BufferedImage pendingThumbnailImage = null;
-    private volatile BufferedImage pendingScaledThumbnail = null;
-    private volatile Integer pendingCoverAccentColor = null;
-    private volatile String pendingSongTitle = null;
-    private volatile String pendingCoverKey = null;
+    /** Pending CPU-side cover result from worker thread, uploaded on render thread. */
+    private volatile ProcessedCoverResult pendingProcessedCover = null;
     private volatile String requestedCoverKey = null;
+    private volatile int requestedCoverGeneration = 0;
     private volatile int coverAccentColor = DEFAULT_COVER_ACCENT_COLOR;
+    private final AtomicInteger coverGeneration = new AtomicInteger();
+    private PendingCoverUpload activeCoverUpload = null;
 
 
     @Override
@@ -520,6 +579,14 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     int screenHeight = mc.getMainWindow().getHeight();
 
                     TrackTitleParts titleParts = parseTrackTitle(this.songTitle);
+                    String lyric = this.getCurrentLyric();
+                    CustomFont customFont = this.getSpectrumCustomFont();
+                    boolean customSpectrumFont = customFont != null && customFont.ensureSpectrumTypeface();
+                    int customSpectrumColor = customSpectrumFont
+                            ? customFont.getSpectrumTextColor()
+                            : ClientColors.LIGHT_GREYISH_BLUE.getColor();
+                    SpectrumTextLayout spectrumLayout = this.buildSpectrumTextLayout(
+                            screenWidth, screenHeight, titleParts, lyric, customSpectrumFont, customFont);
 
                     if (titleParts.artist.isEmpty()) {
 
@@ -527,12 +594,17 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 screenWidth, screenHeight,
                                 titleParts.title,
                                 130.0F,
-                                (float) (screenHeight - 70),
-                                18.0F,
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F),
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F),
+                                spectrumLayout.titleY,
+                                spectrumLayout.titleSize,
+                                customSpectrumFont
+                                        ? RenderUtil2.applyAlpha(customSpectrumColor, 0.35F)
+                                        : RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F),
+                                customSpectrumFont
+                                        ? RenderUtil2.applyAlpha(customSpectrumColor, 0.82F)
+                                        : RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F),
                                 ResourceRegistry.JelloLightFont18_1,
-                                ResourceRegistry.JelloLightFont18);
+                                ResourceRegistry.JelloLightFont18,
+                                customSpectrumFont);
 
                     } else {
 
@@ -540,23 +612,33 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 screenWidth, screenHeight,
                                 titleParts.artist,
                                 130.0F,
-                                (float) (screenHeight - 81),
-                                20.0F,
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.4F),
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F),
+                                spectrumLayout.artistY,
+                                spectrumLayout.artistSize,
+                                customSpectrumFont
+                                        ? RenderUtil2.applyAlpha(customSpectrumColor, 0.3F)
+                                        : RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.4F),
+                                customSpectrumFont
+                                        ? RenderUtil2.applyAlpha(customSpectrumColor, 0.72F)
+                                        : RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F),
                                 ResourceRegistry.JelloMediumFont20_1,
-                                ResourceRegistry.JelloMediumFont20);
+                                ResourceRegistry.JelloMediumFont20,
+                                customSpectrumFont);
 
                         drawSpectrumText(
                                 screenWidth, screenHeight,
                                 titleParts.title,
                                 130.0F,
-                                (float) (screenHeight - 56),
-                                18.0F,
-                                RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F),
-                                RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F),
+                                spectrumLayout.titleY,
+                                spectrumLayout.titleSize,
+                                customSpectrumFont
+                                        ? RenderUtil2.applyAlpha(customSpectrumColor, 0.35F)
+                                        : RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.5F),
+                                customSpectrumFont
+                                        ? RenderUtil2.applyAlpha(customSpectrumColor, 0.86F)
+                                        : RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.7F),
                                 ResourceRegistry.JelloLightFont18_1,
-                                ResourceRegistry.JelloLightFont18);
+                                ResourceRegistry.JelloLightFont18,
+                                customSpectrumFont);
 
                     }
 
@@ -564,32 +646,27 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                     // Lyrics
 
-                    String lyric = this.getCurrentLyric();
-
                     if (lyric != null && !lyric.isEmpty()) {
 
-                        float fontSize = 20.0f;
+                        float fontSize = spectrumLayout.lyricSize;
 
-                        float lyricY = (float) (screenHeight - 38);
+                        float lyricY = spectrumLayout.lyricY;
 
                         float lyricX = 130.0F;
 
-                        boolean skijaReady = SkijaFontRenderer.ensureInitialized(screenWidth, screenHeight);
-
-                        float lyricWidth = skijaReady ? SkijaFontRenderer.getTextWidth(lyric, fontSize) : 0.0F;
+                        float lyricWidth = this.measureSpectrumText(
+                                screenWidth, screenHeight, lyric, fontSize, customSpectrumFont, ResourceRegistry.JelloLightFont18);
 
                         float progress = this.getLyricProgress();
 
                         float progressWidth = lyricWidth * progress;
 
 
-                        int dimColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.35F);
+                        int dimColor = RenderUtil2.applyAlpha(customSpectrumColor, 0.35F);
 
-                        if (skijaReady) {
-                            SkijaFontRenderer.beginFrame(screenWidth, screenHeight);
-                            SkijaFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, dimColor);
-                            SkijaFontRenderer.endFrame();
-                        }
+                        this.drawSpectrumPlainText(
+                                screenWidth, screenHeight, lyric, lyricX, lyricY, fontSize, dimColor,
+                                ResourceRegistry.JelloLightFont18, customSpectrumFont);
 
 
 
@@ -598,13 +675,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                 (int) (lyricY + fontSize), true);
 
 
-                        int brightColor = RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.95F);
+                        int brightColor = RenderUtil2.applyAlpha(customSpectrumColor, 0.95F);
 
-                        if (skijaReady) {
-                            SkijaFontRenderer.beginFrame(screenWidth, screenHeight);
-                            SkijaFontRenderer.drawText(lyric, lyricX, lyricY, fontSize, brightColor);
-                            SkijaFontRenderer.endFrame();
-                        }
+                        this.drawSpectrumPlainText(
+                                screenWidth, screenHeight, lyric, lyricX, lyricY, fontSize, brightColor,
+                                ResourceRegistry.JelloLightFont18, customSpectrumFont);
 
 
 
@@ -630,21 +705,178 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     private void drawSpectrumText(int screenWidth, int screenHeight, String text, float x, float y, float fontSize,
                                   int shadowColor, int mainColor, TrueTypeFont shadowFallback,
-                                  TrueTypeFont mainFallback) {
+                                  TrueTypeFont mainFallback, boolean useCustomTypeface) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+
+        this.drawSpectrumPlainText(
+                screenWidth, screenHeight, text, x, y, fontSize, shadowColor, shadowFallback, useCustomTypeface);
+        this.drawSpectrumPlainText(
+                screenWidth, screenHeight, text, x, y, fontSize, mainColor, mainFallback, useCustomTypeface);
+    }
+
+    private void drawSpectrumPlainText(int screenWidth, int screenHeight, String text, float x, float y,
+                                       float fontSize, int color, TrueTypeFont fallback,
+                                       boolean useCustomTypeface) {
         if (text == null || text.isEmpty()) {
             return;
         }
 
         if (SkijaFontRenderer.ensureInitialized(screenWidth, screenHeight)) {
             SkijaFontRenderer.beginFrame(screenWidth, screenHeight);
-            SkijaFontRenderer.drawText(text, x, y, fontSize, shadowColor);
-            SkijaFontRenderer.drawText(text, x, y, fontSize, mainColor);
+            if (useCustomTypeface && SkijaFontRenderer.hasCustomTypeface()) {
+                SkijaFontRenderer.drawCustomText(text, x, y, fontSize, color);
+            } else {
+                SkijaFontRenderer.drawText(text, x, y, fontSize, color);
+            }
             SkijaFontRenderer.endFrame();
             return;
         }
 
-        RenderUtil.drawString(shadowFallback, x, y, text, shadowColor);
-        RenderUtil.drawString(mainFallback, x, y, text, mainColor);
+        RenderUtil.drawString(fallback, x, y, text, color);
+    }
+
+    private SpectrumTextLayout buildSpectrumTextLayout(int screenWidth, int screenHeight, TrackTitleParts titleParts,
+                                                       String lyric, boolean useCustomTypeface, CustomFont customFont) {
+        SpectrumTextLayout layout = new SpectrumTextLayout();
+        boolean hasArtist = titleParts != null && !titleParts.artist.isEmpty();
+        boolean hasLyric = lyric != null && !lyric.isEmpty();
+
+        if (!useCustomTypeface || customFont == null) {
+            layout.artistSize = 20.0F;
+            layout.titleSize = 18.0F;
+            layout.lyricSize = 20.0F;
+            layout.artistY = (float) (screenHeight - 81);
+            layout.titleY = (float) (screenHeight - (hasArtist ? 56 : 70));
+            layout.lyricY = (float) (screenHeight - 38);
+            return layout;
+        }
+
+        float scale = customFont.getSpectrumFontScale();
+        layout.artistSize = this.clampSpectrumFontSize(20.0F * scale);
+        layout.titleSize = this.clampSpectrumFontSize(18.0F * scale);
+        layout.lyricSize = this.clampSpectrumFontSize(20.0F * scale);
+
+        float maxTextWidth = Math.max(80.0F, (float) screenWidth - 150.0F);
+        if (hasArtist) {
+            layout.artistSize = this.fitSpectrumFontSize(
+                    screenWidth, screenHeight, titleParts.artist, layout.artistSize, maxTextWidth,
+                    true, ResourceRegistry.JelloMediumFont20);
+        }
+        layout.titleSize = this.fitSpectrumFontSize(
+                screenWidth, screenHeight, titleParts.title, layout.titleSize, maxTextWidth,
+                true, ResourceRegistry.JelloLightFont18);
+        if (hasLyric) {
+            layout.lyricSize = this.fitSpectrumFontSize(
+                    screenWidth, screenHeight, lyric, layout.lyricSize, maxTextWidth,
+                    true, ResourceRegistry.JelloLightFont18);
+        }
+
+        float gap = Math.max(4.0F, Math.min(9.0F, 5.0F * scale));
+        float topLimit = (float) screenHeight - 106.0F;
+        float bottomLimit = (float) screenHeight - 14.0F;
+        float totalHeight = layout.titleSize;
+        if (hasArtist) {
+            totalHeight += gap + layout.artistSize;
+        }
+        if (hasLyric) {
+            totalHeight += gap + layout.lyricSize;
+        }
+
+        float verticalBudget = Math.max(42.0F, bottomLimit - topLimit);
+        if (totalHeight > verticalBudget) {
+            float fit = verticalBudget / totalHeight;
+            layout.artistSize = Math.max(10.0F, layout.artistSize * fit);
+            layout.titleSize = Math.max(10.0F, layout.titleSize * fit);
+            layout.lyricSize = Math.max(10.0F, layout.lyricSize * fit);
+            gap = Math.max(3.0F, gap * fit);
+        }
+
+        if (hasLyric) {
+            layout.lyricY = bottomLimit - layout.lyricSize;
+            layout.titleY = layout.lyricY - gap - layout.titleSize;
+            layout.artistY = hasArtist ? layout.titleY - gap - layout.artistSize : layout.titleY;
+        } else if (hasArtist) {
+            layout.titleY = bottomLimit - layout.titleSize;
+            layout.artistY = layout.titleY - gap - layout.artistSize;
+            layout.lyricY = bottomLimit - layout.lyricSize;
+        } else {
+            layout.titleY = topLimit + (verticalBudget - layout.titleSize) * 0.5F;
+            layout.artistY = layout.titleY;
+            layout.lyricY = bottomLimit - layout.lyricSize;
+        }
+
+        float top = hasArtist ? layout.artistY : layout.titleY;
+        if (top < topLimit) {
+            float offset = topLimit - top;
+            layout.artistY += offset;
+            layout.titleY += offset;
+            layout.lyricY += offset;
+        }
+
+        layout.titleSize = this.fitSpectrumFontSize(
+                screenWidth, screenHeight, titleParts.title, layout.titleSize, maxTextWidth,
+                true, ResourceRegistry.JelloLightFont18);
+        if (hasArtist) {
+            layout.artistSize = this.fitSpectrumFontSize(
+                    screenWidth, screenHeight, titleParts.artist, layout.artistSize, maxTextWidth,
+                    true, ResourceRegistry.JelloMediumFont20);
+        }
+        if (hasLyric) {
+            layout.lyricSize = this.fitSpectrumFontSize(
+                    screenWidth, screenHeight, lyric, layout.lyricSize, maxTextWidth,
+                    true, ResourceRegistry.JelloLightFont18);
+        }
+
+        return layout;
+    }
+
+    private float fitSpectrumFontSize(int screenWidth, int screenHeight, String text, float fontSize, float maxWidth,
+                                      boolean useCustomTypeface, TrueTypeFont fallback) {
+        if (text == null || text.isEmpty()) {
+            return fontSize;
+        }
+
+        float width = this.measureSpectrumText(screenWidth, screenHeight, text, fontSize, useCustomTypeface, fallback);
+        if (width <= 0.0F || width <= maxWidth) {
+            return fontSize;
+        }
+        return Math.max(10.0F, fontSize * maxWidth / width);
+    }
+
+    private float measureSpectrumText(int screenWidth, int screenHeight, String text, float fontSize,
+                                      boolean useCustomTypeface, TrueTypeFont fallback) {
+        if (text == null || text.isEmpty()) {
+            return 0.0F;
+        }
+
+        if (SkijaFontRenderer.ensureInitialized(screenWidth, screenHeight)) {
+            if (useCustomTypeface && SkijaFontRenderer.hasCustomTypeface()) {
+                return SkijaFontRenderer.getCustomTextWidth(text, fontSize);
+            }
+            return SkijaFontRenderer.getTextWidth(text, fontSize);
+        }
+
+        if (fallback != null) {
+            return fallback.getWidth(text);
+        }
+        return text.length() * fontSize * 0.55F;
+    }
+
+    private float clampSpectrumFontSize(float fontSize) {
+        return Math.max(10.0F, Math.min(34.0F, fontSize));
+    }
+
+    private CustomFont getSpectrumCustomFont() {
+        try {
+            if (Client.getInstance() == null || Client.getInstance().moduleManager == null) {
+                return null;
+            }
+            return (CustomFont) Client.getInstance().moduleManager.getModuleByClass(CustomFont.class);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
 
@@ -668,6 +900,15 @@ public class MusicManager extends Manager implements MinecraftUtil {
         }
 
         return new TrackTitleParts("", safeTitle);
+    }
+
+    private static class SpectrumTextLayout {
+        private float artistY;
+        private float titleY;
+        private float lyricY;
+        private float artistSize;
+        private float titleSize;
+        private float lyricSize;
     }
 
     private static class TrackTitleParts {
@@ -698,105 +939,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
         // --- Upload pending textures on the render thread (safe for OpenGL) ---
         try {
-            if (this.pendingThumbnailImage != null && this.pendingScaledThumbnail != null
-                    && this.pendingCoverAccentColor != null
-                    && this.currentVideo == null && !mc.isGamePaused()) {
-                // Grab pending data atomically
-                BufferedImage thumbImg = this.pendingThumbnailImage;
-                BufferedImage scaledImg = this.pendingScaledThumbnail;
-                Integer pendingAccent = this.pendingCoverAccentColor;
-                String title = this.pendingSongTitle;
-                String pendingKey = this.pendingCoverKey;
-                String expectedKey = this.requestedCoverKey;
-                this.pendingThumbnailImage = null;
-                this.pendingScaledThumbnail = null;
-                this.pendingCoverAccentColor = null;
-                this.pendingSongTitle = null;
-                this.pendingCoverKey = null;
-
-                // Drop stale worker results (old song cover) to avoid async race overwriting current song state.
-                if (pendingKey != null && expectedKey != null && !pendingKey.equals(expectedKey)) {
-                    this.processing = false;
-                    return;
-                }
-
-                // Only recreate if song actually changed
-                if (title != null && !title.equals(this.cachedTextureSongTitle)) {
-                    // Release old textures first
-                    if (this.songThumbnail != null) {
-                        try { this.songThumbnail.release(); } catch (Exception ignored) {}
-
-                        this.songThumbnail = null;
-
-                    }
-
-                    if (this.notificationImage != null) {
-
-                        try { this.notificationImage.release(); } catch (Exception ignored) {}
-
-                        this.notificationImage = null;
-
-                    }
-
-
-
-                    // Deep-copy to TYPE_INT_ARGB before handing pixels to the safe native uploader.
-
-                    BufferedImage safeThumb = ensureSafeTexture(thumbImg);
-
-                    BufferedImage safeScaled = ensureSafeTexture(scaledImg);
-
-
-
-                    try {
-
-                        this.songThumbnail = SafeTextureUploader.upload(uniqueTextureName("music_bg"), safeThumb);
-
-                    } catch (Exception e) {
-
-                        System.err.println("[MusicManager] Failed to create songThumbnail texture: " + e.getMessage());
-
-                        e.printStackTrace();
-
-                        this.songThumbnail = null;
-
-                    }
-
-
-
-                    try {
-
-                        this.notificationImage = SafeTextureUploader.upload(uniqueTextureName("music_cover"), safeScaled);
-
-                    } catch (Exception e) {
-
-                        System.err.println("[MusicManager] Failed to create notificationImage texture: " + e.getMessage());
-
-                        e.printStackTrace();
-
-                        this.notificationImage = null;
-
-                    }
-
-                    this.songTitle = title;
-                    this.cachedTextureSongTitle = title;
-                    // Apply extracted accent only after artwork textures were uploaded successfully.
-                    this.coverAccentColor = sanitizeAccentColor(pendingAccent);
-
-                    if (this.notificationImage != null) {
-                        Client.getInstance().notificationManager
-                                .send(new Notification("Now Playing", this.songTitle, 7000, this.notificationImage));
-                    } else {
-                        Client.getInstance().notificationManager
-
-                                .send(new Notification("Now Playing", this.songTitle));
-
-                    }
-
-                }
-
-                this.processing = false;
-
+            if (!mc.isGamePaused()) {
+                this.preparePendingCoverUpload();
+                this.uploadNextCoverTexture();
             }
         } catch (Throwable exc) {
             // Catch all exceptions (including native wrapper errors) to prevent render thread crash
@@ -819,6 +964,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
             this.songThumbnail = null;
             this.notificationImage = null;
             this.cachedTextureSongTitle = null; // allow retry on next tick
+            this.cachedTextureCoverKey = null;
+            this.pendingProcessedCover = null;
+            this.releaseActiveCoverUpload();
             this.coverAccentColor = DEFAULT_COVER_ACCENT_COLOR;
             this.processing = false;
         }
@@ -830,6 +978,138 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
         }
 
+    }
+
+    private void preparePendingCoverUpload() {
+        if (this.activeCoverUpload != null) {
+            return;
+        }
+
+        ProcessedCoverResult result = this.pendingProcessedCover;
+        if (result == null) {
+            return;
+        }
+
+        this.pendingProcessedCover = null;
+        if (!this.isCurrentCoverResult(result)) {
+            this.processing = false;
+            return;
+        }
+
+        if (result.coverKey != null
+                && result.coverKey.equals(this.cachedTextureCoverKey)
+                && this.hasReadySongArtwork()) {
+            this.songTitle = result.title;
+            this.cachedTextureSongTitle = result.title;
+            this.coverAccentColor = sanitizeAccentColor(result.images.accentColor);
+            this.currentVideo = null;
+            this.processing = false;
+            if (this.notificationImage != null) {
+                Client.getInstance().notificationManager
+                        .send(new Notification("Now Playing", this.songTitle, 7000, this.notificationImage));
+            }
+            return;
+        }
+
+        this.activeCoverUpload = new PendingCoverUpload(result);
+    }
+
+    private void uploadNextCoverTexture() {
+        PendingCoverUpload upload = this.activeCoverUpload;
+        if (upload == null) {
+            return;
+        }
+
+        if (!this.isCurrentCoverResult(upload.result)) {
+            this.releaseActiveCoverUpload();
+            this.processing = false;
+            return;
+        }
+
+        if (upload.step == 0) {
+            upload.step = 1;
+            try {
+                upload.songThumbnail = SafeTextureUploader.upload(
+                        uniqueTextureName("music_bg"), upload.result.images.backgroundStrip);
+            } catch (Exception e) {
+                System.err.println("[MusicManager] Failed to create songThumbnail texture: " + e.getMessage());
+                e.printStackTrace();
+                upload.songThumbnail = null;
+            }
+            return;
+        }
+
+        if (upload.step == 1) {
+            upload.step = 2;
+            try {
+                upload.notificationImage = SafeTextureUploader.upload(
+                        uniqueTextureName("music_cover"), upload.result.images.notificationCover);
+            } catch (Exception e) {
+                System.err.println("[MusicManager] Failed to create notificationImage texture: " + e.getMessage());
+                e.printStackTrace();
+                upload.notificationImage = null;
+            }
+            this.finishCoverUpload(upload);
+        }
+    }
+
+    private void finishCoverUpload(PendingCoverUpload upload) {
+        Texture oldSongThumbnail = this.songThumbnail;
+        Texture oldNotificationImage = this.notificationImage;
+
+        this.songThumbnail = upload.songThumbnail;
+        this.notificationImage = upload.notificationImage;
+
+        if (oldSongThumbnail != null && oldSongThumbnail != this.songThumbnail) {
+            try { oldSongThumbnail.release(); } catch (Exception ignored) {}
+        }
+
+        if (oldNotificationImage != null && oldNotificationImage != this.notificationImage) {
+            try { oldNotificationImage.release(); } catch (Exception ignored) {}
+        }
+
+        this.songTitle = upload.result.title;
+        this.cachedTextureSongTitle = upload.result.title;
+        this.cachedTextureCoverKey = upload.result.coverKey;
+        this.coverAccentColor = sanitizeAccentColor(upload.result.images.accentColor);
+        this.currentVideo = null;
+        this.activeCoverUpload = null;
+        this.processing = false;
+
+        if (this.notificationImage != null) {
+            Client.getInstance().notificationManager
+                    .send(new Notification("Now Playing", this.songTitle, 7000, this.notificationImage));
+        } else {
+            Client.getInstance().notificationManager
+                    .send(new Notification("Now Playing", this.songTitle));
+        }
+    }
+
+    private void releaseActiveCoverUpload() {
+        PendingCoverUpload upload = this.activeCoverUpload;
+        this.activeCoverUpload = null;
+        if (upload == null) {
+            return;
+        }
+
+        if (upload.songThumbnail != null) {
+            try { upload.songThumbnail.release(); } catch (Exception ignored) {}
+        }
+
+        if (upload.notificationImage != null) {
+            try { upload.notificationImage.release(); } catch (Exception ignored) {}
+        }
+    }
+
+    private boolean isCurrentCoverResult(ProcessedCoverResult result) {
+        if (result == null) {
+            return false;
+        }
+
+        String expectedKey = this.requestedCoverKey;
+        return expectedKey != null
+                && expectedKey.equals(result.coverKey)
+                && result.generation == this.requestedCoverGeneration;
     }
 
 
@@ -884,11 +1164,73 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     private static String buildCoverKey(YoutubeVideoData videoData) {
         if (videoData == null) {
-            return "";
+            return "missing-cover";
         }
-        String id = videoData.videoId == null ? "" : videoData.videoId;
-        String title = videoData.title == null ? "" : videoData.title;
-        return id + "|" + title;
+
+        String fullUrl = normalizeSongKeyPart(videoData.fullUrl);
+        if (fullUrl.isEmpty()) {
+            return "missing-cover";
+        }
+
+        try {
+            URL url = new URL(fullUrl);
+            if ("file".equalsIgnoreCase(url.getProtocol())) {
+                File file = new File(url.toURI());
+                return "file:" + file.getAbsolutePath()
+                        + "|" + file.lastModified()
+                        + "|" + file.length();
+            }
+        } catch (Exception ignored) {
+        }
+
+        return "url:" + fullUrl;
+    }
+
+    private static ProcessedCoverImages processedCoverCacheGet(String coverKey) {
+        synchronized (PROCESSED_COVER_CACHE) {
+            return PROCESSED_COVER_CACHE.get(coverKey);
+        }
+    }
+
+    private static void processedCoverCachePut(String coverKey, ProcessedCoverImages images) {
+        if (coverKey == null || images == null) {
+            return;
+        }
+
+        synchronized (PROCESSED_COVER_CACHE) {
+            PROCESSED_COVER_CACHE.put(coverKey, images);
+        }
+    }
+
+    private static BufferedImage readCoverImage(String fullUrl) throws IOException {
+        String normalized = normalizeSongKeyPart(fullUrl);
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        URL url = new URL(normalized);
+        URLConnection connection = url.openConnection();
+        connection.setConnectTimeout(COVER_CONNECT_TIMEOUT_MS);
+        connection.setReadTimeout(COVER_READ_TIMEOUT_MS);
+        connection.setUseCaches(true);
+
+        if (connection instanceof HttpURLConnection httpConnection) {
+            httpConnection.setRequestMethod("GET");
+            httpConnection.setRequestProperty("User-Agent", "Mozilla/5.0");
+            int responseCode = httpConnection.getResponseCode();
+            if (responseCode < 200 || responseCode >= 300) {
+                httpConnection.disconnect();
+                return null;
+            }
+        }
+
+        try (InputStream inputStream = new BufferedInputStream(connection.getInputStream())) {
+            return ImageIO.read(inputStream);
+        } finally {
+            if (connection instanceof HttpURLConnection httpConnection) {
+                httpConnection.disconnect();
+            }
+        }
     }
 
     private static String buildSongNotificationKey(YoutubeVideoData videoData) {
@@ -978,7 +1320,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
     }
 
     private static BufferedImage createDefaultCoverImage() {
-        BufferedImage fallback = new BufferedImage(180, 180, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage fallback = new BufferedImage(COVER_PROCESS_SIZE, COVER_PROCESS_SIZE, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = fallback.createGraphics();
         g.setColor(new Color(DEFAULT_COVER_ACCENT_COLOR, true));
         g.fillRect(0, 0, fallback.getWidth(), fallback.getHeight());
@@ -1006,10 +1348,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
             return copyRegionToArgb(source, 1, 3, 170, 170);
         }
 
-        int side = Math.min(width, height);
-        int x = Math.max(0, (width - side) / 2);
-        int y = Math.max(0, (height - side) / 2);
-        return copyRegionToArgb(source, x, y, side, side);
+        return source;
     }
 
     private static BufferedImage createBottomStripSample(BufferedImage blurredSquare) {
@@ -1163,13 +1502,24 @@ public class MusicManager extends Manager implements MinecraftUtil {
     }
 
     private void startProcessingVideoThumbnail(YoutubeVideoData videoData) {
-        if (videoData != null && !this.processing) {
+        if (videoData != null) {
+            String coverKey = buildCoverKey(videoData);
+            int generation = this.coverGeneration.incrementAndGet();
+            this.requestedCoverKey = coverKey;
+            this.requestedCoverGeneration = generation;
+            this.visualizerData.clear();
+
+            if (this.processing) {
+                return;
+            }
+
             // Mark processing before starting thread to prevent duplicate workers racing each other.
             this.processing = true;
-            this.visualizerData.clear();
-            String coverKey = buildCoverKey(videoData);
-            this.requestedCoverKey = coverKey;
-            new Thread(() -> this.processVideoThumbnail(videoData, coverKey), "MusicCoverProcessor").start();
+            Thread worker = new Thread(
+                    () -> this.processVideoThumbnail(videoData, coverKey, generation),
+                    "MusicCoverProcessor");
+            worker.setDaemon(true);
+            worker.start();
         }
     }
 
@@ -2039,73 +2389,63 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
 
     public void processVideoThumbnail(YoutubeVideoData videoData) {
-        this.processVideoThumbnail(videoData, buildCoverKey(videoData));
+        String coverKey = buildCoverKey(videoData);
+        int generation = this.coverGeneration.incrementAndGet();
+        this.requestedCoverKey = coverKey;
+        this.requestedCoverGeneration = generation;
+        this.processVideoThumbnail(videoData, coverKey, generation);
     }
 
-    private void processVideoThumbnail(YoutubeVideoData videoData, String coverKey) {
+    private void processVideoThumbnail(YoutubeVideoData videoData, String coverKey, int generation) {
         try {
             if (videoData == null) {
                 this.processing = false;
                 return;
             }
 
-            BufferedImage buffImage = null;
-            try {
-                buffImage = ImageIO.read(new URL(videoData.fullUrl));
-            } catch (Exception e) {
-                // If failed to read image (e.g. audio file), use default or null
-            }
-
-            if (buffImage == null) {
-                // Keep original behavior for texture pipeline stability.
-                buffImage = new BufferedImage(180, 180, BufferedImage.TYPE_INT_ARGB);
-            }
-
             String title = videoData.title;
-            BufferedImage blurred = ImageUtil.applyBlur(buffImage, 15);
-            if (blurred == null) {
-                blurred = buffImage;
-            }
-
-            // Keep legacy sampling region for bar texture to avoid visual regressions.
-            int blurH = blurred.getHeight();
-            int blurW = blurred.getWidth();
-            int subY = Math.min((int) (blurH * 0.75F), blurH - 1);
-            int subH = Math.max(1, Math.min((int) (blurH * 0.2F), blurH - subY));
-            BufferedImage thumbSub = blurred.getSubimage(0, subY, blurW, subH);
-
-            int imgW = buffImage.getWidth();
-            int imgH = buffImage.getHeight();
-            BufferedImage scaledSub;
-            if (imgH != imgW) {
-                if (title != null && title.contains("[NCS Release]") && imgW >= 173 && imgH >= 173) {
-                    scaledSub = buffImage.getSubimage(1, 3, 170, 170);
-                } else {
-                    int cropW = Math.min(imgW, 180);
-                    int cropH = Math.min(imgH, 180);
-                    scaledSub = buffImage.getSubimage(0, 0, cropW, cropH);
+            ProcessedCoverImages images = processedCoverCacheGet(coverKey);
+            if (images == null) {
+                BufferedImage buffImage = readCoverImage(videoData.fullUrl);
+                if (buffImage == null) {
+                    buffImage = createDefaultCoverImage();
                 }
-            } else {
-                scaledSub = buffImage;
-            }
 
-            // Analyze a detached ARGB copy to avoid getSubimage raster side effects.
-            BufferedImage sampledCover = ensureSafeTexture(scaledSub);
-            int extractedAccent = extractDominantCoverColor(sampledCover);
+                BufferedImage normalizedCover = normalizeCoverForSampling(buffImage, title);
+                BufferedImage workingCover = ImageUtil.resizeCover(normalizedCover, COVER_PROCESS_SIZE);
+                if (workingCover == null) {
+                    workingCover = createDefaultCoverImage();
+                }
+
+                BufferedImage blurred = ImageUtil.applyBlur(workingCover, 15);
+                if (blurred == null) {
+                    blurred = workingCover;
+                }
+
+                BufferedImage thumbSub = createBottomStripSample(blurred);
+                BufferedImage sampledCover = ImageUtil.resizeCover(
+                        workingCover, COVER_NOTIFICATION_SIZE, COVER_NOTIFICATION_SIZE);
+                if (sampledCover == null) {
+                    sampledCover = ImageUtil.resizeCover(
+                            createDefaultCoverImage(), COVER_NOTIFICATION_SIZE, COVER_NOTIFICATION_SIZE);
+                }
+
+                int extractedAccent = extractDominantCoverColor(workingCover);
+                images = new ProcessedCoverImages(
+                        ensureSafeTexture(thumbSub),
+                        ensureSafeTexture(sampledCover),
+                        extractedAccent);
+                processedCoverCachePut(coverKey, images);
+            }
 
             // Async guard: do not let stale worker results override a newer song's artwork/color.
-            if (!coverKey.equals(this.requestedCoverKey)) {
+            if (!coverKey.equals(this.requestedCoverKey) || generation != this.requestedCoverGeneration) {
                 this.processing = false;
                 return;
             }
 
             // Store results for the render thread to pick up (no GL calls here!)
-            this.pendingThumbnailImage = ensureSafeTexture(thumbSub);
-            this.pendingScaledThumbnail = sampledCover;
-            this.pendingCoverAccentColor = extractedAccent;
-            this.pendingSongTitle = title;
-            this.pendingCoverKey = coverKey;
-            this.currentVideo = null;
+            this.pendingProcessedCover = new ProcessedCoverResult(title, coverKey, generation, images);
         } catch (Exception var5) {
             var5.printStackTrace();
             this.processing = false;

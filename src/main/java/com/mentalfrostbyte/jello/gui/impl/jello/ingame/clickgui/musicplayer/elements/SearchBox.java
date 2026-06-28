@@ -13,6 +13,7 @@ import com.mentalfrostbyte.jello.gui.combined.AnimatedIconPanel;
 import com.mentalfrostbyte.jello.gui.impl.jello.buttons.ScrollableContentPanel;
 
 import com.mentalfrostbyte.jello.gui.impl.jello.buttons.TextField;
+import com.mentalfrostbyte.jello.gui.impl.jello.ingame.clickgui.musicplayer.MusicPlayer;
 
 import com.mentalfrostbyte.jello.managers.MusicManager;
 
@@ -296,7 +297,14 @@ public class SearchBox extends AnimatedIconPanel {
 
                                                     );
 
-                                            var7x.onClick((var2, var3xx) -> this.field20843.playSong(null, var4));
+                                            var7x.onClick((var2, var3xx) -> {
+                                                if (var3xx == 2 && this.getParent() instanceof MusicPlayer musicPlayer) {
+                                                    musicPlayer.addMidFavor(var4);
+                                                    return;
+                                                }
+
+                                                this.field20843.playSong(null, var4);
+                                            });
 
                                         }
 

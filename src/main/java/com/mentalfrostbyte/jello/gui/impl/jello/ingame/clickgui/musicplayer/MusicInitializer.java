@@ -1,7 +1,6 @@
 package com.mentalfrostbyte.jello.gui.impl.jello.ingame.clickgui.musicplayer;
 
 import com.mentalfrostbyte.jello.gui.base.elements.impl.button.Button;
-import com.mentalfrostbyte.jello.gui.base.elements.impl.button.types.ThumbnailButton;
 import com.mentalfrostbyte.jello.gui.impl.jello.buttons.ScrollableContentPanel;
 import com.mentalfrostbyte.jello.managers.util.Thumbnails;
 import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
@@ -57,26 +56,12 @@ public class MusicInitializer implements Runnable {
             queue.method13514(true);
             queue.setSelfVisible(false);
             queue.setListening(false);
+            MusicPlayer.registerQueue(this.musicPlayer2, this.thumbnail, queue);
             if (this.thumbnail.videoList != null) {
                 for (int i = 0; i < this.thumbnail.videoList.size(); i++) {
                     YoutubeVideoData song = this.thumbnail.videoList.get(i);
-                    ThumbnailButton thumbnail;
-                    int x = 65;
-                    int y = 10;
-                    if (!queue.isntQueue(this.thumbnail.videoId)) {
-                        queue.addToList(
-                                thumbnail = new ThumbnailButton(
-                                        queue,
-                                        y + i % 3 * 183 - (i % 3 <= 0 ? 0 : y) - (i % 3 <= 1 ? 0 : y),
-                                        x + y + (i - i % 3) / 3 * 210,
-                                        183,
-                                        220,
-                                        song
-                                )
-                        );
-                        thumbnail.onClick((parent, idk) -> {
-                            MusicPlayer.playSong(this.musicPlayer2, this.thumbnail, song);
-                        });
+                    if (!queue.isntQueue(song.videoId)) {
+                        MusicPlayer.addTrackButton(this.musicPlayer2, queue, this.thumbnail, song, i);
                     }
                 }
             }

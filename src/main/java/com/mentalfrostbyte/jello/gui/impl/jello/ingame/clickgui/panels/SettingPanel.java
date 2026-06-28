@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.gui.impl.jello.ingame.clickgui.panels;
 
 import com.mentalfrostbyte.jello.gui.base.animations.Animation;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.*;
+import com.mentalfrostbyte.jello.gui.base.elements.impl.button.Button;
 import com.mentalfrostbyte.jello.gui.base.elements.impl.colorpicker.ColorPicker;
 import com.mentalfrostbyte.jello.gui.base.interfaces.Class4342;
 import com.mentalfrostbyte.jello.gui.combined.ContentSize;
@@ -13,10 +14,13 @@ import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleWithModuleSettings;
 import com.mentalfrostbyte.jello.module.settings.Setting;
 import com.mentalfrostbyte.jello.module.settings.impl.*;
+import com.mentalfrostbyte.jello.util.client.render.FontSizeAdjust;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
+import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
+import com.mentalfrostbyte.jello.util.system.math.SmoothInterpolator;
 import org.lwjgl.opengl.GL11;
 
 import java.util.HashMap;
@@ -251,6 +255,261 @@ public class SettingPanel extends ScrollableContentPanel implements Class4342 {
                 panel.addToList(var11);
                 panel.addToList(var12);
                 var4 += 150 + var5 - 10;
+                break;
+            case FONT_SWITCH:
+                FontSwitch var52 = (FontSwitch) setting;
+                int var56 = 500;
+                int var57 = 4;
+                CustomGuiScreen var53 = new CustomGuiScreen(panel, setting.getName() + "card", var3 - 4, var4,
+                        panel.getWidthA() - var5, var56) {
+                    private final int WINDOW_BG = 0xFFFFFFFF;
+                    private final int JELLO_BLUE = 0xFF4080FF;
+                    private final int JELLO_BLUE_LIGHT = 0xFF6CA0FF;
+                    private final int TEXT_MAIN = 0xFF282D37;
+                    private final int TEXT_MUTED = 0xFF787D87;
+                    private final int TEXT_WHITE = 0xFFFFFFFF;
+                    private final int TEXT_WHITE_MUTED = 0xD8FFFFFF;
+                    private final int ITEM_BG_DEFAULT = 0xFFF5F6F8;
+                    private final int DIVIDER_COLOR = 0xFFDCDDE6;
+                    private int fontScroll;
+                    private Animation[] fontAnimations = new Animation[0];
+                    private String fontFingerprint = "";
+
+                    @Override
+                    public void draw(float partialTicks) {
+                        int maxScroll = Math.max(0, var52.getFonts().size() - var57);
+                        this.fontScroll = Math.min(this.fontScroll, maxScroll);
+                        this.ensureFontAnimations();
+                        float x = this.getXA();
+                        float y = this.getYA();
+                        float w = this.getWidthA();
+                        float h = this.getHeightA();
+
+                        if (this.fontAnimations != null) {
+                            float listY = y + 190.0F;
+                            float itemHeight = 42.0F;
+                            float itemW = w - 60.0F;
+                            this.drawGeminiFontPanel(partialTicks, x, y, w, h, listY, itemHeight, itemW);
+                            super.draw(partialTicks);
+                            return;
+                        }
+
+                        RenderUtil.drawRoundedRect(x, y, x + w, y + h, RenderUtil2.applyAlpha(WINDOW_BG, partialTicks));
+
+                        RenderUtil.drawString(ResourceRegistry.JelloMediumFont20, x + 20.0F, y + 22.0F,
+                                "Import", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
+                        RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, x + 30.0F, y + 80.0F,
+                                "Size", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
+                        RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, x + 30.0F, y + 120.0F,
+                                "Sharpness", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
+                        RenderUtil.drawString(ResourceRegistry.JelloLightFont14, x + 30.0F, y + 166.0F,
+                                "Fonts", RenderUtil2.applyAlpha(TEXT_MUTED, partialTicks));
+
+                        float listY = y + 190.0F;
+                        float itemHeight = 42.0F;
+                        float itemW = w - 60.0F;
+                        float prevAnimPercent = 1.0F;
+                        int mouseX = this.getHeightO();
+                        int mouseY = this.getWidthO();
+                        int rowY = (int) listY;
+                        if (this.fontAnimations != null) {
+                            this.drawGeminiFontPanel(partialTicks, x, y, w, h, listY, itemHeight, itemW);
+                            super.draw(partialTicks);
+                            return;
+                        }
+                        int index = 0;
+                        for (String fontName : var52.getFonts().subList(this.fontScroll, var52.getFonts().size())) {
+                            if (index >= var57) {
+                                break;
+                            }
+                            boolean selected = fontName.equals(var52.getCurrentValue());
+                            boolean hovered = mouseX >= this.method13271() + 20
+                                    && mouseX <= this.method13271() + this.getWidthA() - 20
+                                    && mouseY >= rowY && mouseY <= rowY + 36;
+                            int rowColor = selected ? 0x23528BFF : (hovered ? 0xC8FFFFFF : 0x90FFFFFF);
+                            RenderUtil.drawRoundedRect(x + 20.0F, rowY, x + w - 20.0F, rowY + 36.0F,
+                                    RenderUtil2.applyAlpha(rowColor, partialTicks));
+                            if (selected) {
+                                RenderUtil.drawRoundedRect(x + 20.0F, rowY, x + 21.0F, rowY + 36.0F,
+                                        RenderUtil2.applyAlpha(0x46528BFF, partialTicks));
+                            }
+                            float nameX = x + 35.0F;
+                            if (this.fontScroll + index == 0) {
+                                RenderUtil.drawString(ResourceRegistry.JelloLightFont14, nameX, rowY + 12.0F,
+                                        "内置鸿蒙", RenderUtil2.applyAlpha(0x8C2C3E50, partialTicks));
+                                nameX += 62.0F;
+                            }
+                            RenderUtil.drawString(selected ? ResourceRegistry.JelloMediumFont14 : ResourceRegistry.JelloLightFont14,
+                                    nameX, rowY + 12.0F, fontName, RenderUtil2.applyAlpha(0xFF2C3E50, partialTicks));
+                            if (selected) {
+                                RenderUtil.drawString(ResourceRegistry.JelloLightFont14, x + w - 74.0F, rowY + 12.0F,
+                                        "Active", RenderUtil2.applyAlpha(0xFF528BFF, partialTicks));
+                            }
+                            rowY += 42;
+                            index++;
+                        }
+
+                        float previewY = y + h - 95.0F;
+                        RenderUtil.drawRoundedRect(x + 20.0F, previewY, x + w - 20.0F, previewY + 75.0F,
+                                RenderUtil2.applyAlpha(0x2DFFFFFF, partialTicks));
+                        RenderUtil.drawRoundedRect(x + 20.0F, previewY, x + w - 20.0F, previewY + 1.0F,
+                                RenderUtil2.applyAlpha(0x19000000, partialTicks));
+                        super.draw(partialTicks);
+                    }
+
+                    @Override
+                    public void onClick3(int mouseX, int mouseY, int mouseButton) {
+                        int localX = mouseX - this.method13271();
+                        int localY = mouseY - this.method13272();
+                        if (localX >= 30 && localX <= this.getWidthA() - 30 && localY >= 190 && localY < 190 + var57 * 50) {
+                            int slotY = (localY - 190) % 50;
+                            if (slotY > 42) {
+                                super.onClick3(mouseX, mouseY, mouseButton);
+                                return;
+                            }
+                            int index = this.fontScroll + (localY - 190) / 50;
+                            if (index >= 0 && index < var52.getFonts().size()) {
+                                var52.selectFont(var52.getFonts().get(index));
+                                return;
+                            }
+                        }
+                        super.onClick3(mouseX, mouseY, mouseButton);
+                    }
+
+                    @Override
+                    public void voidEvent3(float scroll) {
+                        int maxScroll = Math.max(0, var52.getFonts().size() - var57);
+                        if (maxScroll > 0) {
+                            this.fontScroll = Math.max(0, Math.min(maxScroll, this.fontScroll + (scroll < 0.0F ? 1 : -1)));
+                        }
+                        super.voidEvent3(scroll);
+                    }
+
+                    private void drawGeminiFontPanel(float partialTicks, float x, float y, float w, float h,
+                                                     float listY, float itemHeight, float itemW) {
+                        RenderUtil.drawRoundedRect(x, y, x + w, y + h, RenderUtil2.applyAlpha(WINDOW_BG, partialTicks));
+
+                        RenderUtil.drawString(ResourceRegistry.JelloMediumFont20, x + 30.0F, y + 22.0F,
+                                "Import", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
+                        RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, x + 30.0F, y + 80.0F,
+                                "Size", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
+                        RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, x + 30.0F, y + 120.0F,
+                                "Sharpness", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
+                        RenderUtil.drawString(ResourceRegistry.JelloLightFont14, x + 30.0F, y + 166.0F,
+                                "Fonts", RenderUtil2.applyAlpha(TEXT_MUTED, partialTicks));
+
+                        float prevAnimPercent = 1.0F;
+                        int visibleIndex = 0;
+                        for (String fontName : var52.getFonts().subList(this.fontScroll, var52.getFonts().size())) {
+                            if (visibleIndex >= var57) {
+                                break;
+                            }
+                            int fontIndex = this.fontScroll + visibleIndex;
+                            if (fontIndex < 0 || fontIndex >= this.fontAnimations.length) {
+                                break;
+                            }
+
+                            float itemY = listY + visibleIndex * (itemHeight + 8.0F);
+                            Animation currentAnim = this.fontAnimations[fontIndex];
+                            if (prevAnimPercent > 0.2F) {
+                                currentAnim.changeDirection(Animation.Direction.FORWARDS);
+                            }
+
+                            float animPercent = currentAnim.calcPercent();
+                            float eased = SmoothInterpolator.interpolate(animPercent, 0.51, 0.82, 0.0, 0.99);
+                            float xOffset = -((1.0F - eased) * (itemW + 30.0F));
+                            float alphaProgress = Math.min(1.0F, animPercent / 0.3F) * partialTicks;
+                            prevAnimPercent = animPercent;
+
+                            float drawX = x + 30.0F + xOffset;
+                            boolean selected = fontName.equals(var52.getCurrentValue());
+                            if (selected) {
+                                this.drawGradientRow(drawX, itemY, itemW, itemHeight, alphaProgress);
+                                RenderUtil.drawString(ResourceRegistry.JelloLightFont14, drawX + 15.0F, itemY + 14.0F,
+                                        "系统字体", RenderUtil2.applyAlpha(TEXT_WHITE_MUTED, alphaProgress));
+                                RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, drawX + 80.0F, itemY + 14.0F,
+                                        fontName, RenderUtil2.applyAlpha(TEXT_WHITE, alphaProgress));
+                            } else {
+                                RenderUtil.drawRoundedRect(drawX, itemY, drawX + itemW, itemY + itemHeight,
+                                        RenderUtil2.applyAlpha(ITEM_BG_DEFAULT, alphaProgress));
+                                RenderUtil.drawString(ResourceRegistry.JelloLightFont14, drawX + 15.0F, itemY + 14.0F,
+                                        "系统字体", RenderUtil2.applyAlpha(TEXT_MUTED, alphaProgress));
+                                RenderUtil.drawString(ResourceRegistry.JelloLightFont14, drawX + 80.0F, itemY + 14.0F,
+                                        fontName, RenderUtil2.applyAlpha(TEXT_MAIN, alphaProgress));
+                            }
+                            visibleIndex++;
+                        }
+
+                        float lineY = y + h - 90.0F;
+                        RenderUtil.drawRoundedRect(x + 30.0F, lineY, x + w - 30.0F, lineY + 1.0F,
+                                RenderUtil2.applyAlpha(DIVIDER_COLOR, partialTicks));
+                    }
+
+                    private void drawGradientRow(float x, float y, float width, float height, float alpha) {
+                        int slices = 8;
+                        float sliceWidth = width / slices;
+                        for (int i = 0; i < slices; i++) {
+                            float progress = i / (float) Math.max(1, slices - 1);
+                            int color = RenderUtil2.shiftTowardsOther(JELLO_BLUE, JELLO_BLUE_LIGHT, progress);
+                            float left = x + sliceWidth * i;
+                            float right = i == slices - 1 ? x + width : left + sliceWidth + 1.0F;
+                            RenderUtil.drawRoundedRect(left, y, right, y + height, RenderUtil2.applyAlpha(color, alpha));
+                        }
+                    }
+
+                    private void ensureFontAnimations() {
+                        int count = var52.getFonts().size();
+                        StringBuilder fingerprintBuilder = new StringBuilder();
+                        for (String fontName : var52.getFonts()) {
+                            fingerprintBuilder.append(fontName).append('\u001F');
+                        }
+                        String newFingerprint = fingerprintBuilder.toString();
+                        if (this.fontAnimations.length == count && this.fontFingerprint.equals(newFingerprint)) {
+                            return;
+                        }
+                        this.fontFingerprint = newFingerprint;
+                        this.fontAnimations = new Animation[count];
+                        for (int i = 0; i < count; i++) {
+                            this.fontAnimations[i] = new Animation(260, 260, Animation.Direction.BACKWARDS);
+                        }
+                    }
+                };
+                var53.setSize((var1x, var2x) -> var1x.setWidthA(var2x.getWidthA() - var5));
+                Text var48 = new Text(var53, setting.getName() + "lbl", 12, 10, this.field21222, 24,
+                        Text.defaultColorHelper, "");
+                Text var49 = new Text(var53, setting.getName() + "value", 20, 42, this.field21222, 20,
+                        Text.defaultColorHelper, String.valueOf(setting.getCurrentValue()), ResourceRegistry.JelloLightFont14);
+                var49.setSelfVisible(false);
+                Text var54 = new Text(var53, setting.getName() + "preview_cn", 30, var56 - 60, this.field21222, 22,
+                        Text.defaultColorHelper, "\u4E2D\u56FD\u667A\u9020\uFF0C\u60E0\u53CA\u5168\u7403", var52.getPreviewFont());
+                Text var55 = new Text(var53, setting.getName() + "preview_en", 30, var56 - 35, this.field21222, 22,
+                        Text.defaultColorHelper, "The quick brown fox jumps over the lazy dog.", var52.getPreviewFont());
+                ColorHelper var58 = new ColorHelper(0xFF4080FF, 0xFF286BF0, 0xFF4080FF, 0xFFFFFFFF,
+                        FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2, FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2);
+                Button var50 = new Button(var53, setting.getName() + "open", var53.getWidthA() - 220,
+                        16, 90, 26, var58, "OpenFolder", ResourceRegistry.JelloLightFont14);
+                Button var51 = new Button(var53, setting.getName() + "refresh", var53.getWidthA() - 120,
+                        16, 90, 26, var58, "Refresh", ResourceRegistry.JelloLightFont14);
+                var50.field20586 = 5;
+                var51.field20586 = 5;
+                this.field21223.put(var48, setting);
+                var50.onClick((var1x, var2x) -> var52.openFolder());
+                var51.onClick((var1x, var2x) -> var52.refresh());
+                setting.addObserver(var1x -> {
+                    var49.setText(String.valueOf(var1x.getCurrentValue()));
+                    var54.setFont(var52.getPreviewFont());
+                    var55.setFont(var52.getPreviewFont());
+                });
+                var50.setSize((var1x, var2x) -> var1x.setXA(var2x.getWidthA() - 220));
+                var51.setSize((var1x, var2x) -> var1x.setXA(var2x.getWidthA() - 120));
+                var53.addToList(var48);
+                var53.addToList(var49);
+                var53.addToList(var54);
+                var53.addToList(var55);
+                var53.addToList(var50);
+                var53.addToList(var51);
+                panel.addToList(var53);
+                var4 += var56 + var5;
                 break;
         }
 
