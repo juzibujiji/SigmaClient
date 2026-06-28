@@ -1,7 +1,5 @@
 package com.mentalfrostbyte.jello.module.impl.gui.jello.irc;
 
-import com.mentalfrostbyte.Client;
-import com.mentalfrostbyte.jello.managers.util.notifs.Notification;
 import com.mentalfrostbyte.jello.module.impl.gui.jello.irc.packet.*;
 
 import java.io.*;
@@ -155,12 +153,7 @@ public class IRCClientConnection implements PacketHandler {
             return;
         }
 
-        String safeMessage = IRCChatHistory.sanitizeMessage(message);
-        if (safeMessage.isEmpty()) {
-            return;
-        }
-
-        PacketChatMessage packet = new PacketChatMessage(username, safeMessage);
+        PacketChatMessage packet = new PacketChatMessage(username, message);
         sendPacket(packet);
     }
 
@@ -221,23 +214,18 @@ public class IRCClientConnection implements PacketHandler {
 
     @Override
     public void handleChatMessage(PacketChatMessage packet) {
-        IRCChatHistory.Entry entry = IRCChatHistory.addChat(packet.getUsername(), packet.getMessage(), packet.getTimestamp());
-        String msg = "[IRC] " + entry.getUsername() + ": " + entry.getMessage();
-        IRCUtlis.printMessage(msg, false);
-
-        if (IRCManager.shouldNotify() && !entry.getUsername().equalsIgnoreCase(IRCChatHistory.sanitizeUsername(this.username))) {
-            Client.getInstance().notificationManager.send(new Notification("IRC", shorten(entry.getUsername() + ": " + entry.getMessage(), 120), 4500));
-        }
+        String msg = "[IRC] " + packet.getUsername() + ": " + packet.getMessage();
+        IRCUtlis.printMessage(msg);
     }
 
     @Override
     public void handleLogin(PacketLogin packet) {
-        IRCUtlis.printMessage("[IRC] " + IRCChatHistory.sanitizeUsername(packet.getUsername()) + " joined the chat");
+        IRCUtlis.printMessage("[IRC] " + packet.getUsername() + " joined the chat");
     }
 
     @Override
     public void handleLogout(PacketLogout packet) {
-        IRCUtlis.printMessage("[IRC] " + IRCChatHistory.sanitizeUsername(packet.getUsername()) + " left: " + IRCChatHistory.sanitizeMessage(packet.getReason()));
+        IRCUtlis.printMessage("[IRC] " + packet.getUsername() + " left: " + packet.getReason());
     }
 
     @Override
@@ -245,16 +233,4 @@ public class IRCClientConnection implements PacketHandler {
         // 收到对方心跳，不需要再额外回复，避免双方无限互相回应
         // （我们已经有自己的定时心跳线程在主动发送）
     }
-<<<<<<< Updated upstream
-
-    private static String shorten(String text, int maxLength) {
-        if (text == null || text.length() <= maxLength) {
-            return text;
-        }
-
-        return text.substring(0, Math.max(0, maxLength - 3)) + "...";
-    }
 }
-=======
-}
->>>>>>> Stashed changes
