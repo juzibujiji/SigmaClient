@@ -35,12 +35,16 @@ public class TargetHUD extends ModuleWithModuleSettings implements Draggable {
 
     public NumberSetting<Float> scale = new NumberSetting<>("Scale", "HUD scale", 1.0F, 0.5F, 2.0F, 0.1F);
 
+    public NumberSetting<Float> opacity = new NumberSetting<>("Opacity", "Panel opacity", 1.0F, 0.1F, 1.0F, 0.05F);
+
+    public NumberSetting<Float> panelAlpha = new NumberSetting<>("PanelAlpha", "Background transparency", 0.65F, 0.0F, 1.0F, 0.05F);
+
     public TargetHUD() {
         super(ModuleCategory.GUI, "TargetHud", "Target HUD", "Style",
                 new JelloTargetHUD(),
                 new ClassicTargetHUD()
         );
-        this.registerSetting(x, y, scale);
+        this.registerSetting(x, y, scale, opacity, panelAlpha);
     }
 
     public void setX(float v) {

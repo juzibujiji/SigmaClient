@@ -58,11 +58,12 @@ public class JelloTargetHUD extends RenderModule {
     private static final float PB_TAGS    = 2.0F;
     private static final float W_CONTENT  = W_PANEL - PAD * 2 - SZ_AVATAR - GAP_ROW; // 154
 
-    // ===== 颜色（匹配 HTML）=====
-    private static final int C_PANEL    = 0xFFFFFFFF;
+    // ===== 颜色（精确匹配 HTML）=====
+    // HTML: background: rgba(255,255,255,0.55)，透明度由 panelAlpha 设置控制
+    private static final int C_PANEL_RGB = 0x00FFFFFF;  // 仅 RGB，alpha 由设置动态计算
     private static final int C_SHADOW   = 0x4D000000;   // rgba(0,0,0,0.3)
     private static final int C_AVATAR   = 0xFF3A9BDC;
-    private static final int C_NAME     = 0xFF202020;
+    private static final int C_NAME     = 0xFF2C2C2C;   // 比 #282828 浅一点
     private static final int C_DIST     = 0xFF555555;
     private static final int C_BAR_BG   = 0x1E000000;   // rgba(0,0,0,0.115)
     private static final int C_BAR_FILL = 0xFF3A9BDC;
@@ -255,6 +256,10 @@ public class JelloTargetHUD extends RenderModule {
 
         // ===== 计算绘制位置（应用用户缩放设置）=====
         float userScale = parent.scale.getCurrentValue();
+        float userOpacity = parent.opacity.getCurrentValue();
+        float panelAlpha = parent.panelAlpha.getCurrentValue();
+        opacity *= userOpacity;
+        int panelColor = ((int)(panelAlpha * 255) << 24) | C_PANEL_RGB;
         float cx = posX + W_PANEL / 2.0F;
         float cy = posY + panelH / 2.0F;
         float drawScale = scale * userScale;
@@ -273,17 +278,27 @@ public class JelloTargetHUD extends RenderModule {
         }
         boolean tagsHeightChanging = Math.abs(tagsWrapperHeight - tagsWrapperTarget) > 0.3F;
 
-        String newKey = String.format(Locale.US, "%s|%.1f|%.1f|%.1f|%d|%d|%.4f|%.4f|%.4f|%.4f|%.4f|%.2f",
-                name, dist, dispHealth, dispMaxHp, aliveCount,
-                tagStates.size(), opacity, scale, ty, tagsWrapperHeight,
-                tagStates.values().stream().mapToDouble(ts -> ts.opacity).sum(), userScale);
+        // 缓存 key：只用影响纹理内容的状态，降低精度避免每帧重建
+        // 注意：tagsWrapperHeight 不影响纹理内容（只影响面板高度/绘制位置），不进 key
+        // opacity/scale/ty 在动画期间每帧变，但动画结束后值固定，key 稳定
+        String newKey = String.format(Locale.US, "%s|%d|%.0f|%.0f|%d|%d|%.3f|%.3f|%.3f|%.2f|%.2f|%.2f",
+                name, (int) dist, dispHealth * 2, dispMaxHp * 2, aliveCount,
+                tagStates.size(),
+                opacity, scale, ty,
+                userScale, userOpacity, panelAlpha);
 
+        // tags opacity 进 key（四舍五入到 0.01 精度，避免浮点误差）
+        for (TagState ts : tagStates.values()) {
+            newKey += String.format(Locale.US, "|%.2f", ts.opacity);
+        }
+
+        // 动画期间强制 dirty，动画结束后只靠 key 变化判断
         boolean dirty = panelAnim || healthAnim || tagsAnim || tagsHeightChanging || !newKey.equals(cacheKey);
 
         // ===== 只有脏时才重新渲染 Skija 纹理 =====
         if (dirty) {
             cacheKey = newKey;
-            renderToTexture(name, dist, target, opacity, panelH, rowH);
+            renderToTexture(name, dist, target, opacity, panelH, rowH, panelColor);
             if (cachedHudTexture == null) return;
         }
 
@@ -295,14 +310,14 @@ public class JelloTargetHUD extends RenderModule {
      * 用 Skija 渲染整个面板到纹理。只在脏标记为 true 时调用。
      */
     private void renderToTexture(String name, float dist, Entity target,
-                                  float opacity, float panelH, float rowH) {
+                                  float opacity, float panelH, float rowH, int panelColor) {
         int ss = 2; // 2x 超采样（性能与清晰度平衡）
         int texW = (int) Math.ceil(W_PANEL);
         int texH = (int) Math.ceil(panelH);
         SkijaHudRenderer hud = new SkijaHudRenderer(texW, texH, ss);
 
-        // 面板背景
-        hud.drawRoundedRect(0, 0, W_PANEL, panelH, R_PANEL, withA(C_PANEL, opacity));
+        // 面板背景（alpha 由 panelAlpha 设置控制）
+        hud.drawRoundedRect(0, 0, W_PANEL, panelH, R_PANEL, withA(panelColor, opacity));
 
         // 内边框（HTML: inset 0 0 0 1px rgba(255,255,255,0.25)）
         hud.drawRoundedRectStroke(0.5F, 0.5F, W_PANEL - 1, panelH - 1, R_PANEL, 1.0F, withA(C_INNER_BORDER, opacity));
@@ -318,12 +333,12 @@ public class JelloTargetHUD extends RenderModule {
         float ctX = ix + SZ_AVATAR + GAP_ROW;
         float ctW = W_CONTENT;
 
-        // 名字 — 14px medium（HTML: font-size: 14px; font-weight: 500）
-        hud.drawText(name, ctX, iy, 14, withA(C_NAME, opacity), true);
+        // 名字 — 14px medium
+        hud.drawText(name, ctX, iy - 2, 14, withA(C_NAME, opacity), true);
         // 距离 — 11px light（HTML: font-size: 11px）
         String dStr = String.format(Locale.US, "%.1fm", dist);
         float dW = hud.measureText(dStr, 11, false);
-        hud.drawText(dStr, ctX + ctW - dW, iy + 2, 11, withA(C_DIST, opacity), false);
+        hud.drawText(dStr, ctX + ctW - dW, iy, 11, withA(C_DIST, opacity), false);
 
         // 血条（HTML: height: 10px; margin-top: 4px）
         float bY = iy + 14 + MT_BAR;
