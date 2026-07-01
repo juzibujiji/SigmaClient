@@ -54,8 +54,6 @@ public final class SkijaFontRenderer {
     private static boolean initialized = false;
     private static int currentWidth = 0;
     private static int currentHeight = 0;
-    // TEMP DIAGNOSTIC (Stage 1): logs once when the new upload+draw path first runs.
-    private static boolean uploadPathLogged = false;
 
     private static final Map<String, CachedText> textCache =
             new LinkedHashMap<String, CachedText>(MAX_CACHE_SIZE, 0.75f, true) {
@@ -413,14 +411,7 @@ public final class SkijaFontRenderer {
             // generic GL_RGBA, glFinish), returning a Slick Texture with correct UV ratios.
             Texture texture = SafeTextureUploader.upload("skija_text_" + cacheKey.hashCode(), image);
             if (texture == null) {
-                System.out.println("[SkijaFix] SafeTextureUploader returned NULL for text: '" + text + "'");
                 return null;
-            }
-
-            if (!uploadPathLogged) {
-                uploadPathLogged = true;
-                System.out.println("[SkijaFix] SkijaFontRenderer NEW upload+draw path active "
-                        + "(SafeTextureUploader + RenderUtil.drawImage). First text: '" + text + "'");
             }
 
             return new CachedText(texture, advanceWidth, displayWidth, displayHeight, baseline / ss);

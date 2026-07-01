@@ -413,18 +413,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
         if (this.playing && !this.visualizerData.isEmpty() && this.spectrum) {
 
-            // ── TEMP DIAGNOSTIC (Stage 1): confirm the new path runs + observe leaked GL state ──
-            if (!spectrumPathLogged) {
-                spectrumPathLogged = true;
-                System.out.println("[SkijaFix] NEW spectrum render path ACTIVE (no glPushAttrib). "
-                        + "Seeing this confirms your running build includes the fix.");
-            }
-            boolean diag = (spectrumDiagFrame++ % 60) == 0;
-            if (diag) {
-                logSpectrumGlState("before");
-            }
-
-            // The spectrum HUD now draws exclusively through GlStateManager-consistent
+            // The spectrum HUD draws exclusively through GlStateManager-consistent
             // paths (RenderUtil + SkijaFontRenderer via SafeTextureUploader/drawImage).
             try {
 
@@ -442,34 +431,10 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                 RenderSystem.clearCurrentColor();
 
-                if (diag) {
-                    logSpectrumGlState("after ");
-                }
-
             }
 
         }
 
-    }
-
-    // ── TEMP DIAGNOSTIC (Stage 1) — remove once the render issue is resolved ──
-    private static boolean spectrumPathLogged = false;
-    private static int spectrumDiagFrame = 0;
-
-    private void logSpectrumGlState(String when) {
-        int err = GL11.glGetError();
-        System.out.println("[SkijaFix][" + when + "]"
-                + " err=0x" + Integer.toHexString(err)
-                + " stencil=" + GL11.glIsEnabled(2960)
-                + " scissor=" + GL11.glIsEnabled(3089)
-                + " blend=" + GL11.glIsEnabled(3042)
-                + " depthTest=" + GL11.glIsEnabled(2929)
-                + " tex2d=" + GL11.glIsEnabled(3553)
-                + " lighting=" + GL11.glIsEnabled(2896)
-                + " alphaTest=" + GL11.glIsEnabled(3008)
-                + " activeTex=0x" + Integer.toHexString(GL11.glGetInteger(0x84E0))
-                + " boundTex=" + GL11.glGetInteger(0x8069)
-                + " program=" + GL11.glGetInteger(0x8B8D));
     }
 
 
