@@ -63,6 +63,7 @@ public class BackTrack extends Module {
     private final static NumberSetting<Integer> pingtick = new NumberSetting<>("Max PingTick", "BackTrack Max Tick", 50, 10, 500, 10);
     private final static BooleanSetting maxtickslowrelease = new BooleanSetting("Slow Release", "Max Tick SlowRelease", false);
     private final static BooleanSetting entitymetadatapacket = new BooleanSetting("Delay EntityMetadataPacket", "Delay EntityMetadataPacket And EntityPropertiesPacket,This packet can ed PlayerMove", false);
+    private final static BooleanSetting delayAllspacket = new BooleanSetting("ForceDelayAllSPacket","idk why give vl to me so delayAllSPacket",false);
     //render
     private final static BooleanSetting esprender = new BooleanSetting("ESP", "Render Player Real Pos", true);
     private final static NumberSetting<Float> espboxexpand = new NumberSetting<>("BoxExpand","ESP Box Expand",0.05f,0.00f,1.00f,0.05f);
@@ -83,7 +84,7 @@ public class BackTrack extends Module {
 
     public BackTrack() {
         super(ModuleCategory.COMBAT, "BackTrack", "Track and render entity real positions");
-        registerSetting(maxreach,maxreachvalue,maxreachslowrelease,followtarget,followTargetStartReach,followTargetKeepAttackReach,/*targetTotargetreach,targetTotargetreachvalue,*/minreach,minreachvalue,pingtick, maxtickslowrelease, entitymetadatapacket, esprender, espboxexpand, espwidth,rendertargetesp,renderfriendesp,renderotheresp, /*targetfillColor,*/ targetwireColor,  /*fillColor,*/ wireColor,reachdebug);
+        registerSetting(maxreach,maxreachvalue,maxreachslowrelease,followtarget,followTargetStartReach,followTargetKeepAttackReach,/*targetTotargetreach,targetTotargetreachvalue,*/minreach,minreachvalue,pingtick, maxtickslowrelease, entitymetadatapacket, delayAllspacket, esprender, espboxexpand, espwidth,rendertargetesp,renderfriendesp,renderotheresp, /*targetfillColor,*/ targetwireColor,  /*fillColor,*/ wireColor,reachdebug);
     }
 
     @Override
@@ -107,7 +108,7 @@ public class BackTrack extends Module {
             if (NeedCancelSPacket(packet)) {
                 //延迟了玩家的元数据包 这里包括了生命值 搞个fake
                 //我也不知道这个SEntityMetadataPacket和SEntityPropertiesPacket具体是啥
-                if (packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) {
+                if ((packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) || delayAllspacket.getCurrentValue()) {
                     RemoteClientPlayerEntity entity = new RemoteClientPlayerEntity(mc.world, mc.player.getGameProfile());
                     entity.setHealth(mc.player.getHealth());
                     entity.getDataManager().setEntryValues(((SEntityMetadataPacket) packet).getDataManagerEntries());
@@ -286,7 +287,7 @@ public class BackTrack extends Module {
             EventBus.call(event);
             if (!event.cancelled) {
                 //已经设置血量过了不设置了
-                if (event.packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) {
+                if ((packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) || delayAllspacket.getCurrentValue()) {
                     RemoteClientPlayerEntity entity = new RemoteClientPlayerEntity(mc.world, mc.player.getGameProfile());
                     entity.setHealth(mc.player.getHealth());
                     NetworkManager.processPacket(event.packet, Objects.requireNonNull(mc.getConnection()).getNetworkManager().packetListener);
@@ -355,7 +356,7 @@ public class BackTrack extends Module {
             EventReceivePacket event = new EventReceivePacket(packet);
             EventBus.call(event);
             if (!event.cancelled) {
-                if (event.packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) {
+                if ((packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) || delayAllspacket.getCurrentValue()) {
                     RemoteClientPlayerEntity entity = new RemoteClientPlayerEntity(mc.world, mc.player.getGameProfile());
                     entity.setHealth(mc.player.getHealth());
                     NetworkManager.processPacket(event.packet, Objects.requireNonNull(mc.getConnection()).getNetworkManager().packetListener);
@@ -382,7 +383,7 @@ public class BackTrack extends Module {
             EventBus.call(event);
             if (!event.cancelled) {
                 //已经设置血量过了不设置了
-                if (event.packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) {
+                if ((packet instanceof SEntityMetadataPacket && entitymetadatapacket.getCurrentValue()) || delayAllspacket.getCurrentValue()) {
                     RemoteClientPlayerEntity entity = new RemoteClientPlayerEntity(mc.world, mc.player.getGameProfile());
                     entity.setHealth(mc.player.getHealth());
                     NetworkManager.processPacket(event.packet, Objects.requireNonNull(mc.getConnection()).getNetworkManager().packetListener);
@@ -435,20 +436,32 @@ public class BackTrack extends Module {
     }*/
 
     private boolean NeedCancelSPacket(IPacket<?> packet) {
-        return packet instanceof SExplosionPacket //爆炸与击退
-                || packet instanceof SEntityVelocityPacket //击退s12
-                || packet instanceof SConfirmTransactionPacket //通信包c0f
-                || packet instanceof SPlayerPositionLookPacket //回弹包s08
-                || packet instanceof SEntityPacket //实体位置包s14
-                || packet instanceof SEntityTeleportPacket //实体tp包
-                || packet instanceof SMultiBlockChangePacket //方块
-                || packet instanceof SChangeBlockPacket //方块
-                || packet instanceof SCooldownPacket //冷却条?
-                || packet instanceof SPlayEntityEffectPacket //效果
-                || packet instanceof SEntityStatusPacket && ((SEntityStatusPacket) packet).getOpCode() != 2//实体状态 2为受伤
-                || entitymetadatapacket.getCurrentValue() && packet instanceof SEntityMetadataPacket && ((SEntityMetadataPacket) packet).getEntityId() == Objects.requireNonNull(mc.player).getEntityId() //玩家数据包 不延迟可能报模拟 原因:这个包会设置玩家的移动相关似乎是疾跑
-                || entitymetadatapacket.getCurrentValue() && packet instanceof SEntityPropertiesPacket && ((SEntityPropertiesPacket) packet).getEntityId() == Objects.requireNonNull(mc.player).getEntityId() //玩家属性包 不延迟可能报模拟 原因:这个包会设置玩家的移动相关似乎是疾跑
-                ;
+        if (delayAllspacket.getCurrentValue()) {
+            if (packet instanceof SEntityStatusPacket && ((SEntityStatusPacket) packet).getOpCode() == 2) {
+                return false;
+            } else if (packet instanceof SEntityMetadataPacket && ((SEntityMetadataPacket) packet).getEntityId() != Objects.requireNonNull(mc.player).getEntityId()){
+                return false;
+            } else if (packet instanceof SEntityPropertiesPacket && ((SEntityPropertiesPacket) packet).getEntityId() != Objects.requireNonNull(mc.player).getEntityId()){
+                return false;
+            } else if (packet instanceof SPlaySoundEffectPacket || packet instanceof SPlaySoundPacket || packet instanceof SStopSoundPacket || packet instanceof SPlaySoundEventPacket || packet instanceof SSpawnMovingSoundEffectPacket){
+                return false;
+            }
+            return true;
+        } else {
+            return packet instanceof SExplosionPacket //爆炸与击退
+                    || packet instanceof SEntityVelocityPacket //击退s12
+                    || packet instanceof SConfirmTransactionPacket //通信包c0f
+                    || packet instanceof SPlayerPositionLookPacket //回弹包s08
+                    || packet instanceof SEntityPacket //实体位置包s14
+                    || packet instanceof SEntityTeleportPacket //实体tp包
+                    || packet instanceof SMultiBlockChangePacket //方块
+                    || packet instanceof SChangeBlockPacket //方块
+                    || packet instanceof SCooldownPacket //冷却条?
+                    || packet instanceof SPlayEntityEffectPacket //效果
+                    || packet instanceof SEntityStatusPacket && ((SEntityStatusPacket) packet).getOpCode() != 2//实体状态 2为受伤
+                    || entitymetadatapacket.getCurrentValue() && packet instanceof SEntityMetadataPacket && ((SEntityMetadataPacket) packet).getEntityId() == Objects.requireNonNull(mc.player).getEntityId() //玩家数据包 不延迟可能报模拟 原因:这个包会设置玩家的移动相关似乎是疾跑
+                    || entitymetadatapacket.getCurrentValue() && packet instanceof SEntityPropertiesPacket && ((SEntityPropertiesPacket) packet).getEntityId() == Objects.requireNonNull(mc.player).getEntityId();
+        }
     }
 
     private void recordRealPosition(IPacket<?> packet) {
