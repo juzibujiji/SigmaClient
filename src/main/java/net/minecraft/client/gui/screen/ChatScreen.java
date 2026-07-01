@@ -1,6 +1,7 @@
 package net.minecraft.client.gui.screen;
 
-import com.mentalfrostbyte.jello.util.game.render.ChatChangeXY;
+import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.TargetHUD;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.CommandSuggestionHelper;
@@ -31,9 +32,13 @@ public class ChatScreen extends Screen
     private String defaultInputFieldText = "";
     private CommandSuggestionHelper commandSuggestionHelper;
 
+    // TargetHUD 拖拽状态（自包含，不依赖 ChatChangeXY）
+    private boolean hudDragging = false;
+    private double hudDragOffX, hudDragOffY;
+
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        ChatChangeXY.in.release();
+        hudDragging = false;
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
@@ -45,7 +50,7 @@ public class ChatScreen extends Screen
 
     protected void init()
     {
-        ChatChangeXY.in.init();
+        hudDragging = false;
         this.minecraft.keyboardListener.enableRepeatEvents(true);
         this.sentHistoryCursor = this.minecraft.ingameGUI.getChatGUI().getSentMessages().size();
         this.inputField = new TextFieldWidget(this.font, 4, this.height - 12, this.width - 4, 12, new TranslationTextComponent("chat.editBox"))
@@ -183,7 +188,19 @@ public class ChatScreen extends Screen
 
     public boolean mouseClicked(double mouseX, double mouseY, int button)
     {
-        ChatChangeXY.in.click(mouseX, mouseY);
+        // TargetHUD 拖拽：点击在面板上时开始拖拽
+        // 鼠标坐标在标准 GUI 空间，面板坐标在渲染空间，需转换
+        if (button == 0) {
+            TargetHUD targetHUD = (TargetHUD) Client.getInstance().moduleManager.getModuleByClass(TargetHUD.class);
+            if (targetHUD != null && targetHUD.isHover(mouseX, mouseY)) {
+                hudDragging = true;
+                float rs = TargetHUD.getRenderScale();
+                double mxR = mouseX / rs;
+                double myR = mouseY / rs;
+                hudDragOffX = mxR - targetHUD.getX();
+                hudDragOffY = myR - targetHUD.getY();
+            }
+        }
         if (this.commandSuggestionHelper.onClick((double)((int)mouseX), (double)((int)mouseY), button))
         {
             return true;
@@ -209,6 +226,22 @@ public class ChatScreen extends Screen
 
             return this.inputField.mouseClicked(mouseX, mouseY, button) ? true : super.mouseClicked(mouseX, mouseY, button);
         }
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        // TargetHUD 拖拽中：实时更新坐标（鼠标坐标转换到渲染空间）
+        if (hudDragging && button == 0) {
+            TargetHUD targetHUD = (TargetHUD) Client.getInstance().moduleManager.getModuleByClass(TargetHUD.class);
+            if (targetHUD != null) {
+                float rs = TargetHUD.getRenderScale();
+                double mxR = mouseX / rs;
+                double myR = mouseY / rs;
+                targetHUD.setX((float) (mxR - hudDragOffX));
+                targetHUD.setY((float) (myR - hudDragOffY));
+            }
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     protected void insertText(String text, boolean overwrite)
@@ -263,7 +296,17 @@ public class ChatScreen extends Screen
      */
     public void render(MatrixStack matrices, int mouseX, int mouseY, float delta)
     {
-        ChatChangeXY.in.render(mouseX, mouseY);
+        // TargetHUD 拖拽：render 里也更新坐标（mouseDragged 可能不每帧触发）
+        if (hudDragging) {
+            TargetHUD targetHUD = (TargetHUD) Client.getInstance().moduleManager.getModuleByClass(TargetHUD.class);
+            if (targetHUD != null) {
+                float rs = TargetHUD.getRenderScale();
+                double mxR = mouseX / rs;
+                double myR = mouseY / rs;
+                targetHUD.setX((float) (mxR - hudDragOffX));
+                targetHUD.setY((float) (myR - hudDragOffY));
+            }
+        }
         this.setListener(this.inputField);
         this.inputField.setFocused2(true);
         fill(matrices, 2, this.height - 14, this.width - 2, this.height - 2, (int)(minecraft.gameSettings.accessibilityTextBackgroundOpacity * 255) << 24);

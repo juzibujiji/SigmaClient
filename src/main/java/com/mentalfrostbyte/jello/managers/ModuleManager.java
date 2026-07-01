@@ -223,6 +223,10 @@ public class ModuleManager {
         return this.moduleMap.get(module);
     }
 
+    public List<Module> getModules() {
+        return this.modules;
+    }
+
     public JsonObject load(JsonObject json) {
         JsonArray array = null;
 
