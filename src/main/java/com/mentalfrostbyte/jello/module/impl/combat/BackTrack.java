@@ -132,7 +132,9 @@ public class BackTrack extends Module {
                     recordRealPosition(packet);
                 }
 
-                if (packet instanceof SPlayerPositionLookPacket) {
+                if (packet instanceof SPlayerPositionLookPacket
+                        || packet instanceof SEntityTeleportPacket && ((SEntityTeleportPacket) packet).getEntityId() == mc.player.getEntityId()
+                ) {
                     releaseAllSPacket();
                 }
             }
