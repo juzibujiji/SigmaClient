@@ -184,6 +184,7 @@ public class JelloTargetHUD extends RenderModule {
                 try { cachedHudTexture.release(); } catch (Exception ignored) {}
                 cachedHudTexture = null;
             }
+            cacheKey = "";
             return;
         }
 
@@ -269,7 +270,6 @@ public class JelloTargetHUD extends RenderModule {
         float drawH = panelH * drawScale;
 
         // ===== 脏标记：检查内容是否变化 =====
-        boolean panelAnim = pT < 1.0F;
         boolean healthAnim = hElapsed < D_HEALTH;
         boolean tagsAnim = false;
         for (TagState ts : tagStates.values()) {
@@ -278,14 +278,11 @@ public class JelloTargetHUD extends RenderModule {
         }
         boolean tagsHeightChanging = Math.abs(tagsWrapperHeight - tagsWrapperTarget) > 0.3F;
 
-        // 缓存 key：只用影响纹理内容的状态，降低精度避免每帧重建
-        // 注意：tagsWrapperHeight 不影响纹理内容（只影响面板高度/绘制位置），不进 key
-        // opacity/scale/ty 在动画期间每帧变，但动画结束后值固定，key 稳定
-        String newKey = String.format(Locale.US, "%s|%d|%.0f|%.0f|%d|%d|%.3f|%.3f|%.3f|%.2f|%.2f|%.2f",
+        // 缓存 key：只包含影响纹理内容的状态
+        // opacity/scale/ty 由 GL 层处理（tint + 绘制位置），不影响纹理内容，不进 key
+        String newKey = String.format(Locale.US, "%s|%d|%.0f|%.0f|%d|%d|%.2f",
                 name, (int) dist, dispHealth * 2, dispMaxHp * 2, aliveCount,
-                tagStates.size(),
-                opacity, scale, ty,
-                userScale, userOpacity, panelAlpha);
+                tagStates.size(), panelAlpha);
 
         // tags opacity 进 key（四舍五入到 0.01 精度，避免浮点误差）
         for (TagState ts : tagStates.values()) {
@@ -293,66 +290,69 @@ public class JelloTargetHUD extends RenderModule {
         }
 
         // 动画期间强制 dirty，动画结束后只靠 key 变化判断
-        boolean dirty = panelAnim || healthAnim || tagsAnim || tagsHeightChanging || !newKey.equals(cacheKey);
+        // panelAnim 不再需要：opacity 已移出纹理，show/hide 动画不改变纹理内容
+        boolean dirty = healthAnim || tagsAnim || tagsHeightChanging || !newKey.equals(cacheKey) || cachedHudTexture == null;
 
         // ===== 只有脏时才重新渲染 Skija 纹理 =====
         if (dirty) {
             cacheKey = newKey;
-            renderToTexture(name, dist, target, opacity, panelH, rowH, panelColor);
+            renderToTexture(name, dist, target, panelH, rowH, panelColor);
             if (cachedHudTexture == null) return;
         }
 
-        // ===== 绘制纹理 =====
-        RenderUtil.drawImage(drawX, drawY, drawW, drawH, cachedHudTexture, 0xFFFFFFFF);
+        // ===== 绘制纹理（opacity 通过 GL tint 应用，无需烘焙到纹理）=====
+        int glTint = (Math.max(0, Math.min(255, (int)(opacity * 255))) << 24) | 0xFFFFFF;
+        RenderUtil.drawImage(drawX, drawY, drawW, drawH, cachedHudTexture, glTint);
     }
 
     /**
      * 用 Skija 渲染整个面板到纹理。只在脏标记为 true 时调用。
+     * opacity 不在此处应用——由 GL tint 在绘制时统一处理。
      */
     private void renderToTexture(String name, float dist, Entity target,
-                                  float opacity, float panelH, float rowH, int panelColor) {
+                                  float panelH, float rowH, int panelColor) {
         int ss = 2; // 2x 超采样（性能与清晰度平衡）
         int texW = (int) Math.ceil(W_PANEL);
         int texH = (int) Math.ceil(panelH);
         SkijaHudRenderer hud = new SkijaHudRenderer(texW, texH, ss);
 
-        // 面板背景（alpha 由 panelAlpha 设置控制）
-        hud.drawRoundedRect(0, 0, W_PANEL, panelH, R_PANEL, withA(panelColor, opacity));
+        // 面板背景（alpha 由 panelAlpha 设置控制，opacity 由 GL tint 处理）
+        hud.drawRoundedRect(0, 0, W_PANEL, panelH, R_PANEL, panelColor);
 
         // 内边框（HTML: inset 0 0 0 1px rgba(255,255,255,0.25)）
-        hud.drawRoundedRectStroke(0.5F, 0.5F, W_PANEL - 1, panelH - 1, R_PANEL, 1.0F, withA(C_INNER_BORDER, opacity));
+        hud.drawRoundedRectStroke(0.5F, 0.5F, W_PANEL - 1, panelH - 1, R_PANEL, 1.0F, C_INNER_BORDER);
 
         float ix = PAD;
         float iy = PAD;
 
         // 头像
-        hud.drawRoundedRect(ix, iy, SZ_AVATAR, SZ_AVATAR, R_AVATAR, withA(C_AVATAR, opacity));
-        drawPersonIcon(hud, ix, iy, SZ_AVATAR, withA(0xFFFFFFFF, opacity));
+        hud.drawRoundedRect(ix, iy, SZ_AVATAR, SZ_AVATAR, R_AVATAR, C_AVATAR);
+        drawPersonIcon(hud, ix, iy, SZ_AVATAR, 0xFFFFFFFF);
 
         // 内容区
         float ctX = ix + SZ_AVATAR + GAP_ROW;
         float ctW = W_CONTENT;
 
         // 名字 — 14px medium
-        hud.drawText(name, ctX, iy - 2, 14, withA(C_NAME, opacity), true);
+        hud.drawText(name, ctX, iy - 2, 14, C_NAME, true);
         // 距离 — 11px light（HTML: font-size: 11px）
         String dStr = String.format(Locale.US, "%.1fm", dist);
         float dW = hud.measureText(dStr, 11, false);
-        hud.drawText(dStr, ctX + ctW - dW, iy, 11, withA(C_DIST, opacity), false);
+        hud.drawText(dStr, ctX + ctW - dW, iy, 11, C_DIST, false);
 
         // 血条（HTML: height: 10px; margin-top: 4px）
         float bY = iy + 14 + MT_BAR;
-        hud.drawRect(ctX, bY, ctW, H_BAR, withA(C_BAR_BG, opacity));
+        hud.drawRect(ctX, bY, ctW, H_BAR, C_BAR_BG);
         float hpPct = dispMaxHp > 0 ? Math.min(dispHealth / dispMaxHp, 1.0F) : 0;
         float fW = ctW * hpPct;
-        if (fW > 0.5F) hud.drawRect(ctX, bY, fW, H_BAR, withA(C_BAR_FILL, opacity));
+        if (fW > 0.5F) hud.drawRect(ctX, bY, fW, H_BAR, C_BAR_FILL);
 
         // HP 文字 — 10px（HTML: font-size: 10px）
         float hpY = bY + H_BAR + MT_HP;
         String hpStr = String.format(Locale.US, "%.1f / %.1f", dispHealth, dispMaxHp);
-        hud.drawText(hpStr, ctX, hpY, 10, withA(C_HP, opacity), false);
+        hud.drawText(hpStr, ctX, hpY, 10, C_HP, false);
         float hpLW = hud.measureText("HP", 10, false);
-        hud.drawText("HP", ctX + ctW - hpLW, hpY, 10, withA(C_HP, opacity), false);
+        hud.drawText("HP", ctX + ctW - hpLW, hpY, 10, C_HP, false);
 
         // Tags — 10px（HTML: font-size: 10px）
         if (tagsWrapperHeight > 0.5F) {
@@ -365,7 +365,7 @@ public class JelloTargetHUD extends RenderModule {
                 float icW = ts.icon != null ? SZ_ICON : 0;
                 float icGap = ts.icon != null ? GAP_ICON : 0;
                 float totalW = PH_TAG + icW + icGap + tw + PH_TAG;
-                float tagA = opacity * ts.opacity;
+                float tagA = ts.opacity;
 
                 hud.drawRoundedRect(tagX, tagY, totalW, H_TAG, R_TAG, withA(C_TAG_BG, tagA));
 

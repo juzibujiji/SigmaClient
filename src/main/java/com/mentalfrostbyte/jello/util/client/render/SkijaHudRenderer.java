@@ -21,8 +21,11 @@ import io.github.humbleui.skija.Typeface;
 import org.newdawn.slick.opengl.Texture;
 
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 使用 Skija（Chrome 的 Skia 2D 引擎的 Java 封装）渲染 HUD 元素到位图，
@@ -48,6 +51,21 @@ public final class SkijaHudRenderer {
     private static Typeface cjkMediumTypeface;
     private static Typeface systemCjkTypeface;
     private static boolean fontsLoaded = false;
+
+    // Font 缓存：避免每次 drawText/measureText 都创建新 Font 对象（减少 GC 压力）
+    private static final Map<String, Font> fontCache = new HashMap<>();
+
+    private static Font getCachedFont(Typeface face, float size) {
+        String key = System.identityHashCode(face) + "_" + Math.round(size * 10);
+        Font cached = fontCache.get(key);
+        if (cached != null) return cached;
+        Font f = new Font(face, size);
+        f.setSubpixel(true);
+        f.setHinting(FontHinting.FULL);
+        f.setEdging(FontEdging.SUBPIXEL_ANTI_ALIAS);
+        fontCache.put(key, f);
+        return f;
+    }
 
     public SkijaHudRenderer(int logicalWidth, int logicalHeight, int supersample) {
         this.logicalWidth = logicalWidth;
@@ -171,12 +189,10 @@ public final class SkijaHudRenderer {
         Typeface face = selectFace(text, medium);
         if (face == null) return;
 
-        try (Font font = new Font(face, fontSize); Paint paint = new Paint()) {
+        Font font = getCachedFont(face, fontSize);
+        try (Paint paint = new Paint()) {
             paint.setAntiAlias(true);
             paint.setColor(argb);
-            font.setSubpixel(true);
-            font.setHinting(FontHinting.FULL);
-            font.setEdging(FontEdging.SUBPIXEL_ANTI_ALIAS);
             FontMetrics metrics = font.getMetrics();
             float baseline = -metrics.getAscent();
             canvas.drawString(text, x, yTop + baseline, font, paint);
@@ -188,7 +204,8 @@ public final class SkijaHudRenderer {
         Typeface face = selectFace(text, medium);
         if (face == null) return 0;
 
-        try (Font font = new Font(face, fontSize); Paint paint = new Paint()) {
+        Font font = getCachedFont(face, fontSize);
+        try (Paint paint = new Paint()) {
             return font.measureTextWidth(text, paint);
         }
     }
@@ -196,10 +213,9 @@ public final class SkijaHudRenderer {
     public float getFontHeight(float fontSize, boolean medium) {
         Typeface face = medium ? mediumTypeface : lightTypeface;
         if (face == null) return fontSize;
-        try (Font font = new Font(face, fontSize)) {
-            FontMetrics metrics = font.getMetrics();
-            return metrics.getDescent() - metrics.getAscent();
-        }
+        Font font = getCachedFont(face, fontSize);
+        FontMetrics metrics = font.getMetrics();
+        return metrics.getDescent() - metrics.getAscent();
     }
 
     // ===== 纹理输出 =====
@@ -214,23 +230,26 @@ public final class SkijaHudRenderer {
 
         if (rgba == null) return null;
 
+        // 使用 DataBufferInt 直接写入像素数组，避免逐像素 setRGB() 的方法调用开销
         BufferedImage image = new BufferedImage(pixelWidth, pixelHeight, BufferedImage.TYPE_INT_ARGB);
+        int[] pixelArray = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
+
         int src = 0;
-        for (int y = 0; y < pixelHeight; y++) {
-            for (int x = 0; x < pixelWidth; x++) {
-                int r = rgba[src++] & 0xFF;
-                int g = rgba[src++] & 0xFF;
-                int b = rgba[src++] & 0xFF;
-                int a = rgba[src++] & 0xFF;
-                if (a > 0 && a < 255) {
-                    r = Math.min(255, (r * 255 + a / 2) / a);
-                    g = Math.min(255, (g * 255 + a / 2) / a);
-                    b = Math.min(255, (b * 255 + a / 2) / a);
-                }
-                image.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+        for (int i = 0; i < pixelArray.length; i++) {
+            int r = rgba[src++] & 0xFF;
+            int g = rgba[src++] & 0xFF;
+            int b = rgba[src++] & 0xFF;
+            int a = rgba[src++] & 0xFF;
+            if (a > 0 && a < 255) {
+                int halfA = a >> 1;
+                r = Math.min(255, (r * 255 + halfA) / a);
+                g = Math.min(255, (g * 255 + halfA) / a);
+                b = Math.min(255, (b * 255 + halfA) / a);
             }
+            pixelArray[i] = (a << 24) | (r << 16) | (g << 8) | b;
         }
 
-        return SafeTextureUploader.upload("hud_" + System.nanoTime(), image);
+        // forceFinish=false 使用 glFlush 替代 glFinish，避免管线阻塞
+        return SafeTextureUploader.upload("hud_" + System.nanoTime(), image, false);
     }
 }
