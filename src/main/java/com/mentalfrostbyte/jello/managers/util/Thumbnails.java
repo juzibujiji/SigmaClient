@@ -205,8 +205,10 @@ public class Thumbnails {
                 }
 
                 for (NeteaseApiSearch.NeteaseTrack track : tracks) {
+                    // 规范化封面 URL：添加 param=300y300 参数，下载 300x300 缩略图而非原图
+                    // 原图可能 640x640 甚至更大，导致模糊图 GL 上传耗时过长引起掉帧
                     String coverUrl = (track.coverUrl != null && !track.coverUrl.isEmpty())
-                            ? track.coverUrl
+                            ? normalizeCoverUrl(track.coverUrl)
                             : null;
                     // 使用 netease:// 占位URL，播放时再解析真实URL
                     // 传递 neteaseSongId 和 duration 以支持歌词和精确时长
@@ -241,5 +243,21 @@ public class Thumbnails {
         } else {
             return true;
         }
+    }
+
+    /**
+     * 规范化封面 URL：为网易云封面添加 param=300y300 参数，
+     * 确保下载 300x300 缩略图而非原图（避免大图导致掉帧）。
+     */
+    private static String normalizeCoverUrl(String coverUrl) {
+        if (coverUrl == null) return null;
+        String normalized = coverUrl.trim();
+        if (normalized.isEmpty()) return null;
+        if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+            if (!normalized.contains("param=")) {
+                normalized += (normalized.contains("?") ? "&" : "?") + "param=300y300";
+            }
+        }
+        return normalized;
     }
 }

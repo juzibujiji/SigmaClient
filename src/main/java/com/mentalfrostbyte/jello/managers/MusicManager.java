@@ -35,6 +35,7 @@ import com.mentalfrostbyte.jello.util.client.network.youtube.YoutubeVideoData;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
 
 import com.mentalfrostbyte.jello.util.client.music.LrcParser;
+import com.mentalfrostbyte.jello.util.client.music.YrcParser;
 
 import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiLogin;
 
@@ -228,7 +229,15 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     private List<LrcParser.LyricLine> currentLyrics = new ArrayList<>();
 
+    // YRC 逐词歌词数据（非空时优先使用逐词高亮，为空时回退到 LRC 行级高亮）
+    private List<YrcParser.YrcLine> currentYrcLyrics = null;
+
     private long currentPositionMs = 0;
+
+    // 歌词高亮插值动画状态
+    private float smoothedLyricProgress = 0.0f;
+    private String lastLyricText = "";
+    private long lastProgressUpdateTime = 0L;
 
     private volatile long mp3SeekTargetSec = -1;
 
@@ -624,7 +633,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                         float progress = this.getLyricProgress();
 
-                        float progressWidth = lyricWidth * progress;
+                        float progressWidth = lyricWidth * progress + 3;
 
 
                         int dimColor = RenderUtil2.applyAlpha(customSpectrumColor, 0.35F);
@@ -1678,10 +1687,12 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                     if (lrcFile.exists()) {
 
                                                         this.currentLyrics = LrcParser.parse(lrcFile);
+                                                        this.currentYrcLyrics = null;
 
                                                     } else {
 
                                                         this.currentLyrics = null;
+                                                        this.currentYrcLyrics = null;
 
                                                     }
 
@@ -1690,6 +1701,7 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                     e.printStackTrace();
 
                                                     this.currentLyrics = null;
+                                                    this.currentYrcLyrics = null;
 
                                                 }
 
@@ -1705,15 +1717,31 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                                                         if (lrcText != null && !lrcText.isEmpty()) {
 
-                                                            this.currentLyrics = LrcParser.parseString(lrcText);
-
-                                                            System.out.println("[MusicManager] Loaded Netease lyrics for song ID: " + videoData.neteaseSongId
-
-                                                                    + " (" + (this.currentLyrics != null ? this.currentLyrics.size() : 0) + " lines)");
+                                                            // 检测是否为 YRC 逐词歌词格式
+                                                            if (YrcParser.isYrc(lrcText)) {
+                                                                // 解析 YRC 逐词歌词
+                                                                this.currentYrcLyrics = YrcParser.parse(lrcText);
+                                                                // 同时生成 LRC 行级歌词用于 getCurrentLyric 文本
+                                                                this.currentLyrics = new ArrayList<>();
+                                                                if (this.currentYrcLyrics != null) {
+                                                                    for (YrcParser.YrcLine yl : this.currentYrcLyrics) {
+                                                                        this.currentLyrics.add(new LrcParser.LyricLine(yl.startTime, yl.content));
+                                                                    }
+                                                                }
+                                                                System.out.println("[MusicManager] Loaded Netease YRC lyrics for song ID: " + videoData.neteaseSongId
+                                                                        + " (" + (this.currentYrcLyrics != null ? this.currentYrcLyrics.size() : 0) + " YRC lines)");
+                                                            } else {
+                                                                // 普通 LRC 歌词
+                                                                this.currentLyrics = LrcParser.parseString(lrcText);
+                                                                this.currentYrcLyrics = null;
+                                                                System.out.println("[MusicManager] Loaded Netease lyrics for song ID: " + videoData.neteaseSongId
+                                                                        + " (" + (this.currentLyrics != null ? this.currentLyrics.size() : 0) + " lines)");
+                                                            }
 
                                                         } else {
 
                                                             this.currentLyrics = null;
+                                                            this.currentYrcLyrics = null;
 
                                                         }
 
@@ -1722,12 +1750,14 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                         System.err.println("[MusicManager] Failed to load Netease lyrics: " + e.getMessage());
 
                                                         this.currentLyrics = null;
+                                                        this.currentYrcLyrics = null;
 
                                                     }
 
                                                 } else {
 
                                                     this.currentLyrics = null;
+                                                    this.currentYrcLyrics = null;
 
                                                 }
 
@@ -2649,27 +2679,62 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
         long current = this.currentPositionMs;
 
+        // ===== 计算原始目标进度 =====
+        float rawProgress = 0.0f;
+
         for (int i = 0; i < currentLyrics.size(); i++) {
 
             if (currentLyrics.get(i).timestamp > current) {
 
-                if (i == 0)
+                if (i > 0) {
 
-                    return 0.0f;
+                    long start = currentLyrics.get(i - 1).timestamp;
 
-                long start = currentLyrics.get(i - 1).timestamp;
+                    long end = currentLyrics.get(i).timestamp;
 
-                long end = currentLyrics.get(i).timestamp;
+                    // 压缩时间轴：高亮在下一行开始前 500ms 就填满，
+                    // 让高亮比读词快 0.5 秒，但行选择仍用真实时间避免倒退
+                    long fillSpan = end - start - 500L;
+                    if (fillSpan <= 0L) fillSpan = end - start; // 间隔太短时不压缩
 
-                float progress = (float) (current - start) / (float) (end - start);
+                    rawProgress = (float) (current - start) / (float) fillSpan;
 
-                return Math.max(0.0f, Math.min(1.0f, progress));
+                    rawProgress = Math.max(0.0f, Math.min(1.0f, rawProgress));
+
+                }
+
+                break;
 
             }
 
+            if (i == currentLyrics.size() - 1) rawProgress = 1.0f;
+
         }
 
-        return 1.0f;
+        // ===== 插值动画 =====
+        // 歌词切换时重置平滑进度，避免从上一行的尾部滑到新行的头部
+        String currentText = this.getCurrentLyric();
+        if (!currentText.equals(lastLyricText)) {
+            lastLyricText = currentText;
+            smoothedLyricProgress = 0.0f;
+        }
+
+        // 帧率无关的指数平滑：每帧向目标值靠近，speed 越大越跟手
+        long now = System.currentTimeMillis();
+        if (lastProgressUpdateTime == 0L) lastProgressUpdateTime = now;
+        long deltaMs = Math.min(now - lastProgressUpdateTime, 100L);
+        lastProgressUpdateTime = now;
+
+        float speed = 12.0f;
+        float alpha = 1.0f - (float) Math.exp(-speed * deltaMs / 1000.0f);
+        smoothedLyricProgress += (rawProgress - smoothedLyricProgress) * alpha;
+
+        // 指数平滑渐近趋近目标但永远差一点，差值足够小时直接 snap 到目标
+        if (Math.abs(rawProgress - smoothedLyricProgress) < 0.005f) {
+            smoothedLyricProgress = rawProgress;
+        }
+
+        return smoothedLyricProgress;
 
     }
 

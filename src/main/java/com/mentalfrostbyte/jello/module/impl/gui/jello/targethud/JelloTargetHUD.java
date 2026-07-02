@@ -280,13 +280,14 @@ public class JelloTargetHUD extends RenderModule {
 
         // 缓存 key：只包含影响纹理内容的状态
         // opacity/scale/ty 由 GL 层处理（tint + 绘制位置），不影响纹理内容，不进 key
+        // 距离用 2 米精度（每 2 米才重建），tag opacity 用 0.05 步进，减少战斗中的重建频率
         String newKey = String.format(Locale.US, "%s|%d|%.0f|%.0f|%d|%d|%.2f",
-                name, (int) dist, dispHealth * 2, dispMaxHp * 2, aliveCount,
+                name, (int)(dist / 2), dispHealth * 2, dispMaxHp * 2, aliveCount,
                 tagStates.size(), panelAlpha);
 
-        // tags opacity 进 key（四舍五入到 0.01 精度，避免浮点误差）
+        // tags opacity 进 key（0.05 步进，动画期间也不会每帧变 key）
         for (TagState ts : tagStates.values()) {
-            newKey += String.format(Locale.US, "|%.2f", ts.opacity);
+            newKey += String.format(Locale.US, "|%.2f", Math.round(ts.opacity * 20) / 20.0f);
         }
 
         // 动画期间强制 dirty，动画结束后只靠 key 变化判断

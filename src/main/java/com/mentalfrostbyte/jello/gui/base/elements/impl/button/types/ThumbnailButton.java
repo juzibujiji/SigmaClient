@@ -46,7 +46,7 @@ public class ThumbnailButton extends AnimatedIconPanel {
     // helpers below. Worst-case heap: COVER_CACHE_MAX * (compatible + blurred) ≈ 22 MB.
     // Eviction simply drops references; buttons currently displaying the evicted image keep
     // their own ref via field20773/blurredImage, so eviction is always safe.
-    private static final int COVER_CACHE_MAX = 16;
+    private static final int COVER_CACHE_MAX = 48;
     private static final java.util.LinkedHashMap<String, CachedCover> COVER_CACHE =
             new java.util.LinkedHashMap<String, CachedCover>(32, 0.75f, true) {
                 @Override
@@ -385,7 +385,19 @@ public class ThumbnailButton extends AnimatedIconPanel {
 
                                 BufferedImage blurred = null;
                                 try {
-                                    blurred = ImageUtil.applyBlur(compatible, 14);
+                                    // 先缩小到 64x64 再模糊：悬停模糊图只是装饰性背景，
+                                    // 64x64 拉伸后视觉效果与全分辨率模糊几乎无差异，
+                                    // 但 GL 上传从 360KB+（300x300）降到 16KB（64x64），
+                                    // 彻底消除鼠标快速划过多张图片时的掉帧。
+                                    int blurSize = 64;
+                                    BufferedImage downscaled = new BufferedImage(blurSize, blurSize,
+                                            BufferedImage.TYPE_INT_ARGB);
+                                    java.awt.Graphics2D dg = downscaled.createGraphics();
+                                    dg.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                                            java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                                    dg.drawImage(compatible, 0, 0, blurSize, blurSize, null);
+                                    dg.dispose();
+                                    blurred = ImageUtil.applyBlur(downscaled, 6);
                                 } catch (Exception e) {
                                     e.printStackTrace();
                                 }

@@ -147,29 +147,52 @@ public final class SafeTextureUploader {
         try {
             // --- Pack pixels directly into the native allocation ---
             //
-            // BufferedImage.getRGB returns ARGB ints (0xAARRGGBB) regardless
-            // of the source image type. We need bytes in memory ordered
-            // [R, G, B, A] for GL_RGBA + GL_UNSIGNED_BYTE on a little-endian
-            // host, which means the int written by memPutInt must be
-            //   (A << 24) | (B << 16) | (G << 8) | R    — i.e. "ABGR".
-            //
-            // The GL texture storage is still POT-sized, but we only upload
-            // the real image rectangle. This keeps the transfer tightly
-            // bounded to the pixels we actually wrote.
-            final int[] pixels = new int[origW * origH];
-            image.getRGB(0, 0, origW, origH, pixels, 0, origW);
+            // Fast path: if the BufferedImage has a DataBufferInt backing
+            // (TYPE_INT_ARGB / TYPE_INT_RGB), read the int[] directly
+            // without going through getRGB()'s color-model conversion.
+            // Slow path: fall back to getRGB() for other image types.
+            int[] pixels;
+            boolean directIntBuffer = false;
+            if (image.getType() == BufferedImage.TYPE_INT_ARGB
+                    || image.getType() == BufferedImage.TYPE_INT_RGB) {
+                int[] buf = ((java.awt.image.DataBufferInt) image.getRaster().getDataBuffer()).getData();
+                // If the raster has no offset/banding, use the buffer directly
+                if (buf.length == origW * origH) {
+                    pixels = buf;
+                    directIntBuffer = true;
+                } else {
+                    pixels = new int[origW * origH];
+                    image.getRGB(0, 0, origW, origH, pixels, 0, origW);
+                }
+            } else {
+                pixels = new int[origW * origH];
+                image.getRGB(0, 0, origW, origH, pixels, 0, origW);
+            }
 
-            for (int y = 0; y < origH; y++) {
-                final long rowBase = ptr + ((long) y * origW) * 4L;
-                final int srcRow = y * origW;
-                for (int x = 0; x < origW; x++) {
-                    final int argb = pixels[srcRow + x];
+            if (directIntBuffer) {
+                // Direct path: bulk copy with no per-pixel method call overhead
+                for (int i = 0; i < pixels.length; i++) {
+                    final int argb = pixels[i];
                     final int a = (argb >>> 24) & 0xFF;
                     final int r = (argb >>> 16) & 0xFF;
                     final int g = (argb >>>  8) & 0xFF;
                     final int b = (argb       ) & 0xFF;
                     final int abgr = (a << 24) | (b << 16) | (g << 8) | r;
-                    MemoryUtil.memPutInt(rowBase + ((long) x) * 4L, abgr);
+                    MemoryUtil.memPutInt(ptr + ((long) i) * 4L, abgr);
+                }
+            } else {
+                for (int y = 0; y < origH; y++) {
+                    final long rowBase = ptr + ((long) y * origW) * 4L;
+                    final int srcRow = y * origW;
+                    for (int x = 0; x < origW; x++) {
+                        final int argb = pixels[srcRow + x];
+                        final int a = (argb >>> 24) & 0xFF;
+                        final int r = (argb >>> 16) & 0xFF;
+                        final int g = (argb >>>  8) & 0xFF;
+                        final int b = (argb       ) & 0xFF;
+                        final int abgr = (a << 24) | (b << 16) | (g << 8) | r;
+                        MemoryUtil.memPutInt(rowBase + ((long) x) * 4L, abgr);
+                    }
                 }
             }
 
