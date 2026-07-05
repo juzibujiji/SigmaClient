@@ -67,6 +67,7 @@ public class ModuleManager {
             this.register(new com.mentalfrostbyte.jello.module.impl.render.jello.ESP());
             this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.InfoHUD());
             this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.TargetHUD());
+            this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.Radar());
             this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.ShulkerInfo());
             this.register(new com.mentalfrostbyte.jello.module.impl.gui.jello.TabGUI());
             this.register(new YsmGUI());

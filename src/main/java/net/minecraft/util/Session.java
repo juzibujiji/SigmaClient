@@ -12,6 +12,7 @@ import javax.annotation.Nullable;
 
 public class Session
 {
+    private static final String DEFAULT_USERNAME = "Player";
     public String username;
     public String playerID;
     public String token;
@@ -47,15 +48,28 @@ public class Session
 
     public GameProfile getProfile()
     {
+        String profileName = this.getProfileName();
+        String profileId = this.getPlayerID();
+
+        if (profileId == null || profileId.trim().isEmpty())
+        {
+            return new GameProfile((UUID)null, profileName);
+        }
+
         try
         {
-            UUID uuid = UUIDTypeAdapter.fromString(this.getPlayerID());
-            return new GameProfile(uuid, this.getUsername());
+            UUID uuid = UUIDTypeAdapter.fromString(profileId);
+            return new GameProfile(uuid, profileName);
         }
         catch (IllegalArgumentException illegalargumentexception)
         {
-            return new GameProfile((UUID)null, this.getUsername());
+            return new GameProfile((UUID)null, profileName);
         }
+    }
+
+    private String getProfileName()
+    {
+        return this.username != null && !this.username.trim().isEmpty() ? this.username : DEFAULT_USERNAME;
     }
 
     public static enum Type

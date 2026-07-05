@@ -5,6 +5,7 @@ import com.mentalfrostbyte.jello.module.Draggable;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.data.ModuleWithModuleSettings;
 import com.mentalfrostbyte.jello.module.impl.gui.jello.targethud.ClassicTargetHUD;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.targethud.GeminiStyleJello;
 import com.mentalfrostbyte.jello.module.impl.gui.jello.targethud.JelloTargetHUD;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import net.minecraft.client.Minecraft;
@@ -42,7 +43,8 @@ public class TargetHUD extends ModuleWithModuleSettings implements Draggable {
     public TargetHUD() {
         super(ModuleCategory.GUI, "TargetHud", "Target HUD", "Style",
                 new JelloTargetHUD(),
-                new ClassicTargetHUD()
+                new ClassicTargetHUD(),
+                new GeminiStyleJello()
         );
         this.registerSetting(x, y, scale, opacity, panelAlpha);
     }

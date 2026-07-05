@@ -116,7 +116,9 @@ public class SkinManager
             {
                 profile.getProperties().clear();
 
-                if (profile.getId().equals(Minecraft.getInstance().getSession().getProfile().getId()))
+                GameProfile sessionProfile = Minecraft.getInstance().getSession().getProfile();
+
+                if (profile.getId() != null && profile.getId().equals(sessionProfile.getId()))
                 {
                     profile.getProperties().putAll(Minecraft.getInstance().getProfileProperties());
                     map.putAll(this.sessionService.getTextures(profile, false));

@@ -83,6 +83,10 @@ public class AccountManager extends Manager {
         try {
             Session session = Minecraft.getInstance().getSession();
             Session newSession = account.login();
+            if (this.isBlank(newSession.getUsername()) && this.isBlank(newSession.getPlayerID())) {
+                return false;
+            }
+
             session.username = newSession.getUsername();
             session.playerID = newSession.getPlayerID();
             session.token = newSession.getToken();
@@ -152,5 +156,9 @@ public class AccountManager extends Manager {
         return this.getEmail() != null
                 ? account.getEmail().equals(this.getEmail())
                 : account.getKnownName().equals(Minecraft.getInstance().getSession().getUsername());
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

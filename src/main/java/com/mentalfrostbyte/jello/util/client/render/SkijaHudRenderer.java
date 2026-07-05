@@ -15,6 +15,7 @@ import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.ImageInfo;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.PaintMode;
+import io.github.humbleui.skija.Shader;
 import io.github.humbleui.types.Rect;
 import io.github.humbleui.types.RRect;
 import io.github.humbleui.skija.Typeface;
@@ -181,6 +182,33 @@ public final class SkijaHudRenderer {
             paint.setAntiAlias(true);
             paint.setColor(argb);
             canvas.drawImageRect(img, Rect.makeXYWH(x, y, w, h), paint);
+        }
+    }
+
+    /**
+     * 绘制圆角裁切的图片（如玩家头像）。
+     */
+    public void drawRoundedImage(Image img, float x, float y, float w, float h, float r, float alpha) {
+        if (img == null) return;
+        try (Paint paint = new Paint()) {
+            paint.setAntiAlias(true);
+            paint.setAlphaf(Math.max(0.0F, Math.min(1.0F, alpha)));
+            canvas.save();
+            canvas.clipRRect(RRect.makeLTRB(x, y, x + w, y + h, r), true);
+            canvas.drawImageRect(img, Rect.makeXYWH(x, y, w, h), paint);
+            canvas.restore();
+        }
+    }
+
+    /**
+     * 绘制水平线性渐变的圆角矩形（如血条填充）。
+     */
+    public void drawRoundedRectGradient(float x, float y, float w, float h, float r, int argbStart, int argbEnd) {
+        try (Shader shader = Shader.makeLinearGradient(x, y, x + w, y, new int[]{argbStart, argbEnd});
+             Paint paint = new Paint()) {
+            paint.setAntiAlias(true);
+            paint.setShader(shader);
+            canvas.drawRRect(RRect.makeLTRB(x, y, x + w, y + h, r), paint);
         }
     }
 

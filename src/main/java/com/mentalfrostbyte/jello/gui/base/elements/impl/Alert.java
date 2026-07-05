@@ -113,8 +113,8 @@ public class Alert extends Element {
                                                 return;
                                             }
 
-                                            Account account = new Account(session.username, session.playerID,
-                                                    session.token);
+                                            Account account = this.createAuthenticatedAccount(
+                                                    session.username, session.playerID, session.token);
                                             if (!Client.getInstance().accountManager.containsAccount(account)) {
                                                 Client.getInstance().accountManager.updateAccount(account);
                                             }
@@ -145,8 +145,8 @@ public class Alert extends Element {
                                                     executor)
                                             .thenAccept(session -> Minecraft.getInstance().execute(() -> {
                                                 try {
-                                                    Account account = new Account(session.username, session.playerID,
-                                                            session.token);
+                                                    Account account = this.createAuthenticatedAccount(
+                                                            session.username, session.playerID, session.token);
                                                     if (!Client.getInstance().accountManager.containsAccount(account)) {
                                                         Client.getInstance().accountManager.updateAccount(account);
                                                     }
@@ -286,6 +286,23 @@ public class Alert extends Element {
         }
 
         return var3;
+    }
+
+    private Account createAuthenticatedAccount(String username, String playerID, String token) {
+        String safeUsername = !this.isBlank(username) ? username : "Unknown name";
+        String safePlayerID = playerID != null ? playerID : "";
+        Account account = new Account(safeUsername, safePlayerID, token);
+        account.setName(safeUsername);
+
+        if (!this.isBlank(safePlayerID)) {
+            account.setUuid(Account.fixUUID(safePlayerID));
+        }
+
+        return account;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     public Map<String, String> getInputMap() {

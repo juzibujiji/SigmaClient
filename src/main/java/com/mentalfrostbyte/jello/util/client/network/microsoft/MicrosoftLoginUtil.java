@@ -478,25 +478,35 @@ public final class MicrosoftLoginUtil {
                 final org.apache.http.HttpResponse res = client.execute(request);
 
                 final JsonObject json = new JsonParser().parse(EntityUtils.toString(res.getEntity())).getAsJsonObject();
-                return Optional.ofNullable(json.get("id"))
-                        .map(JsonElement::getAsString)
-                        .filter(uuid -> !StringUtils.isBlank(uuid))
-                        .map(uuid -> new Session(
-                                json.get("name").getAsString(),
-                                uuid,
-                                mcToken,
-                                Session.Type.MOJANG.toString()
-                        ))
-                        .orElseThrow(() -> new Exception(
-                                json.has("error") ? String.format(
-                                        "%s: %s", json.get("error").getAsString(), json.get("errorMessage").getAsString()
-                                ) : "There was no profile or error description present."
-                        ));
+                final String uuid = getJsonString(json, "id");
+                final String name = getJsonString(json, "name");
+
+                if (!StringUtils.isBlank(uuid) && !StringUtils.isBlank(name)) {
+                    return new Session(
+                            name,
+                            uuid,
+                            mcToken,
+                            Session.Type.MOJANG.toString()
+                    );
+                }
+
+                throw new Exception(
+                        json.has("error") ? String.format(
+                                "%s: %s",
+                                getJsonString(json, "error"),
+                                getJsonString(json, "errorMessage")
+                        ) : "Minecraft profile response did not include a player name and UUID."
+                );
             } catch (InterruptedException e) {
                 throw new CancellationException("Minecraft profile fetching was cancelled!");
             } catch (Exception e) {
                 throw new CompletionException("Unable to fetch Minecraft profile!", e);
             }
         }, executor);
+    }
+
+    private static String getJsonString(final JsonObject json, final String key) {
+        final JsonElement element = json.get(key);
+        return element != null && !element.isJsonNull() ? element.getAsString() : "";
     }
 }
