@@ -658,6 +658,25 @@ public class NeteaseApiSearch {
 
             JsonObject json = JsonParser.parseString(response).getAsJsonObject();
 
+            // 优先返回 YRC 逐词歌词（如果可用），否则回退到普通 LRC
+            if (json.has("yrc") && !json.get("yrc").isJsonNull()) {
+
+                JsonObject yrc = json.getAsJsonObject("yrc");
+
+                if (yrc.has("lyric") && !yrc.get("lyric").isJsonNull()) {
+
+                    String yrcText = yrc.get("lyric").getAsString();
+
+                    if (yrcText != null && !yrcText.isEmpty()) {
+
+                        return yrcText;
+
+                    }
+
+                }
+
+            }
+
             if (json.has("lrc") && !json.get("lrc").isJsonNull()) {
 
                 JsonObject lrc = json.getAsJsonObject("lrc");

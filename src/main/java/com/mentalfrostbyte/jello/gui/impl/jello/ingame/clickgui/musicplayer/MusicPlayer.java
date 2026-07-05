@@ -930,7 +930,7 @@ public class MusicPlayer extends AnimatedIconPanel {
             int var14 = this.getYA() + this.getHeightA() - 50 + var4;
 
             float progress = this.musicManager.getLyricProgress();
-            int progressX = var13 + (int) (var11 * progress);
+            int progressX = var13 + (int) (var11 * progress) + 3;
 
             int screenWidth = mc.getMainWindow().getFramebufferWidth();
             int screenHeight = mc.getMainWindow().getFramebufferHeight();
@@ -957,7 +957,7 @@ public class MusicPlayer extends AnimatedIconPanel {
             int var14 = this.getYA() + this.getHeightA() - 50 + var4;
 
             float progress = this.musicManager.getLyricProgress();
-            int progressX = var13 + (int) (var11 * progress);
+            int progressX = var13 + (int) (var11 * progress) + 3;
 
             com.mojang.blaze3d.matrix.MatrixStack matrixStack = new com.mojang.blaze3d.matrix.MatrixStack();
 
