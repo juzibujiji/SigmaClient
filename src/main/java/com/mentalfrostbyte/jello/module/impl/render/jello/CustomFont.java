@@ -294,6 +294,22 @@ public class CustomFont extends Module {
         }
     }
 
+    /**
+     * Minimum STB oversample so glyphs are baked at the same device density Skija uses.
+     * MUST mirror SkijaFontRenderer.supersample() exactly (2 * ceil(guiScale), capped 2..4) —
+     * otherwise the MC-font STB path and the Skija path bake at different densities and one looks
+     * softer than the other at low Sharpness (the bug: STB floored at 2 while Skija baked at 4).
+     */
+    private static float deviceOversampleFloor() {
+        try {
+            double guiScale = net.minecraft.client.Minecraft.getInstance().getMainWindow().getGuiScaleFactor();
+            int target = 2 * (int) Math.ceil(guiScale);
+            return Math.max(2.0F, Math.min(4.0F, (float) target));
+        } catch (Throwable t) {
+            return 4.0F;
+        }
+    }
+
     private IGlyphProvider buildProvider(InputStream inputStream, String sourceName) throws IOException {
         ByteBuffer buffer = null;
         STBTTFontinfo info = null;
@@ -305,7 +321,12 @@ public class CustomFont extends Module {
                 throw new IllegalStateException("stbtt_InitFont failed for " + sourceName);
             }
             float size = this.sizeSetting.getCurrentValue();
-            float oversample = this.sharpnessSetting.getCurrentValue();
+            // Sharpness is the user's relative crispness control, but it must never let the glyph
+            // bake BELOW device-pixel density — Sharpness=1 would otherwise mean "oversample 1x",
+            // i.e. a 1x bake that the GUI-scale matrix then magnifies and blurs (the same failure
+            // we fixed on the Skija side). So floor the STB oversample at the GUI scale: the slider
+            // still ranges soft->crisp, but even its lowest setting stays crisp on a magnified GUI.
+            float oversample = Math.max(deviceOversampleFloor(), this.sharpnessSetting.getCurrentValue());
             // Provider takes ownership of buffer + info and frees them in close().
             return new TrueTypeGlyphProvider(buffer, info, size, oversample, 0.0F, 0.0F, "");
         } catch (Throwable t) {

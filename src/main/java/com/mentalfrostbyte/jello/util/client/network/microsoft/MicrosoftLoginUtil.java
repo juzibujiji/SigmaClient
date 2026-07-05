@@ -1,10 +1,8 @@
 package com.mentalfrostbyte.jello.util.client.network.microsoft;
 
 import com.google.gson.*;
-import com.sun.net.httpserver.HttpServer;
 import net.minecraft.util.Session;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
@@ -20,20 +18,30 @@ import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
 import java.awt.*;
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetSocketAddress;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public final class MicrosoftLoginUtil {
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     public static void openWebLink(final URI url) {
         try {
@@ -67,89 +75,196 @@ public final class MicrosoftLoginUtil {
     public static CompletableFuture<String> acquireMSAuthCode(
             final Executor executor
     ) {
-        return acquireMSAuthCode(MicrosoftLoginUtil::openWebLink, executor);
+        return acquireMSAuthCodeSession(MicrosoftLoginUtil::openWebLink, executor)
+                .thenApply(MSAuthCodeSession::authCode);
     }
 
     public static CompletableFuture<String> acquireMSAuthCode(
             final Consumer<URI> browserAction,
             final Executor executor
     ) {
+        return acquireMSAuthCodeSession(browserAction, executor)
+                .thenApply(MSAuthCodeSession::authCode);
+    }
+
+    public static CompletableFuture<MSAuthCodeSession> acquireMSAuthCodeSession(
+            final Executor executor
+    ) {
+        return acquireMSAuthCodeSession(MicrosoftLoginUtil::openWebLink, executor);
+    }
+
+    public static CompletableFuture<MSAuthCodeSession> acquireMSAuthCodeSession(
+            final Consumer<URI> browserAction,
+            final Executor executor
+    ) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                final String state = RandomStringUtils.randomAlphanumeric(8);
+                final String state = randomUrlSafe(24);
+                final String codeVerifier = randomUrlSafe(32);
+                final String codeChallenge = createCodeChallenge(codeVerifier);
 
-                final HttpServer server = HttpServer.create(
-                        new InetSocketAddress(PORT), 0
-                );
+                try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("localhost"))) {
+                    final String redirectUri = String.format("http://localhost:%d/callback", server.getLocalPort());
+                    final URI uri = new URIBuilder("https://login.live.com/oauth20_authorize.srf")
+                            .addParameter("client_id", CLIENT_ID)
+                            .addParameter("response_type", "code")
+                            .addParameter("redirect_uri", redirectUri)
+                            .addParameter("scope", "XboxLive.signin XboxLive.offline_access")
+                            .addParameter("state", state)
+                            .addParameter("code_challenge", codeChallenge)
+                            .addParameter("code_challenge_method", "S256")
+                            .addParameter("prompt", "select_account")
+                            .build();
 
-                final CountDownLatch latch = new CountDownLatch(1);
-                final AtomicReference<String> authCode = new AtomicReference<>(null),
-                        errorMsg = new AtomicReference<>(null);
+                    final CompletableFuture<OAuthCallbackResult> callbackFuture = CompletableFuture.supplyAsync(() -> {
+                        try {
+                            return waitForOAuthCallback(server, state);
+                        } catch (Exception e) {
+                            throw new CompletionException(e);
+                        }
+                    });
 
-                server.createContext("/callback", exchange -> {
-                    final Map<String, String> query = URLEncodedUtils
-                            .parse(
-                                    exchange.getRequestURI().toString().replaceAll("/callback\\?", ""),
-                                    StandardCharsets.UTF_8
-                            )
-                            .stream()
-                            .collect(Collectors.toMap(NameValuePair::getName, NameValuePair::getValue));
+                    browserAction.accept(uri);
 
-                    if (!state.equals(query.get("state"))) {
-                        errorMsg.set(
-                                String.format("State mismatch! Expected '%s' but got '%s'.", state, query.get("state"))
-                        );
-                    } else if (query.containsKey("code")) {
-                        authCode.set(query.get("code"));
-                    } else if (query.containsKey("error")) {
-                        errorMsg.set(String.format("%s: %s", query.get("error"), query.get("error_description")));
+                    final OAuthCallbackResult callback = callbackFuture.join();
+                    if (!StringUtils.isBlank(callback.errorMessage())) {
+                        throw new Exception(callback.errorMessage());
                     }
 
-                    final InputStream stream = MicrosoftLoginUtil.class.getResourceAsStream("/callback.html");
-                    final byte[] response = stream != null ? IOUtils.toByteArray(stream) : new byte[0];
-                    exchange.getResponseHeaders().add("Content-Type", "text/html");
-                    exchange.sendResponseHeaders(200, response.length);
-                    exchange.getResponseBody().write(response);
-                    exchange.getResponseBody().close();
-
-                    latch.countDown();
-                });
-
-                final URIBuilder uriBuilder = new URIBuilder("https://login.live.com/oauth20_authorize.srf")
-                        .addParameter("client_id", CLIENT_ID)
-                        .addParameter("response_type", "code")
-                        .addParameter("redirect_uri", String.format("http://localhost:%d/callback", server.getAddress().getPort()))
-                        .addParameter("scope", "XboxLive.signin XboxLive.offline_access")
-                        .addParameter("state", state)
-                        .addParameter("prompt", "select_account");
-                final URI uri = uriBuilder.build();
-
-                browserAction.accept(uri);
-
-                try {
-                    server.start();
-
-                    latch.await();
-
-                    return Optional.ofNullable(authCode.get())
-                            .filter(code -> !StringUtils.isBlank(code))
-                            .orElseThrow(() -> new Exception(
-                                    Optional.ofNullable(errorMsg.get())
-                                            .orElse("There was no auth code or error description present.")
-                            ));
-                } finally {
-                    server.stop(2);
+                    return new MSAuthCodeSession(callback.authCode(), redirectUri, codeVerifier);
                 }
-            } catch (InterruptedException e) {
-                throw new CancellationException("Microsoft auth code acquisition was cancelled!");
             } catch (Exception e) {
                 throw new CompletionException("Unable to acquire Microsoft auth code!", e);
             }
         }, executor);
     }
 
+    private static OAuthCallbackResult waitForOAuthCallback(
+            final ServerSocket server,
+            final String expectedState
+    ) throws Exception {
+        server.setSoTimeout((int) TimeUnit.MINUTES.toMillis(10));
+
+        while (true) {
+            try (Socket socket = server.accept()) {
+                socket.setSoTimeout(5_000);
+                final OAuthCallbackResult callback = parseOAuthCallback(readHttpRequestUri(socket), expectedState);
+                writeOAuthCallbackResponse(socket, callback.responseCode());
+
+                if (callback.complete()) {
+                    return callback;
+                }
+            } catch (SocketTimeoutException e) {
+                throw new TimeoutException("Timed out waiting for the Microsoft OAuth callback.");
+            }
+        }
+    }
+
+    private static URI readHttpRequestUri(final Socket socket) throws IOException {
+        final BufferedReader reader = new BufferedReader(
+                new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII)
+        );
+        final String requestLine = reader.readLine();
+        String headerLine;
+        while ((headerLine = reader.readLine()) != null && !headerLine.isEmpty()) {
+        }
+
+        if (StringUtils.isBlank(requestLine)) {
+            throw new IOException("Missing HTTP request line.");
+        }
+
+        final String[] requestParts = requestLine.split(" ", 3);
+        if (requestParts.length < 2) {
+            throw new IOException("Invalid HTTP request line: " + requestLine);
+        }
+
+        return URI.create(requestParts[1]);
+    }
+
+    private static OAuthCallbackResult parseOAuthCallback(
+            final URI requestUri,
+            final String expectedState
+    ) {
+        if (!"/callback".equals(requestUri.getPath())) {
+            return OAuthCallbackResult.pending(404);
+        }
+
+        final Map<String, String> query = URLEncodedUtils
+                .parse(
+                        Optional.ofNullable(requestUri.getRawQuery()).orElse(""),
+                        StandardCharsets.UTF_8
+                )
+                .stream()
+                .collect(Collectors.toMap(
+                        NameValuePair::getName,
+                        NameValuePair::getValue,
+                        (first, second) -> first
+                ));
+
+        if (!expectedState.equals(query.get("state"))) {
+            return OAuthCallbackResult.pending(400);
+        }
+
+        if (query.containsKey("code")) {
+            return OAuthCallbackResult.success(query.get("code"));
+        }
+
+        if (query.containsKey("error")) {
+            return OAuthCallbackResult.error(
+                    String.format("%s: %s", query.get("error"), query.get("error_description"))
+            );
+        }
+
+        return OAuthCallbackResult.error("There was no auth code or error description present.");
+    }
+
+    private static void writeOAuthCallbackResponse(final Socket socket, final int responseCode) throws IOException {
+        final byte[] response;
+        try (InputStream stream = MicrosoftLoginUtil.class.getResourceAsStream("/callback.html")) {
+            response = stream != null ? IOUtils.toByteArray(stream) : new byte[0];
+        }
+
+        final String statusText = responseCode == 200 ? "OK" : responseCode == 404 ? "Not Found" : "Bad Request";
+        final String headers = "HTTP/1.1 " + responseCode + " " + statusText + "\r\n"
+                + "Content-Type: text/html; charset=UTF-8\r\n"
+                + "Content-Length: " + response.length + "\r\n"
+                + "Connection: close\r\n"
+                + "\r\n";
+
+        final OutputStream output = socket.getOutputStream();
+        output.write(headers.getBytes(StandardCharsets.US_ASCII));
+        output.write(response);
+        output.flush();
+    }
+
+    public static CompletableFuture<String> acquireMSAccessToken(
+            final MSAuthCodeSession authCodeSession,
+            final Executor executor
+    ) {
+        return acquireMSAccessToken(
+                authCodeSession.authCode(),
+                authCodeSession.redirectUri(),
+                authCodeSession.codeVerifier(),
+                executor
+        );
+    }
+
     public static CompletableFuture<String> acquireMSAccessToken(
             final String authCode,
+            final Executor executor
+    ) {
+        return acquireMSAccessToken(
+                authCode,
+                String.format("http://localhost:%d/callback", PORT),
+                null,
+                executor
+        );
+    }
+
+    public static CompletableFuture<String> acquireMSAccessToken(
+            final String authCode,
+            final String redirectUri,
+            final String codeVerifier,
             final Executor executor
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -157,17 +272,16 @@ public final class MicrosoftLoginUtil {
                 final HttpPost request = new HttpPost(URI.create("https://login.live.com/oauth20_token.srf"));
                 request.setConfig(REQUEST_CONFIG);
                 request.setHeader("Content-Type", "application/x-www-form-urlencoded");
-                request.setEntity(new UrlEncodedFormEntity(
-                        Arrays.asList(
-                                new BasicNameValuePair("client_id", CLIENT_ID),
-                                new BasicNameValuePair("grant_type", "authorization_code"),
-                                new BasicNameValuePair("code", authCode),
-                                new BasicNameValuePair(
-                                        "redirect_uri", String.format("http://localhost:%d/callback", PORT)
-                                )
-                        ),
-                        "UTF-8"
+                final java.util.List<NameValuePair> params = new java.util.ArrayList<>(Arrays.asList(
+                        new BasicNameValuePair("client_id", CLIENT_ID),
+                        new BasicNameValuePair("grant_type", "authorization_code"),
+                        new BasicNameValuePair("code", authCode),
+                        new BasicNameValuePair("redirect_uri", redirectUri)
                 ));
+                if (!StringUtils.isBlank(codeVerifier)) {
+                    params.add(new BasicNameValuePair("code_verifier", codeVerifier));
+                }
+                request.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
 
                 final org.apache.http.HttpResponse res = client.execute(request);
 
@@ -188,6 +302,40 @@ public final class MicrosoftLoginUtil {
                 throw new CompletionException("Unable to acquire Microsoft access token!", e);
             }
         }, executor);
+    }
+
+    private static String randomUrlSafe(final int byteLength) {
+        final byte[] bytes = new byte[byteLength];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String createCodeChallenge(final String codeVerifier) throws Exception {
+        final MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+        final byte[] digest = sha256.digest(codeVerifier.getBytes(StandardCharsets.US_ASCII));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+    }
+
+    private record OAuthCallbackResult(
+            boolean complete,
+            int responseCode,
+            String authCode,
+            String errorMessage
+    ) {
+        private static OAuthCallbackResult pending(final int responseCode) {
+            return new OAuthCallbackResult(false, responseCode, null, null);
+        }
+
+        private static OAuthCallbackResult success(final String authCode) {
+            return new OAuthCallbackResult(true, 200, authCode, null);
+        }
+
+        private static OAuthCallbackResult error(final String errorMessage) {
+            return new OAuthCallbackResult(true, 200, null, errorMessage);
+        }
+    }
+
+    public record MSAuthCodeSession(String authCode, String redirectUri, String codeVerifier) {
     }
 
     public static CompletableFuture<String> acquireXboxAccessToken(

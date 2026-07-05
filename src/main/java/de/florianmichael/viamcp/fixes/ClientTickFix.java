@@ -31,7 +31,7 @@ public class ClientTickFix {
     }
 
     /**
-     * Sends the 1.21.2+ zero-payload end-of-tick packet once per client tick.
+     * Sends the 1.21.3+ zero-payload end-of-tick packet once per client tick.
      */
     public static void tick() {
         if (!isEnabled()) {
@@ -39,7 +39,7 @@ public class ClientTickFix {
         }
 
         ProtocolVersion targetVersion = ViaLoadingBase.getInstance().getTargetVersion();
-        if (!targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_21_2)) {
+        if (!PacketFixFor1_21Plus.isAtLeast1_21_3Protocol(targetVersion)) {
             return;
         }
 

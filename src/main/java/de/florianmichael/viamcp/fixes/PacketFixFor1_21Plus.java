@@ -33,6 +33,11 @@ public final class PacketFixFor1_21Plus {
     public static final String HANDLER_NAME = "sigma-1_21-movement-flag-fix";
     private static final String ENABLED_PROPERTY = "sigma.viamcp.packetFix1_21";
     private static final String GRIM_VANILLA_COMPAT_PROPERTY = "sigma.viamcp.grimVanillaCompat";
+    /*
+     * ViaVersion exposes protocol 768 as v1_21_2 for the 1.21.2-1.21.3 range.
+     * This is the lowest protocol node that can represent a 1.21.3+ target.
+     */
+    private static final ProtocolVersion FIRST_1_21_3_PROTOCOL = ProtocolVersion.v1_21_2;
     private static final int FLAG_ON_GROUND = 1;
     private static final int FLAG_HORIZONTAL_COLLISION = 2;
     private static final int INPUT_FORWARD = 1;
@@ -51,19 +56,7 @@ public final class PacketFixFor1_21Plus {
             "Protocol1_21_5To1_21_6",
             "Protocol1_21_6To1_21_5"
     };
-    private static final String[] MOVEMENT_1_21_PROTOCOLS = {
-            "Protocol1_20_5To1_21",
-            "Protocol1_21To1_20_5",
-            "Protocol1_21To1_21_2",
-            "Protocol1_21_2To1_21",
-            "Protocol1_21_2To1_21_4",
-            "Protocol1_21_4To1_21_2",
-            "Protocol1_21_4To1_21_5",
-            "Protocol1_21_5To1_21_4",
-            "Protocol1_21_5To1_21_6",
-            "Protocol1_21_6To1_21_5"
-    };
-    private static final String[] MOVEMENT_FLAGS_PROTOCOLS = {
+    private static final String[] MOVEMENT_1_21_3_PROTOCOLS = {
             "Protocol1_21To1_21_2",
             "Protocol1_21_2To1_21",
             "Protocol1_21_2To1_21_4",
@@ -81,10 +74,18 @@ public final class PacketFixFor1_21Plus {
         return Boolean.parseBoolean(System.getProperty(ENABLED_PROPERTY, "true"));
     }
 
+    public static boolean isTargetAtLeast1_21_3Protocol() {
+        return isAtLeast1_21_3Protocol(targetVersion());
+    }
+
+    public static boolean isAtLeast1_21_3Protocol(ProtocolVersion targetVersion) {
+        return targetVersion != null && targetVersion.newerThanOrEqualTo(FIRST_1_21_3_PROTOCOL);
+    }
+
     public static boolean shouldUseMovementFlags() {
         return isEnabled()
-                && targetVersion().newerThanOrEqualTo(ProtocolVersion.v1_21_2)
-                && hasActiveProtocolNamed(MOVEMENT_FLAGS_PROTOCOLS);
+                && isTargetAtLeast1_21_3Protocol()
+                && hasActiveProtocolNamed(MOVEMENT_1_21_3_PROTOCOLS);
     }
 
     public static boolean shouldUseVanilla1_21MovementCadence() {
@@ -93,8 +94,8 @@ public final class PacketFixFor1_21Plus {
 
     public static boolean shouldUseVanilla1_21MovementPhysics() {
         return isEnabled()
-                && targetVersion().newerThanOrEqualTo(ProtocolVersion.v1_21)
-                && hasActiveProtocolNamed(MOVEMENT_1_21_PROTOCOLS);
+                && isTargetAtLeast1_21_3Protocol()
+                && hasActiveProtocolNamed(MOVEMENT_1_21_3_PROTOCOLS);
     }
 
     public static boolean shouldUseGrimVanillaMovement() {
@@ -111,6 +112,7 @@ public final class PacketFixFor1_21Plus {
     public static boolean shouldSendPlayerInput() {
         ProtocolVersion targetVersion = targetVersion();
         return isEnabled()
+                && isAtLeast1_21_3Protocol(targetVersion)
                 && targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_21_5)
                 && hasProtocol(activeUserConnection(), playerInputProtocol(targetVersion));
     }
@@ -355,7 +357,7 @@ public final class PacketFixFor1_21Plus {
     }
 
     private static MovementPacketIds movementPacketIds() {
-        ProtocolVersion targetVersion = ViaLoadingBase.getInstance().getTargetVersion();
+        ProtocolVersion targetVersion = targetVersion();
         if (targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_21_6)) {
             return movementPacketIds(
                     ServerboundPackets1_21_6.MOVE_PLAYER_POS,

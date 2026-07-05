@@ -131,7 +131,7 @@ public class Alert extends Element {
                                 }
                                 case "Web login" -> {
                                     ExecutorService executor = Executors.newSingleThreadExecutor();
-                                    MicrosoftLoginUtil.acquireMSAuthCode(executor)
+                                    MicrosoftLoginUtil.acquireMSAuthCodeSession(executor)
                                             .thenComposeAsync(msAuthCode -> MicrosoftLoginUtil
                                                     .acquireMSAccessToken(msAuthCode, executor), executor)
                                             .thenComposeAsync(msAccessToken -> MicrosoftLoginUtil
@@ -143,23 +143,35 @@ public class Alert extends Element {
                                                     executor)
                                             .thenComposeAsync(mcToken -> MicrosoftLoginUtil.login(mcToken, executor),
                                                     executor)
-                                            .thenAccept(session -> {
-                                                Account account = new Account(session.username, session.playerID,
-                                                        session.token);
-                                                if (!Client.getInstance().accountManager.containsAccount(account)) {
-                                                    Client.getInstance().accountManager.updateAccount(account);
-                                                }
+                                            .thenAccept(session -> Minecraft.getInstance().execute(() -> {
+                                                try {
+                                                    Account account = new Account(session.username, session.playerID,
+                                                            session.token);
+                                                    if (!Client.getInstance().accountManager.containsAccount(account)) {
+                                                        Client.getInstance().accountManager.updateAccount(account);
+                                                    }
 
-                                                this.inputMap = this.method13599();
-                                                this.method13603(false);
-                                                AltManagerScreen.instance.updateAccountList(false);
-                                            })
+                                                    this.inputMap = this.method13599();
+                                                    this.method13603(false);
+                                                    AltManagerScreen.instance.updateAccountList(false);
+                                                } finally {
+                                                    executor.shutdown();
+                                                }
+                                            }))
                                             .exceptionally(error -> {
-                                                Client.getInstance().soundManager.play("error");
-                                                this.inputMap = this.method13599();
-                                                this.method13603(false);
+                                                Client.getInstance().logger.error("Microsoft web login failed", error);
+                                                Minecraft.getInstance().execute(() -> {
+                                                    try {
+                                                        Client.getInstance().soundManager.play("error");
+                                                        this.inputMap = this.method13599();
+                                                        this.method13603(false);
+                                                    } finally {
+                                                        executor.shutdown();
+                                                    }
+                                                });
                                                 return null;
-                                            });
+                                            })
+                                            .whenComplete((ignored, error) -> executor.shutdown());
                                 }
                                 case "Token login" -> {
                                     this.inputMap = this.method13599();

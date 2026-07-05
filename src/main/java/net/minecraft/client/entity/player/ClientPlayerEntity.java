@@ -100,6 +100,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
      */
     public float lastReportedPitch;
     private boolean prevOnGround;
+    private boolean prevHorizontalCollision;
     private boolean isCrouching;
     private boolean clientSneakState;
 
@@ -285,6 +286,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         float yaw = this.rotationYaw;
         float pitch = this.rotationPitch;
         boolean onGround = this.onGround;
+        boolean horizontalCollision = this.collidedHorizontally;
 
         if (!vanillaMovement) {
             event = new EventMotion(x, y, z, yaw, pitch, onGround);
@@ -323,6 +325,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             boolean posMoved = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ > minimumMovement
                     || this.positionUpdateTicks >= positionPacketInterval;
             boolean rotMoved = deltaYaw != 0.0D || deltaPitch != 0.0D;
+            boolean horizontalCollisionChanged = PacketFixFor1_21Plus.shouldUseMovementFlags()
+                    && this.prevHorizontalCollision != horizontalCollision;
 
             if (this.isPassenger()) {
                 Vector3d vector3d = this.getMotion();
@@ -335,7 +339,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                 this.connection.sendPacket(new CPlayerPacket.PositionPacket(x, y, z, onGround));
             } else if (rotMoved) {
                 this.connection.sendPacket(new CPlayerPacket.RotationPacket(yaw, pitch, onGround));
-            } else if (this.prevOnGround != onGround || isLegacy) {
+            } else if (this.prevOnGround != onGround || horizontalCollisionChanged || isLegacy) {
                 this.connection.sendPacket(new CPlayerPacket(onGround));
             }
 
@@ -356,6 +360,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             }
 
             this.prevOnGround = onGround;
+            this.prevHorizontalCollision = horizontalCollision;
             this.autoJumpEnabled = this.mc.gameSettings.autoJump;
         }
 

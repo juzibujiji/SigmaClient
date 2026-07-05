@@ -108,7 +108,7 @@ public class Resources {
         public static Texture youtubePNG = loadTexture("com/mentalfrostbyte/gui/resources/loading/youtube.png");
         public static Texture guildedPNG = loadTexture("com/mentalfrostbyte/gui/resources/loading/guilded.png");
         public static Texture redditPNG = loadTexture("com/mentalfrostbyte/gui/resources/loading/reddit.png");
-        public static Texture mgwtPNG = loadTexture("com/mentalfrostbyte/gui/resources/loading/mgwt.png");
+        public static Texture mgwtPNG = loadTexture("com/mentalfrostbyte/gui/resources/loading/mgwt_translucent.png");
         public static Texture panoramaPNG = createScaledAndProcessedTexture1(
                         "com/mentalfrostbyte/gui/resources/background/panorama5.png", 0.25F, 30);
         private static Texture mgwtBackgroundPNG = null;
