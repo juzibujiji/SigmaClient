@@ -65,11 +65,15 @@ public class WarThunderRadar extends RenderModule {
     /** 触发锁定告警的距离（格） */
     private static final float LOCK_DISTANCE = 5.0F;
 
-    /** Alt+F 手动锁定框颜色（固定亮绿，不随主色变化以便区分） */
+    /** Alt+R 手动锁定框颜色（固定亮绿，不随主色变化以便区分） */
     private static final int LOCK_GREEN = 0xFF55FF55;
 
     /** TWS 扫描线拖影宽度（px） */
     private static final float SCAN_TRAIL_W = 30.0F;
+    private static final int SCAN_TRAIL_LINES = 8;
+    private static final float SCAN_TRAIL_LINE_GAP = 4.0F;
+    private static final long TWS_SCAN_PERIOD_MS = 1800L;
+    private static final int TRANSLUCENT_BLACK_BG = 0x5A0B0D0F;
 
     // ===== 字体（Consolas，懒加载 —— TrueTypeFont 需要 GL 上下文）=====
     private static TrueTypeFont font12, font14;
@@ -78,11 +82,10 @@ public class WarThunderRadar extends RenderModule {
     /** 线宽缩放：glLineWidth 不受矩阵缩放影响，需手动乘用户缩放 */
     private float lineScale = 1.0F;
 
-    /** Alt+F 手动锁定的目标实体 ID（-1 = 未锁定） */
+    /** Alt+R 手动锁定的目标实体 ID（-1 = 未锁定） */
     private int lockedEntityId = -1;
-    /** Alt+F 组合键上一帧状态，用于边沿检测 */
+    /** Alt+R 组合键上一帧状态，用于边沿检测 */
     private boolean prevLockKey = false;
-
     /** 雷达接触目标 */
     private static class Contact {
         Entity entity;
@@ -93,7 +96,7 @@ public class WarThunderRadar extends RenderModule {
         float closingSpeed;  // 径向速度（格/秒），负值 = 接近
         float crosshairAngle; // 与准星视线的夹角（度），越小越靠近准星
         boolean lock;        // 正在接近且距离 < LOCK_DISTANCE
-        boolean marked;      // Alt+F 手动锁定
+        boolean marked;      // Alt+R 手动锁定
     }
 
     public WarThunderRadar() {
@@ -120,7 +123,7 @@ public class WarThunderRadar extends RenderModule {
         List<Contact> contacts = scanContacts(range);
         Contact primary = getMaxClosingContact(contacts);
 
-        // ===== Alt+F 手动锁定（边沿触发，按准星夹角选取目标）=====
+        // ===== Alt+R 手动锁定（按下边沿触发，锁定后保持）=====
         handleLockKey(contacts);
         // 标记被锁定的目标；若锁定实体已消失则清除
         boolean lockAlive = false;
@@ -129,7 +132,7 @@ public class WarThunderRadar extends RenderModule {
         }
         if (lockedEntityId != -1 && !lockAlive) {
             Entity le = mc.world.getEntityByID(lockedEntityId);
-            if (le == null || !le.isAlive() || le.getDistance(mc.player) > range) lockedEntityId = -1;
+            if (le == null || !le.isAlive() || le.getDistance(mc.player) > range || isRejectedByAntiBot(le)) lockedEntityId = -1;
         }
 
         // ===== 告警音效 =====
@@ -163,8 +166,8 @@ public class WarThunderRadar extends RenderModule {
         int dim    = withAlpha(base, 0.40F);
         int soft   = withAlpha(base, 0.65F);
         int bright = withAlpha(lighten(base, 0.45F), 1.0F);
-        // 半透明灰底（Background 开启时使用），否则用主色派生的暗底
-        int bg     = drawBg ? 0x66404040 : withAlpha(scaleRgb(base, 0.10F), 0.28F);
+        // 半透明黑底（Background 开启时使用），否则用主色派生的暗底
+        int bg     = drawBg ? TRANSLUCENT_BLACK_BG : withAlpha(scaleRgb(base, 0.10F), 0.28F);
 
         GL11.glPushMatrix();
         GL11.glTranslatef(parent.getX(), parent.getY(), 0.0F);
@@ -178,15 +181,14 @@ public class WarThunderRadar extends RenderModule {
     }
 
     /**
-     * Alt+F 组合键边沿检测：按下时锁定准星最近的目标；
-     * 若该目标已被锁定则解除，否则切换到新目标。
+     * Alt+R 按键锁定：按下瞬间锁定准星最近的目标；若该目标已被锁定则解除，否则切换到新目标。
      */
     private void handleLockKey(List<Contact> contacts) {
         long handle = mc.getMainWindow().getHandle();
         boolean alt = InputMappings.isKeyDown(handle, GLFW.GLFW_KEY_LEFT_ALT)
                 || InputMappings.isKeyDown(handle, GLFW.GLFW_KEY_RIGHT_ALT);
-        boolean f = InputMappings.isKeyDown(handle, GLFW.GLFW_KEY_F);
-        boolean combo = alt && f;
+        boolean r = InputMappings.isKeyDown(handle, GLFW.GLFW_KEY_R);
+        boolean combo = alt && r;
 
         if (combo && !prevLockKey) {
             Contact nearest = null;
@@ -196,7 +198,7 @@ public class WarThunderRadar extends RenderModule {
             if (nearest == null) {
                 lockedEntityId = -1;
             } else if (nearest.entityId == lockedEntityId) {
-                lockedEntityId = -1; // 再次按下解除
+                lockedEntityId = -1;
             } else {
                 lockedEntityId = nearest.entityId;
             }
@@ -212,6 +214,7 @@ public class WarThunderRadar extends RenderModule {
         List<Contact> list = new ArrayList<>();
         for (Entity e : mc.world.getAllEntities()) {
             if (e == mc.player || !e.isAlive()) continue;
+            if (isRejectedByAntiBot(e)) continue;
             String code = classify(e);
             if (code == null) continue;
 
@@ -234,7 +237,7 @@ public class WarThunderRadar extends RenderModule {
                     ? (float) (relMotion.dotProduct(toTarget) / len * 20.0)
                     : 0.0F;
 
-            // 与准星视线的夹角（用眼睛高度修正的方向向量），Alt+F 选取最靠准星的目标
+            // 与准星视线的夹角（用眼睛高度修正的方向向量），Alt+R 选取最靠准星的目标
             double eyeDy = (e.getPosY() + e.getEyeHeight()) - (mc.player.getPosY() + mc.player.getEyeHeight());
             Vector3d toEye = new Vector3d(dx, eyeDy, dz);
             float crosshair = 180.0F;
@@ -256,6 +259,10 @@ public class WarThunderRadar extends RenderModule {
             list.add(c);
         }
         return list;
+    }
+
+    private static boolean isRejectedByAntiBot(Entity entity) {
+        return Client.getInstance().botManager != null && Client.getInstance().botManager.isBot(entity);
     }
 
     private static String classify(Entity e) {
@@ -303,14 +310,16 @@ public class WarThunderRadar extends RenderModule {
         }
 
         // 纵向扫描线 + 拖影（相控阵方位扫描，拖影拖在扫描方向后方，越远越淡）
-        float scanX = TWS_X + (time * 0.08F) % TWS_W;
+        float scanPhase = (float) ((time % TWS_SCAN_PERIOD_MS) / (double) TWS_SCAN_PERIOD_MS);
+        float scanX = TWS_X + scanPhase * TWS_W;
         float trailStart = Math.max(TWS_X, scanX - SCAN_TRAIL_W);
         if (scanX > trailStart) {
             int trailTail = soft & 0x00FFFFFF;              // 透明（拖影尾端）
             int trailLead = (soft & 0x00FFFFFF) | 0x55000000; // 半透明绿（扫描线处）
             fillGradientH(trailStart, TWS_Y, scanX - trailStart, TWS_H, trailTail, trailLead);
         }
-        line(scanX, TWS_Y, scanX, TWS_Y + TWS_H, 1.6F, soft);
+        drawScanTrailLines(scanX, TWS_Y, TWS_H, soft);
+        line(scanX, TWS_Y, scanX, TWS_Y + TWS_H, 1.8F, bright);
 
         // 底部自机符号：圆 + 十字
         float ownX = TWS_X + TWS_W / 2.0F;
@@ -335,7 +344,7 @@ public class WarThunderRadar extends RenderModule {
             if (isPrimary) {
                 strokeRect(x - 8.0F, y - 8.0F, 16.0F, 16.0F, 1.6F, col);
             }
-            // Alt+F 手动锁定：额外套一层粗体绿框
+            // Alt+R 手动锁定：额外套一层粗体绿框
             if (c.marked) {
                 strokeRect(x - 11.0F, y - 11.0F, 22.0F, 22.0F, 2.6F, LOCK_GREEN);
             }
@@ -409,7 +418,7 @@ public class WarThunderRadar extends RenderModule {
             int col = isPrimary ? bright : main;
 
             circle(p[0], p[1], cr, isPrimary ? 2.0F : 1.4F, col);
-            // Alt+F 手动锁定：额外套一层粗体绿框
+            // Alt+R 手动锁定：额外套一层粗体绿框
             if (c.marked) {
                 float half = cr + 6.0F;
                 strokeRect(p[0] - half, p[1] - half, half * 2.0F, half * 2.0F, 2.6F, LOCK_GREEN);
@@ -541,6 +550,20 @@ public class WarThunderRadar extends RenderModule {
         setColor(rightColor); GL11.glVertex2f(x + w, y);
         GL11.glEnd();
         postDraw();
+    }
+
+    private void drawScanTrailLines(float scanX, float y, float h, int color) {
+        for (int i = 1; i <= SCAN_TRAIL_LINES; i++) {
+            float x = scanX - i * SCAN_TRAIL_LINE_GAP;
+            if (x < TWS_X) {
+                x += TWS_W;
+            }
+
+            float fade = 1.0F - (float) i / (float) (SCAN_TRAIL_LINES + 1);
+            float alpha = 0.38F * fade * fade;
+            float width = 0.75F + 0.65F * fade;
+            line(x, y, x, y + h, width, withAlpha(color, alpha));
+        }
     }
 
     private void strokeRect(float x, float y, float w, float h, float width, int color) {

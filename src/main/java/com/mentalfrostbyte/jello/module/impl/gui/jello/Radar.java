@@ -20,11 +20,11 @@ import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
  *   <li>Color — 雷达主色（ColorSetting 调色盘，支持 rainbow）</li>
  *   <li>Range — 雷达探测半径（格）</li>
  *   <li>Color — 雷达主色（ColorSetting 调色盘，支持 rainbow）</li>
- *   <li>Background — 是否在 RWR/TWS 背后绘制半透明灰底</li>
+ *   <li>Background — 是否在 RWR/TWS 背后绘制半透明黑底</li>
  *   <li>Sound — 告警音效开关：目标距离 &lt; 5 格播放锁定告警，其余距离播放扫描提示音</li>
  * </ul>
  * <p>
- * 快捷键 Alt+F：锁定/切换准星最近的目标，被锁定目标在 RWR 与 TWS 中额外套一层粗体绿框。
+ * 快捷键 Alt+R：按下时锁定/切换准星最近的目标，被锁定目标在 RWR 与 TWS 中额外套一层粗体绿框。
  */
 public class Radar extends ModuleWithModuleSettings implements Draggable {
 
@@ -37,7 +37,7 @@ public class Radar extends ModuleWithModuleSettings implements Draggable {
     public NumberSetting<Float> scale = new NumberSetting<>("Scale", "Radar scale", 1.0F, 0.5F, 2.0F, 0.1F);
     public NumberSetting<Float> range = new NumberSetting<>("Range", "Detection range in blocks", 32.0F, 8.0F, 64.0F, 4.0F);
     public ColorSetting color = new ColorSetting("Color", "Radar display color", 0xFF61FF6A);
-    public BooleanSetting background = new BooleanSetting("Background", "Draw translucent gray backdrop behind RWR/TWS", true);
+    public BooleanSetting background = new BooleanSetting("Background", "Draw translucent black backdrop behind RWR/TWS", true);
     public BooleanSetting sound = new BooleanSetting("Sound", "Play lock/scan warning sounds", true);
 
     public Radar() {
