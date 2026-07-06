@@ -47,8 +47,9 @@ import java.util.Map;
  * 接近率由目标与玩家的相对运动沿视线方向的分量计算（格/秒，负值为接近）。
  *
  * <p>音效（父模块 Sound 开关控制，资源在 res 的 audio 目录）：
- * 有目标正在接近且距离 &lt; 5 格 → 循环播放锁定告警 radar_lock.wav；
- * 其余距离上存在目标 → 播放扫描提示音 radar_scan.wav。
+ * 有目标处于近敌告警距离（Warning Distance）内 → 循环播放锁定告警 radar_lock.mp3（抢占扫描音）；
+ * 其余距离上存在目标 → 播放扫描提示音 radar_scan.mp3。
+ * 告警状态带 400ms 保持时间，避免目标在告警距离边界抖动时来回切换音效。
  *
  * <p>所有文本使用 TrueTypeFont（Consolas，纯英文，无中文渲染问题），
  * 颜色统一由父模块的 ColorSetting 调色盘控制。
@@ -65,9 +66,6 @@ public class WarThunderRadar extends RenderModule {
     private static final float RWR_CY = 96.0F;
     private static final float RWR_R  = 76.0F;
 
-    /** 触发锁定告警的距离（格） */
-    private static final float LOCK_DISTANCE = 5.0F;
-
     /** Alt+R 手动锁定框颜色（固定亮绿，不随主色变化以便区分） */
     private static final int LOCK_GREEN = 0xFF55FF55;
 
@@ -77,7 +75,9 @@ public class WarThunderRadar extends RenderModule {
     private static final float SCAN_TRAIL_LINE_GAP = 4.0F;
     private static final float MIN_SCAN_RATE = 0.05F;
     private static final float TWS_SCAN_HIT_PAD = 2.5F;
-    private static final int TRANSLUCENT_BLACK_BG = 0x5A0B0D0F;
+    private static final int TRANSLUCENT_BLACK_BG = 0xA80B0D0F;
+    /** 近敌告警解除后锁定音的保持时间（ms），吸收目标在告警距离边界的抖动 */
+    private static final long LOCK_SOUND_HOLD_MS = 400L;
 
     // ===== 字体（Consolas，懒加载 —— TrueTypeFont 需要 GL 上下文）=====
     private static TrueTypeFont font12, font14;
@@ -94,6 +94,8 @@ public class WarThunderRadar extends RenderModule {
     private float previousScanX = TWS_X;
     private int previousScanDirection = 1;
     private boolean previousScanValid = false;
+    /** 最近一次存在近敌告警的时间戳（ms），配合 LOCK_SOUND_HOLD_MS 做音效保持 */
+    private long lastLockDangerTime = 0L;
 
     private static class ScanState {
         float x;
@@ -109,12 +111,18 @@ public class WarThunderRadar extends RenderModule {
         float relBearing;    // 相对玩家视角的方位角，0 = 正前方
         float closingSpeed;  // 径向速度（格/秒），负值 = 接近
         float crosshairAngle; // 与准星视线的夹角（度），越小越靠近准星
-        boolean lock;        // 正在接近且距离 < LOCK_DISTANCE
+        boolean lock;        // 距离小于近敌告警距离（Warning Distance）
         boolean marked;      // Alt+R 手动锁定
     }
 
     public WarThunderRadar() {
         super(ModuleCategory.GUI, "WarThunder", "War Thunder style RWR + TWS radar");
+    }
+
+    @Override
+    public void onDisable() {
+        super.onDisable();
+        RadarSoundPlayer.stop();
     }
 
     private static void ensureFonts() {
@@ -132,11 +140,12 @@ public class WarThunderRadar extends RenderModule {
 
         long time = System.currentTimeMillis();
         float range = parent.range.getCurrentValue();
+        float warningDistance = parent.warningDistance.getCurrentValue();
         ScanState twsScan = getTwsScanState(time, parent.scanRate.getCurrentValue());
         boolean realisticTws = parent.realistic.getCurrentValue();
 
         // ===== 目标获取 =====
-        List<Contact> contacts = scanContacts(range);
+        List<Contact> contacts = scanContacts(range, warningDistance);
         Contact primary = getMaxClosingContact(contacts);
 
         // ===== Alt+R 手动锁定（按下边沿触发，锁定后保持）=====
@@ -153,16 +162,20 @@ public class WarThunderRadar extends RenderModule {
         List<Contact> twsContacts = getTwsContacts(contacts, twsScan, realisticTws);
 
         // ===== 告警音效 =====
-        if (parent.sound.getCurrentValue() && !contacts.isEmpty()) {
-            boolean lockDanger = false;
-            for (Contact c : contacts) {
-                if (c.lock) { lockDanger = true; break; }
-            }
-            if (lockDanger) {
-                RadarSoundPlayer.play("radar_lock", 700);
-            } else {
-                RadarSoundPlayer.play("radar_scan", 1600);
-            }
+        // 近敌告警带 400ms 保持：目标在告警距离边界抖动或实体列表瞬时丢失时不来回切换音效
+        if (hasLockDanger(contacts)) lastLockDangerTime = time;
+        boolean lockTone = time - lastLockDangerTime < LOCK_SOUND_HOLD_MS;
+        if (!parent.sound.getCurrentValue()) {
+            RadarSoundPlayer.stop();
+        } else if (lockTone) {
+            // 锁定告警优先：掐断正在播的扫描提示音，立即循环锁定音
+            RadarSoundPlayer.stop("radar_scan");
+            RadarSoundPlayer.play("radar_lock", 700);
+        } else if (!contacts.isEmpty()) {
+            RadarSoundPlayer.stop("radar_lock");
+            RadarSoundPlayer.play("radar_scan", 1600);
+        } else {
+            RadarSoundPlayer.stop("radar_lock");
         }
 
         // ===== 初始位置 =====
@@ -228,7 +241,7 @@ public class WarThunderRadar extends RenderModule {
     // 目标获取
     // =====================================================================
 
-    private List<Contact> scanContacts(float range) {
+    private List<Contact> scanContacts(float range, float warningDistance) {
         List<Contact> list = new ArrayList<>();
         for (Entity e : mc.world.getAllEntities()) {
             if (e == mc.player || !e.isAlive()) continue;
@@ -273,10 +286,19 @@ public class WarThunderRadar extends RenderModule {
             c.relBearing = rel;
             c.closingSpeed = radial;
             c.crosshairAngle = crosshair;
-            c.lock = radial < -0.05F && dist < LOCK_DISTANCE;
+            // 近敌告警：距离判定。径向速度每 tick 抖动（目标瞬时停顿即翻正），
+            // 不能作为告警条件，否则锁定音会被反复掐断；接近率仅用于主威胁选取与读数显示
+            c.lock = dist < warningDistance;
             list.add(c);
         }
         return list;
+    }
+
+    private static boolean hasLockDanger(List<Contact> contacts) {
+        for (Contact c : contacts) {
+            if (c.lock) return true;
+        }
+        return false;
     }
 
     private static boolean isRejectedByAntiBot(Entity entity) {
@@ -567,6 +589,10 @@ public class WarThunderRadar extends RenderModule {
         RenderSystem.enableBlend();
         RenderSystem.disableTexture();
         RenderSystem.blendFuncSeparate(770, 771, 0, 1);
+        // 面剔除只作用于填充图元：开着时背景矩形/圆盘会被整个剔除而线条照常显示。
+        // RenderSystem 走 GlStateManager 缓存，再补一次裸调用防缓存与真实 GL 状态脱节
+        RenderSystem.disableCull();
+        GL11.glDisable(GL11.GL_CULL_FACE);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
         GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
@@ -576,6 +602,7 @@ public class WarThunderRadar extends RenderModule {
     private static void postDraw() {
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
         GL11.glDisable(GL11.GL_BLEND);
+        RenderSystem.enableCull();
         RenderSystem.enableTexture();
         RenderSystem.disableBlend();
         RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
@@ -626,10 +653,11 @@ public class WarThunderRadar extends RenderModule {
     private void fillCircle(float cx, float cy, float r, int color) {
         preDraw(1.0F);
         setColor(color);
+        // 负向扫角 → GUI 投影下的正面朝向，理由同 fillRect
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
         GL11.glVertex2f(cx, cy);
         for (int i = 0; i <= 60; i++) {
-            double a = Math.PI * 2.0 * i / 60.0;
+            double a = -Math.PI * 2.0 * i / 60.0;
             GL11.glVertex2f(cx + (float) Math.cos(a) * r, cy + (float) Math.sin(a) * r);
         }
         GL11.glEnd();
@@ -639,11 +667,12 @@ public class WarThunderRadar extends RenderModule {
     private void fillRect(float x, float y, float w, float h, int color) {
         preDraw(1.0F);
         setColor(color);
+        // GUI 正交投影（y 轴翻转）下需逆序发顶点才是正面朝向，与 RenderUtil.drawRect 一致
         GL11.glBegin(GL11.GL_QUADS);
-        GL11.glVertex2f(x, y);
-        GL11.glVertex2f(x + w, y);
-        GL11.glVertex2f(x + w, y + h);
         GL11.glVertex2f(x, y + h);
+        GL11.glVertex2f(x + w, y + h);
+        GL11.glVertex2f(x + w, y);
+        GL11.glVertex2f(x, y);
         GL11.glEnd();
         postDraw();
     }
