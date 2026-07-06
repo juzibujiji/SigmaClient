@@ -27,8 +27,11 @@ import team.sdhq.eventBus.annotations.EventTarget;
 
 import java.awt.Font;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * WarThunder 模式雷达 — 战争雷霆风格的双雷达显示。
@@ -72,7 +75,8 @@ public class WarThunderRadar extends RenderModule {
     private static final float SCAN_TRAIL_W = 30.0F;
     private static final int SCAN_TRAIL_LINES = 8;
     private static final float SCAN_TRAIL_LINE_GAP = 4.0F;
-    private static final long TWS_SCAN_PERIOD_MS = 1800L;
+    private static final float MIN_SCAN_RATE = 0.05F;
+    private static final float TWS_SCAN_HIT_PAD = 2.5F;
     private static final int TRANSLUCENT_BLACK_BG = 0x5A0B0D0F;
 
     // ===== 字体（Consolas，懒加载 —— TrueTypeFont 需要 GL 上下文）=====
@@ -86,6 +90,16 @@ public class WarThunderRadar extends RenderModule {
     private int lockedEntityId = -1;
     /** Alt+R 组合键上一帧状态，用于边沿检测 */
     private boolean prevLockKey = false;
+    private final Map<Integer, Contact> twsTracks = new HashMap<>();
+    private float previousScanX = TWS_X;
+    private int previousScanDirection = 1;
+    private boolean previousScanValid = false;
+
+    private static class ScanState {
+        float x;
+        int direction;
+    }
+
     /** 雷达接触目标 */
     private static class Contact {
         Entity entity;
@@ -118,6 +132,8 @@ public class WarThunderRadar extends RenderModule {
 
         long time = System.currentTimeMillis();
         float range = parent.range.getCurrentValue();
+        ScanState twsScan = getTwsScanState(time, parent.scanRate.getCurrentValue());
+        boolean realisticTws = parent.realistic.getCurrentValue();
 
         // ===== 目标获取 =====
         List<Contact> contacts = scanContacts(range);
@@ -134,6 +150,7 @@ public class WarThunderRadar extends RenderModule {
             Entity le = mc.world.getEntityByID(lockedEntityId);
             if (le == null || !le.isAlive() || le.getDistance(mc.player) > range || isRejectedByAntiBot(le)) lockedEntityId = -1;
         }
+        List<Contact> twsContacts = getTwsContacts(contacts, twsScan, realisticTws);
 
         // ===== 告警音效 =====
         if (parent.sound.getCurrentValue() && !contacts.isEmpty()) {
@@ -173,10 +190,11 @@ public class WarThunderRadar extends RenderModule {
         GL11.glTranslatef(parent.getX(), parent.getY(), 0.0F);
         GL11.glScalef(userScale, userScale, 1.0F);
 
-        drawTws(contacts, primary, range, time, main, dim, soft, bright, bg);
+        drawTws(twsContacts, primary, range, time, twsScan, main, dim, soft, bright, bg);
         drawRwr(contacts, primary, range, time, main, dim, soft, bright, bg);
 
         GL11.glPopMatrix();
+        rememberTwsScan(twsScan);
         RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
@@ -286,11 +304,111 @@ public class WarThunderRadar extends RenderModule {
         return best;
     }
 
+    private static ScanState getTwsScanState(long time, float scanRate) {
+        float rate = Math.max(MIN_SCAN_RATE, scanRate);
+        double pass = time / 1000.0 * rate;
+        long passIndex = (long) Math.floor(pass);
+        float phase = (float) (pass - passIndex);
+        boolean forward = (passIndex & 1L) == 0L;
+
+        ScanState state = new ScanState();
+        state.direction = forward ? 1 : -1;
+        state.x = TWS_X + (forward ? phase : 1.0F - phase) * TWS_W;
+        return state;
+    }
+
+    private List<Contact> getTwsContacts(List<Contact> liveContacts, ScanState scan, boolean realistic) {
+        if (!realistic) {
+            twsTracks.clear();
+            return liveContacts;
+        }
+
+        Map<Integer, Contact> liveById = new HashMap<>();
+        for (Contact contact : liveContacts) {
+            liveById.put(contact.entityId, contact);
+        }
+
+        Iterator<Map.Entry<Integer, Contact>> iterator = twsTracks.entrySet().iterator();
+        while (iterator.hasNext()) {
+            if (!liveById.containsKey(iterator.next().getKey())) {
+                iterator.remove();
+            }
+        }
+
+        float tolerance = getScanHitTolerance(scan);
+        for (Contact contact : liveContacts) {
+            if (isScanPassingContact(twsContactX(contact), scan, tolerance)) {
+                twsTracks.put(contact.entityId, copyContact(contact));
+            }
+        }
+
+        for (Contact track : twsTracks.values()) {
+            track.marked = track.entityId == lockedEntityId;
+        }
+        return new ArrayList<>(twsTracks.values());
+    }
+
+    private float getScanHitTolerance(ScanState scan) {
+        if (!previousScanValid) {
+            return TWS_SCAN_HIT_PAD;
+        }
+        return Math.max(TWS_SCAN_HIT_PAD, Math.abs(scan.x - previousScanX) + TWS_SCAN_HIT_PAD);
+    }
+
+    private boolean isScanPassingContact(float contactX, ScanState scan, float tolerance) {
+        if (!previousScanValid) {
+            return Math.abs(contactX - scan.x) <= tolerance;
+        }
+
+        float min = Math.min(previousScanX, scan.x) - tolerance;
+        float max = Math.max(previousScanX, scan.x) + tolerance;
+        if (contactX >= min && contactX <= max) {
+            return true;
+        }
+
+        if (scan.direction != previousScanDirection) {
+            float edge = scan.direction > 0 ? TWS_X : TWS_X + TWS_W;
+            return Math.abs(contactX - edge) <= tolerance;
+        }
+        return false;
+    }
+
+    private void rememberTwsScan(ScanState scan) {
+        previousScanX = scan.x;
+        previousScanDirection = scan.direction;
+        previousScanValid = true;
+    }
+
+    private static Contact copyContact(Contact source) {
+        Contact copy = new Contact();
+        copy.entity = source.entity;
+        copy.entityId = source.entityId;
+        copy.code = source.code;
+        copy.distance = source.distance;
+        copy.relBearing = source.relBearing;
+        copy.closingSpeed = source.closingSpeed;
+        copy.crosshairAngle = source.crosshairAngle;
+        copy.lock = source.lock;
+        copy.marked = source.marked;
+        return copy;
+    }
+
+    private static float twsContactX(Contact c) {
+        float az = clamp(c.relBearing / 90.0F, -1.0F, 1.0F);
+        return TWS_X + (az + 1.0F) * 0.5F * (TWS_W - 16.0F) + 8.0F;
+    }
+
+    private static float twsContactY(Contact c, float range) {
+        float ownY = TWS_Y + TWS_H - 10.0F;
+        float distNorm = clamp(c.distance / range, 0.0F, 1.0F);
+        return ownY - distNorm * (TWS_H - 26.0F);
+    }
+
     // =====================================================================
     // TWS 相控阵扫描屏（B-Scope）
     // =====================================================================
 
-    private void drawTws(List<Contact> contacts, Contact primary, float range, long time,
+    private void drawTws(List<Contact> contacts, Contact primary, float range, long time, ScanState scan,
                          int main, int dim, int soft, int bright, int bg) {
         // 背景 + 边框
         fillRect(TWS_X, TWS_Y, TWS_W, TWS_H, bg);
@@ -309,16 +427,8 @@ public class WarThunderRadar extends RenderModule {
             line(TWS_X, y, TWS_X + TWS_W, y, 1.0F, dim);
         }
 
-        // 纵向扫描线 + 拖影（相控阵方位扫描，拖影拖在扫描方向后方，越远越淡）
-        float scanPhase = (float) ((time % TWS_SCAN_PERIOD_MS) / (double) TWS_SCAN_PERIOD_MS);
-        float scanX = TWS_X + scanPhase * TWS_W;
-        float trailStart = Math.max(TWS_X, scanX - SCAN_TRAIL_W);
-        if (scanX > trailStart) {
-            int trailTail = soft & 0x00FFFFFF;              // 透明（拖影尾端）
-            int trailLead = (soft & 0x00FFFFFF) | 0x55000000; // 半透明绿（扫描线处）
-            fillGradientH(trailStart, TWS_Y, scanX - trailStart, TWS_H, trailTail, trailLead);
-        }
-        drawScanTrailLines(scanX, TWS_Y, TWS_H, soft);
+        float scanX = scan.x;
+        drawScanTrail(scanX, scan.direction, TWS_Y, TWS_H, soft);
         line(scanX, TWS_Y, scanX, TWS_Y + TWS_H, 1.8F, bright);
 
         // 底部自机符号：圆 + 十字
@@ -330,12 +440,10 @@ public class WarThunderRadar extends RenderModule {
 
         // 目标：X = 相对方位（±90° 裁剪），Y = 距离（底部 0 → 顶部 range）
         for (Contact c : contacts) {
-            boolean isPrimary = c == primary;
+            boolean isPrimary = primary != null && c.entityId == primary.entityId;
 
-            float az = clamp(c.relBearing / 90.0F, -1.0F, 1.0F);
-            float x = TWS_X + (az + 1.0F) * 0.5F * (TWS_W - 16.0F) + 8.0F;
-            float distNorm = clamp(c.distance / range, 0.0F, 1.0F);
-            float y = ownY - distNorm * (TWS_H - 26.0F);
+            float x = twsContactX(c);
+            float y = twsContactY(c, range);
 
             int col = isPrimary ? bright : main;
 
@@ -552,11 +660,25 @@ public class WarThunderRadar extends RenderModule {
         postDraw();
     }
 
-    private void drawScanTrailLines(float scanX, float y, float h, int color) {
+    private void drawScanTrail(float scanX, int direction, float y, float h, int color) {
+        int trailTail = color & 0x00FFFFFF;
+        int trailLead = (color & 0x00FFFFFF) | 0x55000000;
+        if (direction >= 0) {
+            float trailStart = Math.max(TWS_X, scanX - SCAN_TRAIL_W);
+            if (scanX > trailStart) {
+                fillGradientH(trailStart, y, scanX - trailStart, h, trailTail, trailLead);
+            }
+        } else {
+            float trailEnd = Math.min(TWS_X + TWS_W, scanX + SCAN_TRAIL_W);
+            if (trailEnd > scanX) {
+                fillGradientH(scanX, y, trailEnd - scanX, h, trailLead, trailTail);
+            }
+        }
+
         for (int i = 1; i <= SCAN_TRAIL_LINES; i++) {
-            float x = scanX - i * SCAN_TRAIL_LINE_GAP;
-            if (x < TWS_X) {
-                x += TWS_W;
+            float x = scanX - direction * i * SCAN_TRAIL_LINE_GAP;
+            if (x < TWS_X || x > TWS_X + TWS_W) {
+                continue;
             }
 
             float fade = 1.0F - (float) i / (float) (SCAN_TRAIL_LINES + 1);

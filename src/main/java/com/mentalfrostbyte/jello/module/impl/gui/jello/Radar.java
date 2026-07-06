@@ -36,6 +36,8 @@ public class Radar extends ModuleWithModuleSettings implements Draggable {
     public NumberSetting<Float> y = new NumberSetting<>("Y", "Y", 0, 0, 10000, 10);
     public NumberSetting<Float> scale = new NumberSetting<>("Scale", "Radar scale", 1.0F, 0.5F, 2.0F, 0.1F);
     public NumberSetting<Float> range = new NumberSetting<>("Range", "Detection range in blocks", 32.0F, 8.0F, 64.0F, 4.0F);
+    public NumberSetting<Float> scanRate = new NumberSetting<>("Scan Rate", "TWS one-way scan sweeps per second", 0.55F, 0.10F, 2.00F, 0.05F);
+    public BooleanSetting realistic = new BooleanSetting("Realistic", "TWS contacts update only when the scan line reaches them", false);
     public ColorSetting color = new ColorSetting("Color", "Radar display color", 0xFF61FF6A);
     public BooleanSetting background = new BooleanSetting("Background", "Draw translucent black backdrop behind RWR/TWS", true);
     public BooleanSetting sound = new BooleanSetting("Sound", "Play lock/scan warning sounds", true);
@@ -44,7 +46,7 @@ public class Radar extends ModuleWithModuleSettings implements Draggable {
         super(ModuleCategory.GUI, "Radar", "Aircraft style threat radar", "Mode",
                 new WarThunderRadar()
         );
-        this.registerSetting(x, y, scale, range, color, background, sound);
+        this.registerSetting(x, y, scale, range, scanRate, realistic, color, background, sound);
     }
 
     public void setX(float v) {
