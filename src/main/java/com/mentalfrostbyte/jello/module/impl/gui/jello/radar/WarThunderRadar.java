@@ -16,6 +16,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.AbstractArrowEntity;
 import net.minecraft.entity.projectile.DamagingProjectileEntity;
 import net.minecraft.entity.projectile.EggEntity;
+import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.entity.projectile.SnowballEntity;
 import net.minecraft.entity.projectile.TridentEntity;
 import net.minecraft.util.math.MathHelper;
@@ -76,6 +77,12 @@ public class WarThunderRadar extends RenderModule {
     private static final float MIN_SCAN_RATE = 0.05F;
     private static final float TWS_SCAN_HIT_PAD = 2.5F;
     private static final int TRANSLUCENT_BLACK_BG = 0xA80B0D0F;
+    private static final int OWN_PROJECTILE_LAUNCH_TICKS = 8;
+    private static final float OWN_PROJECTILE_LAUNCH_XZ_TOLERANCE = 0.5F;
+    private static final float OWN_PROJECTILE_LAUNCH_Y_TOLERANCE = 0.5F;
+    private static final double OWN_PROJECTILE_MIN_SPEED = 0.04D;
+    private static final double OWN_PROJECTILE_LOOK_DOT = 0.65D;
+    private static final double OWN_PROJECTILE_AWAY_DOT = 0.10D;
     /** 近敌告警解除后锁定音的保持时间（ms），吸收目标在告警距离边界的抖动 */
     private static final long LOCK_SOUND_HOLD_MS = 400L;
 
@@ -91,6 +98,7 @@ public class WarThunderRadar extends RenderModule {
     /** Alt+R 组合键上一帧状态，用于边沿检测 */
     private boolean prevLockKey = false;
     private final Map<Integer, Contact> twsTracks = new HashMap<>();
+    private final Map<Integer, Entity> ownProjectiles = new HashMap<>();
     private float previousScanX = TWS_X;
     private int previousScanDirection = 1;
     private boolean previousScanValid = false;
@@ -157,7 +165,7 @@ public class WarThunderRadar extends RenderModule {
         }
         if (lockedEntityId != -1 && !lockAlive) {
             Entity le = mc.world.getEntityByID(lockedEntityId);
-            if (le == null || !le.isAlive() || le.getDistance(mc.player) > range || isRejectedByAntiBot(le)) lockedEntityId = -1;
+            if (le == null || !le.isAlive() || le.getDistance(mc.player) > range || isRejectedByAntiBot(le) || isOwnProjectile(le)) lockedEntityId = -1;
         }
         List<Contact> twsContacts = getTwsContacts(contacts, twsScan, realisticTws);
 
@@ -243,8 +251,10 @@ public class WarThunderRadar extends RenderModule {
 
     private List<Contact> scanContacts(float range, float warningDistance) {
         List<Contact> list = new ArrayList<>();
+        pruneOwnProjectileCache();
         for (Entity e : mc.world.getAllEntities()) {
             if (e == mc.player || !e.isAlive()) continue;
+            if (isOwnProjectile(e)) continue;
             if (isRejectedByAntiBot(e)) continue;
             String code = classify(e);
             if (code == null) continue;
@@ -303,6 +313,66 @@ public class WarThunderRadar extends RenderModule {
 
     private static boolean isRejectedByAntiBot(Entity entity) {
         return Client.getInstance().botManager != null && Client.getInstance().botManager.isBot(entity);
+    }
+
+    private void pruneOwnProjectileCache() {
+        Iterator<Map.Entry<Integer, Entity>> it = ownProjectiles.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Integer, Entity> entry = it.next();
+            Entity entity = entry.getValue();
+            if (entity == null || !entity.isAlive() || mc.world.getEntityByID(entry.getKey()) != entity) {
+                it.remove();
+            }
+        }
+    }
+
+    private boolean isOwnProjectile(Entity entity) {
+        if (!(entity instanceof ProjectileEntity) || mc.player == null) return false;
+
+        int entityId = entity.getEntityId();
+        Entity cached = ownProjectiles.get(entityId);
+        if (cached == entity) return true;
+        if (cached != null) ownProjectiles.remove(entityId);
+
+        if (!isLikelyLocalLaunch(entity)) return false;
+        ownProjectiles.put(entityId, entity);
+        return true;
+    }
+
+    private boolean isLikelyLocalLaunch(Entity entity) {
+        if (entity.ticksExisted > OWN_PROJECTILE_LAUNCH_TICKS) return false;
+
+        double launchDx = entity.getPosX() - mc.player.getPosX();
+        double launchDz = entity.getPosZ() - mc.player.getPosZ();
+        if (Math.abs(launchDx) > OWN_PROJECTILE_LAUNCH_XZ_TOLERANCE
+                || Math.abs(launchDz) > OWN_PROJECTILE_LAUNCH_XZ_TOLERANCE) {
+            return false;
+        }
+
+        double minLaunchY = mc.player.getPosY() - OWN_PROJECTILE_LAUNCH_Y_TOLERANCE;
+        double maxLaunchY = mc.player.getPosYEye() + OWN_PROJECTILE_LAUNCH_Y_TOLERANCE;
+        if (entity.getPosY() < minLaunchY || entity.getPosY() > maxLaunchY) return false;
+
+        Vector3d motion = entity.getMotion().subtract(mc.player.getMotion());
+        if (motion.length() < OWN_PROJECTILE_MIN_SPEED) motion = entity.getMotion();
+        double motionLen = motion.length();
+        if (motionLen < OWN_PROJECTILE_MIN_SPEED) return false;
+
+        Vector3d motionDir = motion.scale(1.0D / motionLen);
+        Vector3d look = mc.player.getLook(1.0F);
+        double lookLen = look.length();
+        if (lookLen < 0.01D) return false;
+        if (motionDir.dotProduct(look.scale(1.0D / lookLen)) < OWN_PROJECTILE_LOOK_DOT) return false;
+
+        double horizontalOffset = Math.sqrt(launchDx * launchDx + launchDz * launchDz);
+        if (horizontalOffset < 0.01D) return true;
+
+        Vector3d horizontalMotion = new Vector3d(motionDir.x, 0.0D, motionDir.z);
+        double horizontalMotionLen = horizontalMotion.length();
+        if (horizontalMotionLen < 0.01D) return true;
+
+        Vector3d horizontalLaunch = new Vector3d(launchDx / horizontalOffset, 0.0D, launchDz / horizontalOffset);
+        return horizontalMotion.scale(1.0D / horizontalMotionLen).dotProduct(horizontalLaunch) > OWN_PROJECTILE_AWAY_DOT;
     }
 
     private static String classify(Entity e) {

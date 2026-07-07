@@ -820,10 +820,13 @@ public class Scaffold extends Module {
         event.setMoving(true);
     }
 
-    // EventMoveInput is handled by Sigma's RotationManager.onInput - it
-    // already routes the standalone Scaffold's rots through
-    // MovementUtil.fixMovement (see RotationManager.getMovementFixYaw and
-    // RotationManager.onInput). No per-module hook needed.
+    // Movement fix: Minecraft.runTick() re-syncs RotationCore to the real
+    // camera at the very head of the tick, BEFORE EventRunTicks PRE fires, so
+    // the rotation published by publishVisibleRotation() survives the whole
+    // tick. RotationManager's CorrectMovement-gated handlers then consume it
+    // when the player ticks (EventMoveInput strafe transform, EventMoveFlying
+    // physics yaw, EventJump yaw). Enable CorrectMovement to get the movement
+    // fix while scaffolding; no per-module hook needed here.
 
     // -----------------------------------------------------------------
     // Click cancel / placement - direct mirror of Naven's onClick.

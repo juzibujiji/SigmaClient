@@ -1567,6 +1567,18 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
      * Runs the current tick.
      */
     public void runTick() {
+        // Glue RotationCore to the real camera once per tick. This must run
+        // BEFORE the EventRunTicks PRE dispatch below: Scaffold publishes its
+        // silent rotation from that event, and the published value has to
+        // survive until the player tick consumes it (movement fix in
+        // EventMoveInput/EventMoveFlying/EventJump plus the outbound
+        // EventMotion). Resetting any later clobbers it back to the camera
+        // and silently disables the movement fix while scaffolding.
+        if (player != null) {
+            RotationCore.currentYaw = player.rotationYaw;
+            RotationCore.currentPitch = player.rotationPitch;
+        }
+
         // Naven-style EventRunTicks PRE: fires at the head of the game tick so
         // modules (Scaffold, RotationManager, etc.) can run their per-tick
         // setup logic BEFORE processKeyBinds() dispatches mouse-click events.
@@ -1591,11 +1603,6 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
         }
 
         this.profiler.endStartSection("textures");
-
-        if (player != null) {
-            RotationCore.currentYaw = player.rotationYaw;
-            RotationCore.currentPitch = player.rotationPitch;
-        }
 
         EventBus.call(new EventTick());
 

@@ -344,8 +344,9 @@ public final class SkijaFontRenderer {
         // Rasterize the glyphs at supersample x the requested size, then draw the resulting
         // texture minified (with GL_LINEAR) back down to the display size. This is what makes
         // Skija text smooth: the extra resolution gives the linear minification real coverage
-        // gradients to interpolate, instead of hard 1:1 jagged edges. Higher supersample
-        // (= higher Sharpness) -> softer edges, matching the STB TrueType path's oversample.
+        // gradients to interpolate, instead of hard 1:1 jagged edges. (The vanilla-font STB
+        // path is different: its atlas is sampled GL_NEAREST, so it bakes at exactly the GUI
+        // scale instead — see CustomFont.deviceOversample().)
         int ss = Math.max(1, supersample);
         float rasterSize = fontSize * ss;
         try (Font font = new Font(typeface, rasterSize); Paint paint = new Paint()) {

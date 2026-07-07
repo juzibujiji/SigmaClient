@@ -10,12 +10,12 @@ import com.mentalfrostbyte.jello.module.settings.impl.FontSwitch;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
+import com.mentalfrostbyte.jello.util.client.render.VanillaAlignedGlyphProvider;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.fonts.Font;
 import net.minecraft.client.gui.fonts.FontResourceManager;
 import net.minecraft.client.gui.fonts.providers.IGlyphProvider;
-import net.minecraft.client.gui.fonts.providers.TrueTypeGlyphProvider;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.Util;
@@ -45,9 +45,9 @@ import java.util.Map;
  *
  * <p>Mechanism: the {@code minecraft:default} {@link Font} keeps an ordered
  * {@code List<IGlyphProvider>}; the first provider that has a glyph for a code point
- * wins. On enable we insert the selected {@link TrueTypeGlyphProvider} at the front
- * (vanilla providers stay as fallback for anything the selected font lacks). On disable we
- * put the original list back.</p>
+ * wins. On enable we insert a {@link VanillaAlignedGlyphProvider} for the selected font at
+ * the front (vanilla providers stay as fallback for anything the selected font lacks). On
+ * disable we put the original list back.</p>
  *
  * <p>{@link Font#setGlyphProviders(List)} closes the font's current providers, so to
  * preserve the originals we reflectively empty the list first (then it closes nothing)
@@ -67,7 +67,6 @@ public class CustomFont extends Module {
     private static Field fontProvidersField;
 
     private final NumberSetting<Float> sizeSetting;
-    private final NumberSetting<Float> sharpnessSetting;
     private final BooleanSetting spectrumSetting;
     private final ColorSetting spectrumColorSetting;
     private final FontSwitch fontSwitch;
@@ -80,6 +79,8 @@ public class CustomFont extends Module {
     private List<IGlyphProvider> savedOriginals;
     /** Our selected provider (we own its native memory; close exactly once). */
     private IGlyphProvider harmonyProvider;
+    /** Oversample the current provider was baked with; rebake when the GUI scale changes. */
+    private int appliedOversample;
     private boolean applied;
 
     public CustomFont() {
@@ -88,9 +89,6 @@ public class CustomFont extends Module {
         this.registerSetting(this.sizeSetting = new NumberSetting<>(
                 "Size", "Rasterized glyph height; tweak until it matches the vanilla size.",
                 9.0F, 6.0F, 20.0F, 0.5F));
-        this.registerSetting(this.sharpnessSetting = new NumberSetting<>(
-                "Sharpness", "Supersampling factor (higher = crisper, slower to build).",
-                2.0F, 1.0F, 4.0F, 1.0F));
         this.registerSetting(this.spectrumSetting = new BooleanSetting(
                 "Spectrum", "Apply your prefer font to the music spectrum text.", true));
         this.registerSetting(this.spectrumColorSetting = new ColorSetting(
@@ -105,7 +103,6 @@ public class CustomFont extends Module {
                 this::selectFont,
                 this::getPreviewFont));
         this.sizeSetting.addObserver(s -> this.invalidatePreviewAndReapply());
-        this.sharpnessSetting.addObserver(s -> this.invalidatePreviewAndReapply());
         this.spectrumSetting.addObserver(s -> {
             if (!this.spectrumSetting.getCurrentValue()) {
                 this.invalidateSpectrumTypeface();
@@ -129,7 +126,9 @@ public class CustomFont extends Module {
 
     /**
      * Safety net: re-apply if the module is on but the live default font no longer carries our
-     * provider (covers config-enable-before-font-init and resource/pack reloads that rebuild fonts).
+     * provider (covers config-enable-before-font-init and resource/pack reloads that rebuild
+     * fonts), and re-bake when the GUI scale changes so the glyph atlas stays 1:1 with device
+     * pixels (see {@link #deviceOversample()}).
      */
     @EventTarget
     public void onTick(EventUpdate event) {
@@ -137,15 +136,22 @@ public class CustomFont extends Module {
             return;
         }
         Font font = getDefaultFont();
-        if (font == null || (this.applied && font == this.appliedFont)) {
+        if (font == null) {
             return;
         }
-        if (this.applied && font != this.appliedFont) {
-            // The font was rebuilt (reload) — MC already closed our old provider; drop the refs.
-            this.harmonyProvider = null;
-            this.savedOriginals = null;
-            this.applied = false;
-            this.appliedFont = null;
+        if (this.applied) {
+            if (font != this.appliedFont) {
+                // The font was rebuilt (reload) — MC already closed our old provider; drop the refs.
+                this.harmonyProvider = null;
+                this.savedOriginals = null;
+                this.applied = false;
+                this.appliedFont = null;
+            } else if (this.appliedOversample != deviceOversample()) {
+                // GUI scale changed — the current bake would be NEAREST-minified or magnified.
+                this.restore();
+            } else {
+                return;
+            }
         }
         this.tryApply();
     }
@@ -213,7 +219,8 @@ public class CustomFont extends Module {
             if (font == null) {
                 return; // font system not ready yet; the tick handler retries.
             }
-            IGlyphProvider provider = this.buildSelectedProvider();
+            int oversample = deviceOversample();
+            IGlyphProvider provider = this.buildSelectedProvider(oversample);
             if (provider == null) {
                 return;
             }
@@ -230,6 +237,7 @@ public class CustomFont extends Module {
             this.appliedFont = font;
             this.savedOriginals = originals;
             this.harmonyProvider = provider;
+            this.appliedOversample = oversample;
             this.applied = true;
         } catch (Throwable t) {
             System.err.println("[CustomFont] Failed to apply selected font: " + t.getMessage());
@@ -263,20 +271,20 @@ public class CustomFont extends Module {
         }
     }
 
-    private IGlyphProvider buildSelectedProvider() {
+    private IGlyphProvider buildSelectedProvider(int oversample) {
         File customFont = this.getSelectedCustomFont();
         if (customFont != null) {
-            IGlyphProvider provider = this.buildProvider(customFont);
+            IGlyphProvider provider = this.buildProvider(customFont, oversample);
             if (provider != null) {
                 return provider;
             }
         }
-        return this.buildProvider(HARMONY_FONT_RESOURCE);
+        return this.buildProvider(HARMONY_FONT_RESOURCE, oversample);
     }
 
-    private IGlyphProvider buildProvider(String resourcePath) {
+    private IGlyphProvider buildProvider(String resourcePath, int oversample) {
         try (InputStream is = Resources.readInputStream(resourcePath)) {
-            return this.buildProvider(is, resourcePath);
+            return this.buildProvider(is, resourcePath, oversample);
         } catch (Throwable t) {
             System.err.println("[CustomFont] Failed to build bundled glyph provider: " + t.getMessage());
             t.printStackTrace();
@@ -284,9 +292,9 @@ public class CustomFont extends Module {
         }
     }
 
-    private IGlyphProvider buildProvider(File fontFile) {
+    private IGlyphProvider buildProvider(File fontFile, int oversample) {
         try (InputStream is = new FileInputStream(fontFile)) {
-            return this.buildProvider(is, fontFile.getAbsolutePath());
+            return this.buildProvider(is, fontFile.getAbsolutePath(), oversample);
         } catch (Throwable t) {
             System.err.println("[CustomFont] Failed to build custom glyph provider: " + t.getMessage());
             t.printStackTrace();
@@ -295,22 +303,23 @@ public class CustomFont extends Module {
     }
 
     /**
-     * Minimum STB oversample so glyphs are baked at the same device density Skija uses.
-     * MUST mirror SkijaFontRenderer.supersample() exactly (2 * ceil(guiScale), capped 2..4) —
-     * otherwise the MC-font STB path and the Skija path bake at different densities and one looks
-     * softer than the other at low Sharpness (the bug: STB floored at 2 while Skija baked at 4).
+     * Oversample so the glyph atlas texels map 1:1 onto device pixels. The vanilla font atlas
+     * is sampled with GL_NEAREST ({@code RenderType.getText} -> {@code TextureState(blur=false)}),
+     * so baking ABOVE the GUI scale is NEAREST minification — it drops whole texel rows and the
+     * strokes go ragged/hairy (the old bug: we baked at 4x and GUI scale 2 halved it back down;
+     * only GUI scale 4 happened to look right). Baking BELOW it is magnification — blocky.
+     * {@code ceil(gui scale)} is the one crisp choice, so there is no user knob for this anymore.
      */
-    private static float deviceOversampleFloor() {
+    private static int deviceOversample() {
         try {
             double guiScale = net.minecraft.client.Minecraft.getInstance().getMainWindow().getGuiScaleFactor();
-            int target = 2 * (int) Math.ceil(guiScale);
-            return Math.max(2.0F, Math.min(4.0F, (float) target));
+            return Math.max(1, Math.min(8, (int) Math.ceil(guiScale)));
         } catch (Throwable t) {
-            return 4.0F;
+            return 2;
         }
     }
 
-    private IGlyphProvider buildProvider(InputStream inputStream, String sourceName) throws IOException {
+    private IGlyphProvider buildProvider(InputStream inputStream, String sourceName, int oversample) throws IOException {
         ByteBuffer buffer = null;
         STBTTFontinfo info = null;
         try {
@@ -321,14 +330,8 @@ public class CustomFont extends Module {
                 throw new IllegalStateException("stbtt_InitFont failed for " + sourceName);
             }
             float size = this.sizeSetting.getCurrentValue();
-            // Sharpness is the user's relative crispness control, but it must never let the glyph
-            // bake BELOW device-pixel density — Sharpness=1 would otherwise mean "oversample 1x",
-            // i.e. a 1x bake that the GUI-scale matrix then magnifies and blurs (the same failure
-            // we fixed on the Skija side). So floor the STB oversample at the GUI scale: the slider
-            // still ranges soft->crisp, but even its lowest setting stays crisp on a magnified GUI.
-            float oversample = Math.max(deviceOversampleFloor(), this.sharpnessSetting.getCurrentValue());
             // Provider takes ownership of buffer + info and frees them in close().
-            return new TrueTypeGlyphProvider(buffer, info, size, oversample, 0.0F, 0.0F, "");
+            return new VanillaAlignedGlyphProvider(buffer, info, size, oversample);
         } catch (Throwable t) {
             if (info != null) {
                 try { info.free(); } catch (Throwable ignored) {
@@ -489,15 +492,14 @@ public class CustomFont extends Module {
     }
 
     private float getPreviewPointSize() {
-        // Size ONLY controls the preview point size. Sharpness must never change the glyph
-        // size — it only affects smoothing (see SkijaFontRenderer.configureSmoothing /
-        // supersample, and the STB oversample path).
+        // Size ONLY controls the preview point size; crispness is handled automatically by
+        // baking at the GUI scale (see deviceOversample()).
         float size = this.sizeSetting.getCurrentValue();
         return Math.max(1.0F, size * 2.0F);
     }
 
     private int getPreviewPadding() {
-        return Math.max(1, Math.round(this.sharpnessSetting.getCurrentValue()));
+        return 2;
     }
 
     private static char[] previewCharacters() {

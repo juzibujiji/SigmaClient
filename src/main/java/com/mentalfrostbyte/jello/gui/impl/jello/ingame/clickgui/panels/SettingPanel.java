@@ -300,8 +300,6 @@ public class SettingPanel extends ScrollableContentPanel implements Class4342 {
                                 "Import", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
                         RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, x + 30.0F, y + 80.0F,
                                 "Size", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
-                        RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, x + 30.0F, y + 120.0F,
-                                "Sharpness", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
                         RenderUtil.drawString(ResourceRegistry.JelloLightFont14, x + 30.0F, y + 166.0F,
                                 "Fonts", RenderUtil2.applyAlpha(TEXT_MUTED, partialTicks));
 
@@ -393,8 +391,6 @@ public class SettingPanel extends ScrollableContentPanel implements Class4342 {
                                 "Import", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
                         RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, x + 30.0F, y + 80.0F,
                                 "Size", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
-                        RenderUtil.drawString(ResourceRegistry.JelloMediumFont14, x + 30.0F, y + 120.0F,
-                                "Sharpness", RenderUtil2.applyAlpha(TEXT_MAIN, partialTicks));
                         RenderUtil.drawString(ResourceRegistry.JelloLightFont14, x + 30.0F, y + 166.0F,
                                 "Fonts", RenderUtil2.applyAlpha(TEXT_MUTED, partialTicks));
 
