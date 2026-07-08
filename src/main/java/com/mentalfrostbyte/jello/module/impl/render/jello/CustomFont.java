@@ -10,7 +10,7 @@ import com.mentalfrostbyte.jello.module.settings.impl.FontSwitch;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
-import com.mentalfrostbyte.jello.util.client.render.VanillaAlignedGlyphProvider;
+//import com.mentalfrostbyte.jello.util.client.render.VanillaAlignedGlyphProvider;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.fonts.Font;
@@ -331,7 +331,8 @@ public class CustomFont extends Module {
             }
             float size = this.sizeSetting.getCurrentValue();
             // Provider takes ownership of buffer + info and frees them in close().
-            return new VanillaAlignedGlyphProvider(buffer, info, size, oversample);
+            return null;
+            //return new VanillaAlignedGlyphProvider(buffer, info, size, oversample);
         } catch (Throwable t) {
             if (info != null) {
                 try { info.free(); } catch (Throwable ignored) {

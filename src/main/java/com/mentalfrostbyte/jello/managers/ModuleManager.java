@@ -201,7 +201,6 @@ public class ModuleManager {
         this.register(new HighJump());
         this.register(new LongJump());
         this.register(new BlockFly());
-        this.register(new Scaffold());
         this.register(new NoSlow());
         this.register(new TargetStrafe());
         this.register(new Phase());

@@ -23,7 +23,6 @@ import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
 import com.mentalfrostbyte.jello.util.system.math.MathHelper;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
-import net.minecraft.block.*;
 import net.minecraft.client.gui.screen.inventory.InventoryScreen;
 import net.minecraft.inventory.container.ClickType;
 import net.minecraft.item.Item;
@@ -36,8 +35,6 @@ import org.lwjgl.opengl.GL11;
 import team.sdhq.eventBus.annotations.EventTarget;
 import team.sdhq.eventBus.annotations.priority.LowestPriority;
 
-import java.util.Arrays;
-
 public class BlockFly extends ModuleWithModuleSettings {
     public int lastSpoofedSlot;
     public Animation animation = new Animation(114, 114, Animation.Direction.BACKWARDS);
@@ -49,7 +46,8 @@ public class BlockFly extends ModuleWithModuleSettings {
                 new BlockFlyAACMode(),
                 new BlockFlySmoothMode(),
                 new BlockFlyHypixelMode(),
-                new BlockFlyScaffoldMode(),
+                new BlockFlyCustomMode(),
+                new BlockFlyLCustomMode(),
                 // GrimSemi: semi-silent scaffold hardened against GrimAntiCheat's
                 // block-place pipeline (post.Post, blockplace.FabricatedPlace /
                 // PositionPlace / AirLiquidPlace, badpackets.BadPacketsX/Y/W,
@@ -72,8 +70,12 @@ public class BlockFly extends ModuleWithModuleSettings {
         useGameSprint.setHidden(() -> getBooleanValueFromSettingName("No Sprint"));
         this.registerSetting(useGameSprint);
         this.registerSetting(new BooleanSetting("KeepFOV", "Lock the FOV multiplier to prevent the view from zooming in/out when sprint state toggles.", true));
-        NumberSetting<Float> fovModifier = new NumberSetting<Float>("FOV Modifier", "FOV multiplier used when KeepFOV is on (1.15 = vanilla sprint FOV).", 1.15F, 1.0F, 1.5F, 0.01F);
-        fovModifier.setHidden(() -> !getBooleanValueFromSettingName("KeepFOV"));
+        NumberSetting<Float> fovModifier = new NumberSetting<>("FOV Modifier", "FOV multiplier used when KeepFOV is on (1.15 = vanilla sprint FOV).", 1.15F, 1.0F, 2.0F, 0.05F) {
+            @Override
+            public boolean isHidden() {
+                return !getBooleanValueFromSettingName("KeepFOV");
+            }
+        };
         this.registerSetting(fovModifier);
     }
 
@@ -362,12 +364,9 @@ public class BlockFly extends ModuleWithModuleSettings {
     }
 
     @EventTarget
-    @LowestPriority
     public void onFOV(EventGetFovModifier event) {
-        if (this.isEnabled()
-                && !(this.getModWithTypeSetToName() instanceof BlockFlyScaffoldMode)
-                && this.getBooleanValueFromSettingName("KeepFOV")) {
-            event.fovModifier = this.getNumberValueBySettingName("FOV Modifier");
+        if (this.isEnabled() && this.getBooleanValueFromSettingName("KeepFOV") && MovementUtil.isMoving()) {
+            event.fovModifier = this.getNumberValueBySettingName("FOV Modifier") + (float) MovementUtil.getSpeedBoost() * 0.13F;
         }
     }
 

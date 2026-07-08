@@ -5,7 +5,6 @@ import com.mentalfrostbyte.jello.event.impl.player.EventGetFovModifier;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdateHeldItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventJump;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventSafeWalk;
 import com.mentalfrostbyte.jello.managers.RotationManager;
@@ -64,7 +63,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class BlockFlyScaffoldMode extends Module {
+public class BlockFlyCustomMode extends Module {
     public static final List<Block> BLACKLISTED_BLOCKS = Arrays.asList(
             Blocks.AIR,
             Blocks.WATER,
@@ -127,23 +126,20 @@ public class BlockFlyScaffoldMode extends Module {
     private final BooleanSetting snap;
     private final BooleanSetting hideSnap;
     private final BooleanSetting renderItemSpoof;
-    private final BooleanSetting keepFoV;
-    private final NumberSetting<Float> fov;
-
     private BlockPos pos;
     private int oldSlot = -1;
     private int lastSneakTicks;
     private boolean placedJump;
 
-    public BlockFlyScaffoldMode() {
-        super(ModuleCategory.MOVEMENT, "Scaffold", "HeyPixel-style scaffold port.");
+    public BlockFlyCustomMode() {
+        super(ModuleCategory.MOVEMENT, "Custom", "HeyPixel-style scaffold port.");
         this.registerSetting(this.modeSetting = new ModeSetting("Mode", "Bridge mode.", 0,
                 "Normal", "Telly Bridge", "Keep Y"));
         this.registerSetting(this.eagle = new BooleanSetting("Eagle",
                 "Auto-sneak on block edges in Normal mode.", true) {
             @Override
             public boolean isHidden() {
-                return !BlockFlyScaffoldMode.this.isNormalMode();
+                return !BlockFlyCustomMode.this.isNormalMode();
             }
         });
         this.registerSetting(this.sneak = new BooleanSetting("Sneak",
@@ -154,29 +150,18 @@ public class BlockFlyScaffoldMode extends Module {
                 "Snap yaw on Normal placements.", true) {
             @Override
             public boolean isHidden() {
-                return !BlockFlyScaffoldMode.this.isNormalMode();
+                return !BlockFlyCustomMode.this.isNormalMode();
             }
         });
         this.registerSetting(this.hideSnap = new BooleanSetting("Hide Snap Rotation",
                 "Keep snap correction out of first-person look rendering.", true) {
             @Override
             public boolean isHidden() {
-                return !BlockFlyScaffoldMode.this.isNormalMode()
-                        || !BlockFlyScaffoldMode.this.snap.getCurrentValue();
+                return !BlockFlyCustomMode.this.isNormalMode()
+                        || !BlockFlyCustomMode.this.snap.getCurrentValue();
             }
         });
-        this.registerSetting(this.renderItemSpoof = new BooleanSetting("Render Item Spoof",
-                "Render the pre-scaffold hotbar item while blocks are selected.", true));
-        this.registerSetting(this.keepFoV = new BooleanSetting("Keep FoV",
-                "Lock movement FoV while scaffolding.", true));
-        this.registerSetting(this.fov = new NumberSetting<>("FoV",
-                "FoV multiplier used by this scaffold mode.",
-                1.15F, 1.0F, 2.0F, 0.05F) {
-            @Override
-            public boolean isHidden() {
-                return !BlockFlyScaffoldMode.this.keepFoV.getCurrentValue();
-            }
-        });
+        this.registerSetting(this.renderItemSpoof = new BooleanSetting("Render Item Spoof", "Render the pre-scaffold hotbar item while blocks are selected.", true));
     }
 
     @Override
@@ -232,15 +217,6 @@ public class BlockFlyScaffoldMode extends Module {
         }
 
         event.setItem(mc.player.inventory.getStackInSlot(this.oldSlot));
-    }
-
-    @EventTarget
-    public void onFoV(EventGetFovModifier event) {
-        if (this.isEnabled()
-                && this.keepFoV.getCurrentValue()
-                && MovementUtil.isMoving()) {
-            event.fovModifier = this.fov.currentValue + (float) MovementUtil.getSpeedBoost() * 0.13F;
-        }
     }
 
     @EventTarget
