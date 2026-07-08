@@ -22,6 +22,9 @@ public class YsmZstd {
         if (data == null || data.length < 5) {
             throw new IllegalArgumentException("Invalid data length");
         }
+        // De-obfuscation rewrites frame/block headers in place; work on a private copy so
+        // callers may safely pass shared or cached buffers from any thread.
+        data = data.clone();
 
         ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
 
