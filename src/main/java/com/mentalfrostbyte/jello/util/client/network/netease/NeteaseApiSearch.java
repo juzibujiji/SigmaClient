@@ -430,6 +430,15 @@ public class NeteaseApiSearch {
 
                     urls.add(new NeteaseSongUrl(id, songUrl, br, type));
 
+                } else {
+
+                    int fee = item.has("fee") && !item.get("fee").isJsonNull()
+                            ? item.get("fee").getAsInt() : -1;
+                    int itemCode = item.has("code") ? item.get("code").getAsInt() : -1;
+                    System.err.println("[NeteaseSearch] weapi url=null for song " + id
+                            + " fee=" + fee + " itemCode=" + itemCode
+                            + " loggedIn=" + NeteaseApiLogin.isLoggedIn());
+
                 }
 
             }
@@ -458,8 +467,96 @@ public class NeteaseApiSearch {
 
         List<NeteaseSongUrl> urls = getSongUrls(songId);
 
-        return urls.isEmpty() ? null : urls.get(0).url;
+        if (!urls.isEmpty()) {
 
+            return urls.get(0).url;
+
+        }
+
+        // Fallback 1: EAPI（PC 客户端官方接口）。登录后能拿到 VIP 歌曲的
+        // 会员/免费试听播放地址，比 weapi 更可靠。依次尝试多个音质等级降级。
+        String[] levels = {"exhigh", "higher", "standard"};
+        for (String level : levels) {
+            String eapiUrl = NeteaseApiLogin.getSongUrlEapi(songId, level);
+            if (eapiUrl != null && !eapiUrl.isEmpty()) {
+                System.out.println("[NeteaseSearch] Resolved song " + songId
+                        + " via EAPI (level=" + level + "): " + eapiUrl);
+                return eapiUrl;
+            }
+        }
+
+        // Fallback 2: outer/url 外链端点，手动跟随 302 重定向
+        // （Java HttpURLConnection 不跟随 https→http 跨协议重定向）。
+        String resolved = resolveOuterUrl(songId);
+        if (resolved != null) {
+            System.out.println("[NeteaseSearch] Resolved song " + songId
+                    + " via outer/url: " + resolved);
+            return resolved;
+        }
+
+        System.err.println("[NeteaseSearch] Failed to resolve song URL for ID: " + songId
+                + " (weapi/eapi returned null and outer/url fallback failed)");
+        return null;
+
+    }
+
+    /**
+     * 通过 outer/url 外链端点解析歌曲播放 URL。
+     * 该端点是网易云 web 播放器的公开接口，支持 VIP 歌曲免费试听。
+     * 手动跟随 302 重定向以处理 https→http 跨协议跳转。
+     *
+     * @param songId 网易云歌曲 ID
+     * @return 实际音频 URL，失败返回 null
+     */
+    private static String resolveOuterUrl(long songId) {
+        String requestUrl = "https://music.163.com/song/media/outer/url?id=" + songId + ".mp3";
+        String cookie = NeteaseApiLogin.isLoggedIn()
+                ? NeteaseApiLogin.getLoginCookie() : "";
+
+        try {
+            java.net.HttpURLConnection conn =
+                    (java.net.HttpURLConnection) new java.net.URL(requestUrl).openConnection();
+            conn.setInstanceFollowRedirects(false); // 手动跟随，处理跨协议
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(8000);
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            conn.setRequestProperty("Referer", "https://music.163.com/");
+            if (!cookie.isEmpty()) {
+                conn.setRequestProperty("Cookie", cookie);
+            }
+
+            int maxRedirects = 5;
+            for (int i = 0; i < maxRedirects; i++) {
+                int status = conn.getResponseCode();
+                if (status == java.net.HttpURLConnection.HTTP_OK) {
+                    // 拿到了实际音频 URL
+                    return conn.getURL().toString();
+                }
+                if (status == java.net.HttpURLConnection.HTTP_MOVED_PERM
+                        || status == java.net.HttpURLConnection.HTTP_MOVED_TEMP
+                        || status == 307) {
+                    String location = conn.getHeaderField("Location");
+                    conn.disconnect();
+                    if (location == null || location.isEmpty()) break;
+                    conn = (java.net.HttpURLConnection) new java.net.URL(location).openConnection();
+                    conn.setInstanceFollowRedirects(false);
+                    conn.setConnectTimeout(8000);
+                    conn.setReadTimeout(8000);
+                    conn.setRequestMethod("GET");
+                    conn.setRequestProperty("User-Agent",
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                    continue;
+                }
+                // 403/404 等——歌曲不可用
+                conn.disconnect();
+                break;
+            }
+        } catch (Exception e) {
+            System.err.println("[NeteaseSearch] resolveOuterUrl failed: " + e.getMessage());
+        }
+        return null;
     }
 
     public static Map<Long, NeteaseSongUrl> getSongUrlMap(long... songIds) {

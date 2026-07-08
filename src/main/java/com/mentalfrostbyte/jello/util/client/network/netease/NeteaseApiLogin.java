@@ -223,6 +223,84 @@ public class NeteaseApiLogin {
         return nmtid != null ? "NMTID=" + nmtid : "";
     }
 
+    /**
+     * 通过 EAPI（PC 客户端接口）解析歌曲播放 URL。
+     * <p>
+     * EAPI 是网易云 PC 客户端使用的官方接口，携带登录 MUSIC_U 后
+     * 能获取 VIP 歌曲的免费试听/会员播放地址，比 weapi 更可靠。
+     * 响应为明文 JSON（doEapiRequest 设置 e_r=false）。
+     *
+     * @param songId 歌曲 ID
+     * @param level  音质等级：standard / higher / exhigh / lossless / hires
+     * @return 播放 URL，失败或不可用返回 null
+     */
+    public static String getSongUrlEapi(long songId, String level) {
+        try {
+            com.google.gson.JsonArray ids = new com.google.gson.JsonArray();
+            ids.add(songId);
+
+            JsonObject params = new JsonObject();
+            params.addProperty("ids", ids.toString());
+            params.addProperty("level", level == null ? "exhigh" : level);
+            params.addProperty("encodeType", "flac");
+            if ("sky".equals(level)) {
+                params.addProperty("immerseType", "c51");
+            }
+
+            Map<String, String> result = doEapiRequest(
+                    "/api/song/enhance/player/url/v1", params, CryptoType.PC_EAPI);
+            String response = result.get("body");
+            if (response == null || response.isEmpty()) {
+                System.err.println("[NeteaseLogin] getSongUrlEapi empty response for " + songId);
+                return null;
+            }
+
+            // e_r=false 时响应为明文 JSON；若不是（返回加密 hex），尝试 EAPI 解密
+            String trimmed = response.trim();
+            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+                String decrypted = NeteaseApiEncrypt.eapiDecrypt(trimmed);
+                if (decrypted != null && !decrypted.isEmpty()) {
+                    response = decrypted;
+                }
+            }
+
+            JsonObject json = JsonParser.parseString(response).getAsJsonObject();
+            if (!json.has("code") || json.get("code").getAsInt() != 200) {
+                System.err.println("[NeteaseLogin] getSongUrlEapi bad code: "
+                        + (json.has("code") ? json.get("code") : "?")
+                        + " resp=" + trimForLog(response));
+                return null;
+            }
+
+            com.google.gson.JsonArray dataArr = json.getAsJsonArray("data");
+            if (dataArr == null || dataArr.size() == 0) return null;
+
+            JsonObject item = dataArr.get(0).getAsJsonObject();
+            String url = item.has("url") && !item.get("url").isJsonNull()
+                    ? item.get("url").getAsString() : null;
+            int fee = item.has("fee") && !item.get("fee").isJsonNull()
+                    ? item.get("fee").getAsInt() : 0;
+            int code = item.has("code") ? item.get("code").getAsInt() : 0;
+
+            if (url == null || url.isEmpty()) {
+                System.err.println("[NeteaseLogin] getSongUrlEapi url=null for " + songId
+                        + " fee=" + fee + " itemCode=" + code
+                        + " (可能需要会员或该音质不可用)");
+                return null;
+            }
+            // EAPI 有时返回 http:// 地址，MP3 解码器可正常处理
+            return url;
+        } catch (Exception e) {
+            System.err.println("[NeteaseLogin] getSongUrlEapi failed: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static String trimForLog(String s) {
+        if (s == null) return "null";
+        return s.length() > 400 ? s.substring(0, 400) + "..." : s;
+    }
+
     public static String getNickname() {
         return nickname;
     }
