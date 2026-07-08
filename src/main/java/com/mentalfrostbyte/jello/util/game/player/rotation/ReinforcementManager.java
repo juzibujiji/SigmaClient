@@ -16,7 +16,10 @@ public class ReinforcementManager {
     // Reward values
     private static final float HIT_REWARD = 1.0f;
     private static final float MOVING_HIT_REWARD = 1.5f;
-    private static final float MISS_PENALTY = -0.2f;
+    // Positive weight: a miss teaches the network to move TOWARD the ideal
+    // angles. A negative weight would reverse the gradient and train the
+    // network to aim away from the target.
+    private static final float MISS_CORRECTION_WEIGHT = 0.5f;
 
     // Entity tracking
     private Map<Entity, Long> lastHitTimes = new HashMap<>();
@@ -79,18 +82,9 @@ public class ReinforcementManager {
     public void recordMiss(Entity entity, float[] inputs, float[] idealOutputs) {
         if (entity == null || mc.player == null) return;
 
-        // Apply a negative penalty for misses (to move away from incorrect angles)
-        // Reduced penalty to avoid over-correction
-        float penalty = MISS_PENALTY;  // Use base penalty instead of amplifying by 3x
-
-        // Use the negative penalty directly to push away from incorrect angles
-        trainingManager.addTrainingSample(inputs, idealOutputs, penalty);
-
-        // Don't train immediately on misses to avoid wild swings
-        // neuralNetwork.trainNetworkImmediate(inputs, idealOutputs, penalty);
-
-        // Log the miss for debugging
-        Client.logger.info("JelloAI: Recorded miss with penalty " + penalty);
+        // Train toward the ideal angles so misses correct the aim instead of
+        // pushing it further away
+        trainingManager.addTrainingSample(inputs, idealOutputs, MISS_CORRECTION_WEIGHT);
     }
 
     /**

@@ -341,8 +341,6 @@ public class YsmCrypt {
 
         //uint16_t n = xorred_data[0] | (xorred_data[1] << 8); n &= 0x3ff;
         int n = ((xorredData[0] & 0xFF) | ((xorredData[1] & 0xFF) << 8)) & 0x3FF;
-
-        System.out.println("Size: " + n);
         int zstdOffset = 2 + n;
         byte[] bytes = Arrays.copyOfRange(xorredData, zstdOffset, xorredData.length);
 

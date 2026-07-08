@@ -861,8 +861,13 @@ public final class OpenYsmModelLoader {
             return existing;
         }
 
-        float rx = toModelRotationRadians(arrayValue(bone.rotation, 0, 0.0F), modelId, bone.name, "rotX");
-        float ry = toModelRotationRadians(arrayValue(bone.rotation, 1, 0.0F), modelId, bone.name, "rotY");
+        // .ysm binaries store base bone rotations already converted to YSM's native/GeckoLib
+        // space: radians with X and Y negated (see OpenYSM YSMFolderDeserializer, which writes
+        // {-toRadians(x), -toRadians(y), +toRadians(z)} when encoding). Vanilla model space
+        // negates X and Y relative to that space, so flip them back here. Without this, every
+        // styled bone (hair strands, limb splay) folds the wrong way and chains collapse inward.
+        float rx = -toModelRotationRadians(arrayValue(bone.rotation, 0, 0.0F), modelId, bone.name, "rotX");
+        float ry = -toModelRotationRadians(arrayValue(bone.rotation, 1, 0.0F), modelId, bone.name, "rotY");
         float rz = toModelRotationRadians(arrayValue(bone.rotation, 2, 0.0F), modelId, bone.name, "rotZ");
 
         OpenYsmModelRenderer renderer = new OpenYsmModelRenderer(
@@ -1338,8 +1343,11 @@ public final class OpenYsmModelLoader {
         }
 
         renderer.setRotationPoint(pivot[0] - parentPivot[0], pivot[1] - parentPivot[1], pivot[2] - parentPivot[2]);
-        float rx = toBedrockRotationRadians(def.rotation[0], -1.0F, modelId, def.name, "rotX");
-        float ry = toBedrockRotationRadians(def.rotation[1], -1.0F, modelId, def.name, "rotY");
+        // Bedrock rotations map 1:1 onto vanilla model space angles: GeckoLib stores them as
+        // (-x, -y, +z) in its own X-mirrored Y-up space, and converting that space to vanilla
+        // model space (conjugation by diag(-1,-1,1)) negates X and Y again.
+        float rx = toBedrockRotationRadians(def.rotation[0], 1.0F, modelId, def.name, "rotX");
+        float ry = toBedrockRotationRadians(def.rotation[1], 1.0F, modelId, def.name, "rotY");
         float rz = toBedrockRotationRadians(def.rotation[2], 1.0F, modelId, def.name, "rotZ");
         renderer.rotateAngleX = rx;
         renderer.rotateAngleY = ry;
@@ -1453,7 +1461,10 @@ public final class OpenYsmModelLoader {
                 }
             }
         }
-        return minWorldY == Float.POSITIVE_INFINITY ? 24.0F : -minWorldY * 16.0F;
+        // Same 24-based convention as jsonFootModelY: lowest vertex in vanilla-space pixels.
+        // Binary positions are bedrock block units (Y up, ground at 0), so ground-standing
+        // models yield 24 and models dipping below ground yield 24 + dip.
+        return minWorldY == Float.POSITIVE_INFINITY ? 24.0F : Math.max(24.0F, 24.0F - minWorldY * 16.0F);
     }
 
     private static float degreesToRadians(float degrees) {

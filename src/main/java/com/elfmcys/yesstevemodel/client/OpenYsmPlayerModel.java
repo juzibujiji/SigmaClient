@@ -41,12 +41,16 @@ public final class OpenYsmPlayerModel extends PlayerModel<AbstractClientPlayerEn
                 ? AnimationRenderContext.PREVIEW : AnimationRenderContext.GAME;
         float animationAgeInTicks = OpenYsmPlayerModelState.previewAgeInTicks(ageInTicks);
         this.bakedModel.getBones().values().forEach(OpenYsmBone::resetPose);
+        // Match real YSM: only the head follows vanilla rotation (yaw/pitch); body and limbs
+        // are driven entirely by the model's own main-state animations (idle/walk/run/...).
         copyPosePreferControl("Head", "MHead", this.bipedHead);
-        copyPosePreferControl("UpperBody", "MUpperBody", this.bipedBody);
-        copyPosePreferControl("RightArm", "MRightArm", this.bipedRightArm);
-        copyPosePreferControl("LeftArm", "MLeftArm", this.bipedLeftArm);
-        copyPosePreferControl("RightLeg", "MRightLeg", this.bipedRightLeg);
-        copyPosePreferControl("LeftLeg", "MLeftLeg", this.bipedLeftLeg);
+        if (!this.bakedModel.getAnimations().hasMainStateAnimations()) {
+            copyPosePreferControl("UpperBody", "MUpperBody", this.bipedBody);
+            copyPosePreferControl("RightArm", "MRightArm", this.bipedRightArm);
+            copyPosePreferControl("LeftArm", "MLeftArm", this.bipedLeftArm);
+            copyPosePreferControl("RightLeg", "MRightLeg", this.bipedRightLeg);
+            copyPosePreferControl("LeftLeg", "MLeftLeg", this.bipedLeftLeg);
+        }
 
         PlayerStateSnapshot snapshot = PlayerStateSnapshot.capture(entityIn, limbSwingAmount, animationAgeInTicks,
                 netHeadYaw, headPitch);
@@ -54,7 +58,7 @@ public final class OpenYsmPlayerModel extends PlayerModel<AbstractClientPlayerEn
         ActiveAnimationSet active = this.bakedModel.getAnimations()
                 .resolveActive(snapshot, extraState, context);
         OpenYsmAnimationEventDispatcher.dispatch(this.bakedModel, entityIn, active, snapshot);
-        this.bakedModel.getAnimations().apply(this.bakedModel.getBones(), active, 0.0F);
+        this.bakedModel.getAnimations().apply(this.bakedModel.getBones(), active, 0.0F, snapshot);
         OpenYsmDebugLogger.logActiveState(this.bakedModel, active);
     }
 
@@ -86,7 +90,7 @@ public final class OpenYsmPlayerModel extends PlayerModel<AbstractClientPlayerEn
         OpenYsmPlayerAnimationState.State extraState = OpenYsmPlayerAnimationState.get(entityIn);
         ActiveAnimationSet active = this.bakedModel.getAnimations()
                 .resolveActive(snapshot, extraState, AnimationRenderContext.FIRST_PERSON_ARM);
-        this.bakedModel.getAnimations().apply(armBones, active, 0.0F);
+        this.bakedModel.getAnimations().apply(armBones, active, 0.0F, snapshot);
 
         OpenYsmBone armBone = getArmBone(armBones, rightArm);
         if (armBone == null) {

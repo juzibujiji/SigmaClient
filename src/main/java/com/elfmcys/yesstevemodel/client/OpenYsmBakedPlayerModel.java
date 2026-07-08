@@ -182,7 +182,11 @@ public final class OpenYsmBakedPlayerModel {
     }
 
     public float getGroundOffsetY() {
-        return 1.501F - (this.heightScale * this.footModelY / 16.0F);
+        // Baked bone coordinates are root-normalized so the model's ground plane (bedrock y=0)
+        // sits at y=0, while vanilla model space puts the ground at y=24px=1.501. Real YSM never
+        // "auto-grounds" a model by its lowest vertex: decorative geometry (GUI art, halos,
+        // scale-0 hidden props) routinely extends below the feet and must not shift the model.
+        return 1.501F;
     }
 
     public boolean isRenderLayersFirst() {

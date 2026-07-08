@@ -6,11 +6,18 @@ import com.mentalfrostbyte.jello.managers.GuiManager;
 import com.mentalfrostbyte.jello.module.RenderModule;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.gui.jello.Radar;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.radar.threat.BallisticThreatTracker;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.radar.threat.EnemyLockDetector;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.radar.threat.LockAssessment;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.radar.threat.LookLineLockDetector;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.radar.threat.ProjectileThreat;
+import com.mentalfrostbyte.jello.module.impl.gui.jello.radar.threat.ProjectileThreatTracker;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import com.mentalfrostbyte.jello.util.game.sound.RadarSoundPlayer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.util.InputMappings;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.item.TNTEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.AbstractArrowEntity;
@@ -47,8 +54,16 @@ import java.util.Map;
  * <p>目标获取：扫描范围内的投掷物（雪球/箭/三叉戟/火球/鸡蛋）、TNT 与其他玩家，
  * 接近率由目标与玩家的相对运动沿视线方向的分量计算（格/秒，负值为接近）。
  *
+ * <p>威胁检测（接口在 radar.threat 包，可替换实现）：
+ * 敌锁定 {@link EnemyLockDetector} —— 末影人式视线判定，检测其他玩家是否正在瞄准我们；
+ * 敌跟踪 {@link ProjectileThreatTracker} —— 投掷物弹道逐 tick 推演，预测是否命中我们。
+ * 任一威胁激活时在 RWR 上方渲染闪烁的绿框警示牌（LOCKED / INBOUND，
+ * 文字随 Color 调色盘、底色随 Background 开关），对应接触点套闪烁绿框，
+ * 并抢占主威胁选取与锁定告警音。
+ *
  * <p>音效（父模块 Sound 开关控制，资源在 res 的 audio 目录）：
- * 有目标处于近敌告警距离（Warning Distance）内 → 循环播放锁定告警 radar_lock.mp3（抢占扫描音）；
+ * 有目标处于近敌告警距离（Warning Distance）内，或存在敌锁定/敌跟踪威胁
+ * → 循环播放锁定告警 radar_lock.mp3（抢占扫描音）；
  * 其余距离上存在目标 → 播放扫描提示音 radar_scan.mp3。
  * 告警状态带 400ms 保持时间，避免目标在告警距离边界抖动时来回切换音效。
  *
@@ -86,6 +101,13 @@ public class WarThunderRadar extends RenderModule {
     /** 近敌告警解除后锁定音的保持时间（ms），吸收目标在告警距离边界的抖动 */
     private static final long LOCK_SOUND_HOLD_MS = 400L;
 
+    // ===== 威胁警示牌（RWR 上方，敌锁定/敌跟踪激活时闪烁）=====
+    private static final float BADGE_H = 15.0F;
+    private static final float BADGE_PAD_X = 5.0F;
+    private static final float BADGE_GAP = 6.0F;
+    /** 警示牌底边相对 RWR 盘顶部的间距（往上偏移） */
+    private static final float BADGE_MARGIN = 20.0F;
+
     // ===== 字体（Consolas，懒加载 —— TrueTypeFont 需要 GL 上下文）=====
     private static TrueTypeFont font12, font14;
 
@@ -105,6 +127,11 @@ public class WarThunderRadar extends RenderModule {
     /** 最近一次存在近敌告警的时间戳（ms），配合 LOCK_SOUND_HOLD_MS 做音效保持 */
     private long lastLockDangerTime = 0L;
 
+    /** 敌锁定检测器（可替换实现，接口见 radar.threat.EnemyLockDetector） */
+    private final EnemyLockDetector lockDetector = new LookLineLockDetector();
+    /** 敌跟踪（投掷物弹道预测）检测器（可替换实现，接口见 radar.threat.ProjectileThreatTracker） */
+    private final ProjectileThreatTracker projectileTracker = new BallisticThreatTracker();
+
     private static class ScanState {
         float x;
         int direction;
@@ -121,6 +148,10 @@ public class WarThunderRadar extends RenderModule {
         float crosshairAngle; // 与准星视线的夹角（度），越小越靠近准星
         boolean lock;        // 距离小于近敌告警距离（Warning Distance）
         boolean marked;      // Alt+R 手动锁定
+        boolean aimLock;     // 敌锁定：该玩家视线正瞄准我们（EnemyLockDetector）
+        float aimAngle;      // 其视线与我们连线的夹角（度）
+        boolean incoming;    // 敌跟踪：预测该投掷物将命中我们（ProjectileThreatTracker）
+        int impactTicks = -1; // 预测命中剩余 tick（-1 = 不命中）
     }
 
     public WarThunderRadar() {
@@ -131,6 +162,8 @@ public class WarThunderRadar extends RenderModule {
     public void onDisable() {
         super.onDisable();
         RadarSoundPlayer.stop();
+        lockDetector.reset();
+        projectileTracker.reset();
     }
 
     private static void ensureFonts() {
@@ -153,8 +186,9 @@ public class WarThunderRadar extends RenderModule {
         boolean realisticTws = parent.realistic.getCurrentValue();
 
         // ===== 目标获取 =====
-        List<Contact> contacts = scanContacts(range, warningDistance);
-        Contact primary = getMaxClosingContact(contacts);
+        List<Contact> contacts = scanContacts(range, warningDistance,
+                parent.enemyLock.getCurrentValue(), parent.enemyTrack.getCurrentValue());
+        Contact primary = getPrimaryThreat(contacts);
 
         // ===== Alt+R 手动锁定（按下边沿触发，锁定后保持）=====
         handleLockKey(contacts);
@@ -249,7 +283,7 @@ public class WarThunderRadar extends RenderModule {
     // 目标获取
     // =====================================================================
 
-    private List<Contact> scanContacts(float range, float warningDistance) {
+    private List<Contact> scanContacts(float range, float warningDistance, boolean lockDetect, boolean trackDetect) {
         List<Contact> list = new ArrayList<>();
         pruneOwnProjectileCache();
         for (Entity e : mc.world.getAllEntities()) {
@@ -299,6 +333,20 @@ public class WarThunderRadar extends RenderModule {
             // 近敌告警：距离判定。径向速度每 tick 抖动（目标瞬时停顿即翻正），
             // 不能作为告警条件，否则锁定音会被反复掐断；接近率仅用于主威胁选取与读数显示
             c.lock = dist < warningDistance;
+
+            // 敌锁定：其他玩家的头部视线是否正对准我们（迟滞判定，见 LookLineLockDetector）
+            if (lockDetect && e instanceof PlayerEntity) {
+                LockAssessment aim = lockDetector.assess((LivingEntity) e, mc.player);
+                c.aimLock = aim.locking;
+                c.aimAngle = aim.aimAngle;
+            }
+            // 敌跟踪：投掷物弹道推演是否命中我们。敌我识别沿用 isOwnProjectile
+            // 出生点/方向启发式（拿不到服务器 owner 数据），已在上方过滤自己丢出的弹体
+            if (trackDetect && e instanceof ProjectileEntity) {
+                ProjectileThreat threat = projectileTracker.assess((ProjectileEntity) e, mc.player);
+                c.incoming = threat.incoming;
+                c.impactTicks = threat.ticksToImpact;
+            }
             list.add(c);
         }
         return list;
@@ -306,7 +354,8 @@ public class WarThunderRadar extends RenderModule {
 
     private static boolean hasLockDanger(List<Contact> contacts) {
         for (Contact c : contacts) {
-            if (c.lock) return true;
+            // 敌锁定（被瞄准）与敌跟踪（弹道命中）等同于被锁定，触发锁定告警音
+            if (c.lock || c.aimLock || c.incoming) return true;
         }
         return false;
     }
@@ -386,7 +435,29 @@ public class WarThunderRadar extends RenderModule {
         return null;
     }
 
-    /** 主威胁 = 接近率最大（径向速度最负）的目标，与 HTML 原型逻辑一致 */
+    /**
+     * 主威胁选取，优先级从高到低：
+     * 1. 敌跟踪 —— 预测将命中的投掷物中剩余时间最短者；
+     * 2. 敌锁定 —— 正瞄准我们的玩家中距离最近者；
+     * 3. 接近率最大（径向速度最负）的目标，与 HTML 原型逻辑一致。
+     */
+    private static Contact getPrimaryThreat(List<Contact> contacts) {
+        Contact incoming = null;
+        for (Contact c : contacts) {
+            if (c.incoming && (incoming == null || c.impactTicks < incoming.impactTicks)) incoming = c;
+        }
+        if (incoming != null) return incoming;
+
+        Contact spike = null;
+        for (Contact c : contacts) {
+            if (c.aimLock && (spike == null || c.distance < spike.distance)) spike = c;
+        }
+        if (spike != null) return spike;
+
+        return getMaxClosingContact(contacts);
+    }
+
+    /** 接近率最大（径向速度最负）的目标 */
     private static Contact getMaxClosingContact(List<Contact> contacts) {
         Contact best = null;
         for (Contact c : contacts) {
@@ -482,6 +553,10 @@ public class WarThunderRadar extends RenderModule {
         copy.crosshairAngle = source.crosshairAngle;
         copy.lock = source.lock;
         copy.marked = source.marked;
+        copy.aimLock = source.aimLock;
+        copy.aimAngle = source.aimAngle;
+        copy.incoming = source.incoming;
+        copy.impactTicks = source.impactTicks;
         return copy;
     }
 
@@ -544,6 +619,10 @@ public class WarThunderRadar extends RenderModule {
             if (isPrimary) {
                 strokeRect(x - 8.0F, y - 8.0F, 16.0F, 16.0F, 1.6F, col);
             }
+            // 敌锁定/敌跟踪威胁：闪烁绿框（与 RWR 上方警示牌同步闪烁）
+            if ((c.aimLock || c.incoming) && isThreatBlinkOn(time)) {
+                strokeRect(x - 8.5F, y - 8.5F, 17.0F, 17.0F, 1.8F, LOCK_GREEN);
+            }
             // Alt+R 手动锁定：额外套一层粗体绿框
             if (c.marked) {
                 strokeRect(x - 11.0F, y - 11.0F, 22.0F, 22.0F, 2.6F, LOCK_GREEN);
@@ -598,6 +677,9 @@ public class WarThunderRadar extends RenderModule {
         // FWD 标记（正上 = 玩家视角方向）
         drawCentered(font12, RWR_CX, RWR_CY - RWR_R - 13.0F, "FWD", soft);
 
+        // RWR 上方威胁警示牌：敌锁定 LOCKED / 敌跟踪 INBOUND，闪烁 + 绿框包裹
+        drawThreatBadges(contacts, time, bright, bg);
+
         // 主威胁：动态虚线连接射线 + 脉冲圆环
         if (primary != null) {
             float[] p = rwrContactPos(primary, range);
@@ -610,14 +692,20 @@ public class WarThunderRadar extends RenderModule {
         for (Contact c : contacts) {
             boolean isPrimary = c == primary;
 
-            // 锁定目标闪烁（与 HTML 一致的占空比）；手动锁定目标常亮不闪
-            if (c.lock && !c.marked && MathHelper.sin(time * 0.018F) <= -0.45F) continue;
+            // 锁定目标闪烁（与 HTML 一致的占空比）；手动锁定/敌锁定/敌跟踪目标常亮不闪
+            // （威胁目标自身不隐藏，闪烁交给绿框，避免 INC 倒计时读数消失）
+            if (c.lock && !c.marked && !c.aimLock && !c.incoming && MathHelper.sin(time * 0.018F) <= -0.45F) continue;
 
             float[] p = rwrContactPos(c, range);
             float cr = isPrimary ? 6.5F : 4.5F;
             int col = isPrimary ? bright : main;
 
             circle(p[0], p[1], cr, isPrimary ? 2.0F : 1.4F, col);
+            // 敌锁定/敌跟踪威胁：闪烁绿框包裹（与警示牌同步闪烁）
+            if ((c.aimLock || c.incoming) && isThreatBlinkOn(time)) {
+                float thHalf = cr + 3.5F;
+                strokeRect(p[0] - thHalf, p[1] - thHalf, thHalf * 2.0F, thHalf * 2.0F, 1.8F, LOCK_GREEN);
+            }
             // Alt+R 手动锁定：额外套一层粗体绿框
             if (c.marked) {
                 float half = cr + 6.0F;
@@ -625,7 +713,15 @@ public class WarThunderRadar extends RenderModule {
             }
             drawCentered(font12, p[0], p[1] - cr - 13.0F, c.code, col);
 
-            if (c.lock || isPrimary) {
+            // 标签优先级：敌跟踪（含撞击倒计时）> 敌锁定 > 近敌/主威胁 LOCK
+            if (c.incoming) {
+                String inc = c.impactTicks >= 0
+                        ? String.format(Locale.US, "INC %.1fs", c.impactTicks / 20.0F)
+                        : "INC";
+                drawCentered(font12, p[0], p[1] + cr + 2.0F, inc, LOCK_GREEN);
+            } else if (c.aimLock) {
+                drawCentered(font12, p[0], p[1] + cr + 2.0F, "SPK", LOCK_GREEN);
+            } else if (c.lock || isPrimary) {
                 drawCentered(font12, p[0], p[1] + cr + 2.0F, "LOCK", col);
             }
             if (isPrimary) {
@@ -634,11 +730,61 @@ public class WarThunderRadar extends RenderModule {
             }
         }
 
-        // 状态行
-        String status = primary != null
-                ? String.format(Locale.US, "PRI %s CLOSING %.1f", primary.code, Math.abs(primary.closingSpeed))
-                : "RWR ACTIVE";
+        // 状态行（优先显示敌跟踪/敌锁定威胁）
+        String status;
+        if (primary != null && primary.incoming) {
+            status = primary.impactTicks >= 0
+                    ? String.format(Locale.US, "INBOUND %s %.1fs", primary.code, primary.impactTicks / 20.0F)
+                    : String.format(Locale.US, "INBOUND %s", primary.code);
+        } else if (primary != null && primary.aimLock) {
+            status = String.format(Locale.US, "SPIKE %s %.0fm", primary.code, primary.distance);
+        } else if (primary != null) {
+            status = String.format(Locale.US, "PRI %s CLOSING %.1f", primary.code, Math.abs(primary.closingSpeed));
+        } else {
+            status = "RWR ACTIVE";
+        }
         drawCentered(font12, RWR_CX, RWR_CY + RWR_R + 3.0F, status, main);
+    }
+
+    /** 威胁闪烁相位（警示牌与接触点绿框共用，保证同步）：约 65% 占空比 */
+    private static boolean isThreatBlinkOn(long time) {
+        return MathHelper.sin(time * 0.02F) > -0.45F;
+    }
+
+    /**
+     * RWR 上方威胁警示牌：敌锁定 → LOCKED，敌跟踪 → INBOUND（可同时显示）。
+     * 文字颜色随父模块 Color 调色盘，底色随 Background 开关（与面板底色一致），
+     * 外层绿框包裹，随 {@link #isThreatBlinkOn} 闪烁。
+     */
+    private void drawThreatBadges(List<Contact> contacts, long time, int bright, int bg) {
+        boolean anyAimLock = false;
+        boolean anyIncoming = false;
+        for (Contact c : contacts) {
+            anyAimLock |= c.aimLock;
+            anyIncoming |= c.incoming;
+        }
+        if (!anyAimLock && !anyIncoming) return;
+        if (!isThreatBlinkOn(time)) return;
+
+        List<String> labels = new ArrayList<>();
+        if (anyAimLock) labels.add("LOCKED");
+        if (anyIncoming) labels.add("INBOUND");
+
+        float totalW = 0.0F;
+        for (String label : labels) {
+            totalW += font12.getWidth(label) + BADGE_PAD_X * 2.0F;
+        }
+        totalW += BADGE_GAP * (labels.size() - 1);
+
+        float x = RWR_CX - totalW / 2.0F;
+        float y = RWR_CY - RWR_R - BADGE_MARGIN - BADGE_H;
+        for (String label : labels) {
+            float w = font12.getWidth(label) + BADGE_PAD_X * 2.0F;
+            fillRect(x, y, w, BADGE_H, bg);
+            strokeRect(x, y, w, BADGE_H, 1.8F, LOCK_GREEN);
+            drawCentered(font12, x + w / 2.0F, y + 1.0F, label, bright);
+            x += w + BADGE_GAP;
+        }
     }
 
     /** RWR 布点：FWD 朝上，角度 = 相对方位，半径 = 距离归一化 */

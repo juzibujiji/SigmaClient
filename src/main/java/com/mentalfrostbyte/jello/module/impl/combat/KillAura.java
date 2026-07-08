@@ -16,11 +16,13 @@ import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.combat.killaura.*;
 import com.mentalfrostbyte.jello.module.impl.movement.BlockFly;
+import com.mentalfrostbyte.jello.module.impl.player.Blink;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.ColorSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.ModeSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
+import com.mentalfrostbyte.jello.util.game.player.combat.CombatUtil;
 import com.mentalfrostbyte.jello.util.game.player.rotation.JelloAI;
 import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.util.game.player.rotation.util.RotationUtils;
@@ -32,9 +34,12 @@ import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.projectile.ProjectileHelper;
 import net.minecraft.item.SwordItem;
 import net.minecraft.network.play.server.SEntityStatusPacket;
 import net.minecraft.util.Hand;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.EntityRayTraceResult;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RayTraceResult;
@@ -747,6 +752,70 @@ public class KillAura extends Module {
         this.currentRotation.pitch = MathHelper.clamp(this.currentRotation.pitch, -90.0F, 90.0F);
     }
 
+    private EntityRayTraceResult rayTraceWithKillAuraRotation(LivingEntity expectedTarget) {
+        Entity viewEntity = mc.getRenderViewEntity();
+        if (viewEntity == null || mc.world == null || mc.playerController == null || this.currentRotation == null) {
+            return null;
+        }
+
+        double reach = Math.min(mc.playerController.getBlockReachDistance(), (double) this.getNumberValueBySettingName("Range"));
+        if (reach <= 0.0D) {
+            return null;
+        }
+
+        Vector3d eyes = viewEntity.getEyePosition(1.0F);
+        RayTraceResult blockTrace = viewEntity.customPick(reach, 1.0F, this.currentRotation.yaw, this.currentRotation.pitch);
+        double maxDistance = reach * reach;
+        if (blockTrace != null) {
+            maxDistance = blockTrace.getHitVec().squareDistanceTo(eyes);
+        }
+
+        Vector3d look = viewEntity.getLookCustom(1.0F, this.currentRotation.yaw, this.currentRotation.pitch);
+        Vector3d end = eyes.add(look.x * reach, look.y * reach, look.z * reach);
+        AxisAlignedBB searchBox = viewEntity.getBoundingBox().expand(look.scale(reach)).grow(1.0D, 1.0D, 1.0D);
+        EntityRayTraceResult entityTrace = ProjectileHelper.rayTraceEntities(
+                viewEntity,
+                eyes,
+                end,
+                searchBox,
+                this::canRayTraceCombatEntity,
+                maxDistance);
+
+        if (entityTrace != null && entityTrace.getEntity() == expectedTarget) {
+            mc.objectMouseOver = entityTrace;
+            mc.pointedEntity = expectedTarget;
+            return entityTrace;
+        }
+
+        if (blockTrace != null) {
+            mc.objectMouseOver = blockTrace;
+            mc.pointedEntity = null;
+        }
+
+        return entityTrace;
+    }
+
+    private boolean canRayTraceCombatEntity(Entity entity) {
+        if (entity.isSpectator() || !entity.canBeCollidedWith()) {
+            return false;
+        }
+
+        if (entity == Blink.clientPlayerEntity) {
+            return false;
+        }
+
+        if (entity instanceof PlayerEntity) {
+            PlayerEntity player = (PlayerEntity) entity;
+            Teams teamsMod = (Teams) Client.getInstance().moduleManager.getModuleByClass(Teams.class);
+            boolean removeHitbox = teamsMod != null && teamsMod.isEnabled() && teamsMod.getBooleanValueFromSettingName("RemoveHitbox");
+            if (removeHitbox && CombatUtil.arePlayersOnSameTeam(player)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private void attack() {
         if (this.attackTimer >= autoBlock.getCpsTiming(0)) {
             if (targetData != null && targetData.getEntity() != null) {
@@ -755,10 +824,8 @@ public class KillAura extends Module {
                 if (mc.player.getDistanceToEntityBox(entity) <= this.getNumberValueBySettingName("Range")) {
                     boolean canAttack = true;
                     if (this.getBooleanValueFromSettingName("Raytrace")) {
-                        RayTraceResult result = mc.objectMouseOver;
-                        if (result == null || result.getType() != RayTraceResult.Type.ENTITY ||
-                                !(result instanceof EntityRayTraceResult) ||
-                                ((EntityRayTraceResult) result).getEntity() != entity) {
+                        EntityRayTraceResult result = this.rayTraceWithKillAuraRotation(entity);
+                        if (result == null || result.getEntity() != entity) {
                             canAttack = false;
                         }
                     }
