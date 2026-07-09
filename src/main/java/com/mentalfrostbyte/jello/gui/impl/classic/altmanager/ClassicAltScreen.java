@@ -13,8 +13,9 @@ import com.mentalfrostbyte.jello.gui.impl.jello.buttons.TextField;
 import com.mentalfrostbyte.jello.gui.impl.others.AccountSorter;
 import com.mentalfrostbyte.jello.managers.AccountManager;
 import com.mentalfrostbyte.jello.managers.util.account.microsoft.sorting.AccountCompareType;
-import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
+import com.mentalfrostbyte.jello.util.client.network.microsoft.RandomLoginUtil;
+import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
@@ -128,6 +129,19 @@ public class ClassicAltScreen extends Screen {
                 this.status = "§aLogged in. (" + var1.getName() + (!var1.isEmailAValidEmailFormat() ? "" : " - offline name") + ")";
             }
         }).start();
+    }
+
+    public void loginRandomOfflineAccount() {
+        this.status = "§bLogging in with random name...";
+        new Thread(() -> {
+            com.mentalfrostbyte.jello.managers.util.account.microsoft.Account account = RandomLoginUtil.login(this.accountManager);
+            if (account == null) {
+                this.status = "§cRandom login failed!";
+            } else {
+                this.status = "§aLogged in. (" + account.getName() + " - offline name)";
+                Minecraft.getInstance().execute(this::method13402);
+            }
+        }, "RandomLogin").start();
     }
 
     @Override

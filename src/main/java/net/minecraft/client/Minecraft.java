@@ -1595,6 +1595,14 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
         }
 
         this.profiler.endSection();
+
+        // SouthSide rotation pipeline (OpenSSNGScaffoldAndClutch port):
+        // equivalent of dev.southside.mixin.MixinMinecraftClient#hookRotation — inject before
+        // GameRenderer#getMouseOver (the 1.16.5 updateCrosshairTarget). Caches the eye position
+        // and lets modules submit prioritized rotations, then picks this tick's rotation.
+        com.mentalfrostbyte.jello.southside.utils.raytrace.SSClientRayTraceUtil.updateEyePos();
+        com.mentalfrostbyte.jello.southside.utils.rotation.SSRotationUtils.choose();
+
         this.gameRenderer.getMouseOver(1.0F);
         this.profiler.startSection("gameMode");
 
@@ -1637,6 +1645,13 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
 
         if (this.loadingGui == null && (this.currentScreen == null || this.currentScreen.passEvents)) {
             this.profiler.endStartSection("Keybindings");
+
+            // SouthSide rotation pipeline: equivalent of
+            // dev.southside.mixin.MixinMinecraftClient#hookRotationApplied — inject before
+            // processKeyBinds() (the 1.16.5 handleInputEvents). Upstream comment: 所有模块在这个
+            // event通过RotationUtils.getRotation()拿到当前设置的转头，校验raytrace，防止多模块转头raytrace冲突.
+            EventBus.call(new com.mentalfrostbyte.jello.southside.event.SSRotationAppliedEvent());
+
             this.processKeyBinds();
 
             if (this.leftClickCounter > 0) {

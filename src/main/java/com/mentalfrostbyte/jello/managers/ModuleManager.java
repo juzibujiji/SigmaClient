@@ -93,6 +93,7 @@ public class ModuleManager {
         this.register(new Teams());
         this.register(new Aimbot());
         this.register(new AntiBot());
+        this.register(new HackDetector());
         this.register(new AutoLog());
         this.register(new BackTrack());
         this.register(new FastBow());

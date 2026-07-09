@@ -1,5 +1,11 @@
 {
-  "renderPlayers": true,
+  "enabled": false,
+  "renderPlayers": false,
+  "extraPlayerRender": false,
+  "extraPlayerX": 10,
+  "extraPlayerY": 10,
+  "extraPlayerScale": 40.0,
+  "extraPlayerYawOffset": 5.0,
   "selectedModelId": "小昔涟(ysm2.4.1).ysm",
   "selectedTextureId": ""
 }

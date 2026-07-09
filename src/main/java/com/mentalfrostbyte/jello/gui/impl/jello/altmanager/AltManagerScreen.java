@@ -266,8 +266,9 @@ public class AltManagerScreen extends Screen {
         AlertComponent button2 = new AlertComponent(ComponentType.BUTTON, "Cookie login", 50);
         AlertComponent button3 = new AlertComponent(ComponentType.BUTTON, "Web login", 50);
         AlertComponent button4 = new AlertComponent(ComponentType.BUTTON, "Token login", 50);
+        AlertComponent button5 = new AlertComponent(ComponentType.BUTTON, "Random login", 50);
         this.addToList(this.loginDialog = new Alert(this, "Add alt dialog", true, "Add Alt", header, firstline1,
-                firstline2, emailInput, passwordInput, button, button2, button3, button4));
+                firstline2, emailInput, passwordInput, button, button2, button3, button4, button5));
 
         this.loginDialog.onPress(element -> {
             if (!this.loginDialog.getInputMap().get("Email").contains(":")) {

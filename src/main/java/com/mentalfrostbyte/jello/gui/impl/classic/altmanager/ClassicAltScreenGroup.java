@@ -11,8 +11,6 @@ import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screen.MainMenuHolder;
 
-import java.util.Random;
-
 public class ClassicAltScreenGroup extends CustomGuiScreen {
     public AltManagerButton field21140;
     public AltManagerButton field21141;
@@ -39,13 +37,7 @@ public class ClassicAltScreenGroup extends CustomGuiScreen {
         ClassicAltScreen var10 = (ClassicAltScreen) this.getParent();
         this.field21143
                 .onClick(
-                        (var1x, var2x) -> {
-                            com.mentalfrostbyte.jello.managers.util.account.microsoft.Account var5 = Client.getInstance()
-                                    .accountManager
-                                    .getAccounts()
-                                    .get(new Random().nextInt(Client.getInstance().accountManager.getAccounts().size()));
-                            var10.method13399(var5);
-                        }
+                        (var1x, var2x) -> var10.loginRandomOfflineAccount()
                 );
         this.field21141.onClick((var0, var1x) -> Minecraft.getInstance().displayGuiScreen(new MainMenuHolder()));
         this.field21142.onClick((var1x, var2x) -> var10.method13396());

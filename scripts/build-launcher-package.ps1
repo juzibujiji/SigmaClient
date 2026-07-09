@@ -392,7 +392,6 @@ function Assert-RequiredLibraries {
     param([Parameter(Mandatory = $true)][array]$Libraries)
 
     $required = @(
-        "org.lwjgl:lwjgl-nanovg:3.3.6",
         "com.google.zxing:core:3.5.3",
         "com.google.zxing:javase:3.5.3",
         "club.minnced:discord-rpc-release:v3.3.0",

@@ -13,6 +13,7 @@ import com.mentalfrostbyte.jello.gui.impl.jello.buttons.TextField;
 import com.mentalfrostbyte.jello.managers.util.account.microsoft.Account;
 import com.mentalfrostbyte.jello.util.client.network.microsoft.CookieLoginUtil;
 import com.mentalfrostbyte.jello.util.client.network.microsoft.MicrosoftLoginUtil;
+import com.mentalfrostbyte.jello.util.client.network.microsoft.RandomLoginUtil;
 import com.mentalfrostbyte.jello.util.client.render.ResourceRegistry;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.client.render.theme.ColorHelper;
@@ -199,6 +200,7 @@ public class Alert extends Element {
                                         Client.getInstance().soundManager.play("error");
                                     }
                                 }
+                                case "Random login" -> this.loginWithRandomOfflineAccount();
                                 default -> this.onButtonClick();
                             }
                         });
@@ -299,6 +301,26 @@ public class Alert extends Element {
         }
 
         return account;
+    }
+
+    private void loginWithRandomOfflineAccount() {
+        new Thread(() -> {
+            Account account = RandomLoginUtil.login(Client.getInstance().accountManager);
+            Minecraft.getInstance().execute(() -> {
+                if (account == null) {
+                    Client.getInstance().soundManager.play("error");
+                    return;
+                }
+
+                this.inputMap = this.method13599();
+                this.method13603(false);
+                Client.getInstance().soundManager.play("connect");
+
+                if (AltManagerScreen.instance != null) {
+                    AltManagerScreen.instance.updateAccountList(false);
+                }
+            });
+        }, "RandomLogin").start();
     }
 
     private boolean isBlank(String value) {

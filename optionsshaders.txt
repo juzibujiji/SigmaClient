@@ -1,4 +1,4 @@
-#Mon Apr 06 03:14:48 GMT+08:00 2026
+#Mon Jul 06 08:02:56 GMT+08:00 2026
 handDepthMul=0.125
 TexMinFilB=0
 oldLighting=default
@@ -6,7 +6,7 @@ TexMagFilN=0
 tweakBlockDamage=false
 cloudShadow=false
 TexMagFilS=0
-shaderPack=MakeUp-UltraFast-9.4c.zip
+shaderPack=OFF
 TexMinFilN=0
 specularMapEnabled=true
 normalMapEnabled=true

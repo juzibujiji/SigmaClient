@@ -13,6 +13,7 @@ public class Disabler extends ModuleWithModuleSettings {
                 new NullDisabler(),
                 new HypixelDisabler(),
                 new HypixelPredictionDisabler(),
+                new CubeCraftDisabler(),
                 new TPDisabler(),
                 new ViperDisabler(),
                 new VeltPvPDisabler(),
