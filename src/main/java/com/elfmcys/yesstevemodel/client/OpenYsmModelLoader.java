@@ -861,14 +861,20 @@ public final class OpenYsmModelLoader {
             return existing;
         }
 
-        // .ysm binaries store base bone rotations already converted to YSM's native/GeckoLib
-        // space: radians with X and Y negated (see OpenYSM YSMFolderDeserializer, which writes
-        // {-toRadians(x), -toRadians(y), +toRadians(z)} when encoding). Vanilla model space
-        // negates X and Y relative to that space, so flip them back here. Without this, every
-        // styled bone (hair strands, limb splay) folds the wrong way and chains collapse inward.
+        // .ysm binaries store base bone rotations in YSM/GeckoLib space (radians, X and Y already
+        // negated at encode: stored = {-rad(bx), -rad(by), +rad(bz)} of the bedrock degrees bx/by/bz).
+        // Our render is vanilla model space; applying {-stored_x, -stored_y, -stored_z} yields the
+        // net mapping bedrock -> vanilla = {+rad(bx), +rad(by), -rad(bz)}. This EXACTLY matches the
+        // convention the keyframe path applies in OpenYsmAnimationSet.applyClip ({+bx, +by, -bz}),
+        // so base pose and animation compose coherently. The Z negation is the load-bearing one:
+        // Z is the only nonzero base axis on limb bones (e.g. RightArm z=+0.3054) and, verified by a
+        // full-pipeline coordinate simulation, the wrong Z sign angles every splayed limb inward
+        // toward the body centerline (arms "retracted to the waist"). X/Y are also negated here to
+        // stay consistent with the keyframe convention (66/46 hair/ear/prop bones carry nonzero
+        // base X/Y and must match).
         float rx = -toModelRotationRadians(arrayValue(bone.rotation, 0, 0.0F), modelId, bone.name, "rotX");
         float ry = -toModelRotationRadians(arrayValue(bone.rotation, 1, 0.0F), modelId, bone.name, "rotY");
-        float rz = toModelRotationRadians(arrayValue(bone.rotation, 2, 0.0F), modelId, bone.name, "rotZ");
+        float rz = -toModelRotationRadians(arrayValue(bone.rotation, 2, 0.0F), modelId, bone.name, "rotZ");
 
         OpenYsmModelRenderer renderer = new OpenYsmModelRenderer(
                 sanitizeTextureSize(Math.round(geometry.textureWidth), modelId, "binary_texture_width"),
@@ -1343,12 +1349,12 @@ public final class OpenYsmModelLoader {
         }
 
         renderer.setRotationPoint(pivot[0] - parentPivot[0], pivot[1] - parentPivot[1], pivot[2] - parentPivot[2]);
-        // Bedrock rotations map 1:1 onto vanilla model space angles: GeckoLib stores them as
-        // (-x, -y, +z) in its own X-mirrored Y-up space, and converting that space to vanilla
-        // model space (conjugation by diag(-1,-1,1)) negates X and Y again.
+        // JSON geometry stores base rotation as raw bedrock degrees (bx,by,bz). The universal
+        // bedrock -> vanilla-model-space mapping (see bakeYsmBone and applyClip) is
+        // {+bx, +by, -bz}; only Z is negated. Keeping Z positive angles Z-splayed limbs inward.
         float rx = toBedrockRotationRadians(def.rotation[0], 1.0F, modelId, def.name, "rotX");
         float ry = toBedrockRotationRadians(def.rotation[1], 1.0F, modelId, def.name, "rotY");
-        float rz = toBedrockRotationRadians(def.rotation[2], 1.0F, modelId, def.name, "rotZ");
+        float rz = toBedrockRotationRadians(def.rotation[2], -1.0F, modelId, def.name, "rotZ");
         renderer.rotateAngleX = rx;
         renderer.rotateAngleY = ry;
         renderer.rotateAngleZ = rz;

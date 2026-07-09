@@ -78,7 +78,16 @@ public final class OpenYsmExtraEntityRenderHelper {
                     entity.ticksExisted + partialTicks);
             model.getAnimations().apply(model.getBones(), active, partialTicks, snapshot);
         }
-        model.render(matrixStackIn, bufferIn.getBuffer(model.getRenderType()), packedLightIn,
-                OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+        matrixStackIn.push();
+        try {
+            // Bones are baked in vanilla model space (Y down, X mirrored, ground at local y=0)
+            // but projectile/vehicle renderers hand us an unflipped entity frame; apply the same
+            // flip LivingRenderer would so the model is upright and correctly handed.
+            matrixStackIn.scale(-1.0F, -1.0F, 1.0F);
+            model.render(matrixStackIn, bufferIn.getBuffer(model.getRenderType()), packedLightIn,
+                    OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+        } finally {
+            matrixStackIn.pop();
+        }
     }
 }

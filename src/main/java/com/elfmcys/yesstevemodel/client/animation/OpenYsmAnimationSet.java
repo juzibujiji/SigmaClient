@@ -396,9 +396,27 @@ public final class OpenYsmAnimationSet {
                 ? null
                 : selectMainState(snapshot);
         if (main != null) {
-            active.mainStateClip = main;
-            active.setTime(main, elapsedSeconds);
-            active.setWeight(main, evaluateClipBlendWeight(main, snapshot));
+            if (context == AnimationRenderContext.GAME) {
+                // Per-state timing + short cross-fade: PLAY_ONCE states (jump/climb) sample from
+                // their own start, and flickery state switches blend instead of snapping.
+                OpenYsmMainStateRuntime.Result blend = OpenYsmMainStateRuntime.advance(snapshot.uuid, this.modelId,
+                        main.name, snapshot.ageInTicks);
+                active.mainStateClip = main;
+                active.setTime(main, blend.currentElapsedSeconds);
+                active.setWeight(main, evaluateClipBlendWeight(main, snapshot) * blend.currentWeight);
+                if (blend.previousName != null && blend.previousWeight > 0.0F) {
+                    Clip previous = findMainClip(blend.previousName);
+                    if (previous != null && previous != main) {
+                        active.addControllerClip(previous, ControllerLayer.MAIN, blend.previousElapsedSeconds,
+                                evaluateClipBlendWeight(previous, snapshot) * blend.previousWeight,
+                                "builtin.main_state_blend", blend.previousName);
+                    }
+                }
+            } else {
+                active.mainStateClip = main;
+                active.setTime(main, elapsedSeconds);
+                active.setWeight(main, evaluateClipBlendWeight(main, snapshot));
+            }
         }
 
         for (Clip hand : selectHandClips(snapshot)) {
@@ -407,6 +425,8 @@ public final class OpenYsmAnimationSet {
             active.setWeight(hand, evaluateClipBlendWeight(hand, snapshot));
         }
 
+        String activeExtraName = null;
+        float activeExtraElapsed = 0.0F;
         if (extraState != null && this.modelId.equals(extraState.getModelId())) {
             Clip extra = this.clips.get(extraState.getAnimationName());
             if (extra != null && isWheelVisible(extra)) {
@@ -418,6 +438,25 @@ public final class OpenYsmAnimationSet {
                     active.actionSource = extraState.getSource();
                     active.setTime(extra, elapsed);
                     active.setWeight(extra, evaluateClipBlendWeight(extra, snapshot));
+                    activeExtraName = extra.name;
+                    activeExtraElapsed = elapsed;
+                }
+            }
+        }
+        // Blend an ended/stopped extra action OUT over a short window instead of hard-cutting to
+        // idle. Only in GAME context (mirrors the main-state cross-fade guard) so the tracker is
+        // advanced from exactly one context per frame. The fading clip is sampled frozen at its
+        // stop frame (LoopMode.time clamps PLAY_ONCE to length) at a decaying weight, over the main
+        // state which sits underneath at full weight.
+        if (context == AnimationRenderContext.GAME) {
+            OpenYsmExtraActionRuntime.FadeOut fadeOut = OpenYsmExtraActionRuntime.advance(
+                    snapshot.uuid, this.modelId, activeExtraName, activeExtraElapsed, snapshot.ageInTicks);
+            if (activeExtraName == null && fadeOut != null) {
+                Clip fading = this.clips.get(fadeOut.name);
+                if (fading != null && isWheelVisible(fading)) {
+                    active.extraActionClip = Optional.of(fading);
+                    active.setTime(fading, fadeOut.freezeElapsedSeconds);
+                    active.setWeight(fading, evaluateClipBlendWeight(fading, snapshot) * fadeOut.weight);
                 }
             }
         }
@@ -515,8 +554,32 @@ public final class OpenYsmAnimationSet {
                 }
             }
 
+            // Weighted-BLEND same-bone rotation/position across all simultaneous clips instead of a
+            // raw additive sum. The reference blends by weight within/across controllers (fma of
+            // blendWeight, never a magnitude sum); our old additive path doubled the rotation of any
+            // bone touched by 2+ active clips -> forearm over-rotated past its joint and folded, and
+            // long hair/skirt chains touched by several always-on parallels compounded inward down
+            // the chain. Single-contributor bones (rest/walk) are unchanged (sum(w)=w -> delta).
+            // Scale stays multiplicative and is applied directly inside applyClip.
+            Map<OpenYsmBone, float[]> rotAccum = new java.util.IdentityHashMap<>(); // [wx, wy, wz, totalW]
+            Map<OpenYsmBone, float[]> posAccum = new java.util.IdentityHashMap<>(); // [wx, wy, wz, totalW]
             for (ActiveAnimationSet.ActiveClip activeClip : active.activeClipsInOrder()) {
-                applyClip(bones, activeClip.getClip(), activeClip.getTimeSeconds(), activeClip.getWeight(), snapshot);
+                applyClip(bones, activeClip.getClip(), activeClip.getTimeSeconds(), activeClip.getWeight(),
+                        snapshot, rotAccum, posAccum);
+            }
+            for (Map.Entry<OpenYsmBone, float[]> entry : rotAccum.entrySet()) {
+                float totalWeight = entry.getValue()[3];
+                if (totalWeight > 0.0F) {
+                    entry.getKey().addRotation(entry.getValue()[0] / totalWeight,
+                            entry.getValue()[1] / totalWeight, entry.getValue()[2] / totalWeight);
+                }
+            }
+            for (Map.Entry<OpenYsmBone, float[]> entry : posAccum.entrySet()) {
+                float totalWeight = entry.getValue()[3];
+                if (totalWeight > 0.0F) {
+                    entry.getKey().addPosition(entry.getValue()[0] / totalWeight,
+                            entry.getValue()[1] / totalWeight, entry.getValue()[2] / totalWeight);
+                }
             }
         } catch (Exception exception) {
             if (isDebugEnabled()) {
@@ -1717,7 +1780,9 @@ public final class OpenYsmAnimationSet {
                     : OpenYsmPlayerAnimationState.getGuiVariables(snapshot.uuid, this.modelId);
             MolangBindings bindings = new MolangBindings(variables, Collections.emptyMap());
             MolangContext context = MolangContext.controller(snapshot, this.modelId, "blend_weight", bindings,
-                    false, false);
+                    false, false)
+                    .withRuntimeVariables(snapshot == null ? null
+                            : OpenYsmPlayerAnimationState.getRuntimeVariables(snapshot.uuid, this.modelId));
             double value = MolangEvaluator.evaluate(parsed, context).asDouble();
             return Double.isFinite(value) ? Math.max(0.0F, (float)value) : 0.0F;
         } catch (Exception exception) {
@@ -1750,7 +1815,8 @@ public final class OpenYsmAnimationSet {
     }
 
     private void applyClip(Map<String, OpenYsmBone> bones, Clip clip, float elapsedSeconds, float weight,
-                           PlayerStateSnapshot snapshot) {
+                           PlayerStateSnapshot snapshot,
+                           Map<OpenYsmBone, float[]> rotAccum, Map<OpenYsmBone, float[]> posAccum) {
         if (weight <= 0.0F) {
             return;
         }
@@ -1764,15 +1830,26 @@ public final class OpenYsmAnimationSet {
             BoneTrack track = entry.getValue();
             float[] rotation = sample(track.rotation, sampleTime, keyframeContext);
             if (rotation != null) {
-                // Bedrock keyframe rotations apply unmodified in vanilla model space
-                // (GeckoLib's (-x,-y,+z) storage and the geckolib->vanilla space conversion
-                // both negate X and Y, cancelling out). See loader base-rotation handling.
-                bone.addRotation(rotation[0] * DEG_TO_RAD * weight, rotation[1] * DEG_TO_RAD * weight,
-                        rotation[2] * DEG_TO_RAD * weight);
+                // Keyframe rotations are raw bedrock degrees. Our render (vanilla model) space
+                // differs from bedrock by the 24-y pivot flip diag(1,-1,1), an improper transform
+                // mapping bedrock (bx,by,bz) -> (-bx,+by,-bz). X and Y net to positive here (the
+                // extra base-pose X/Y negation cancels against the flip for the near-zero base),
+                // while Z must be negated to stay in the same convention as the base rotation
+                // (see bakeYsmBone). Accumulate weighted (not summed) — divided by total weight in
+                // apply() so 2+ clips blend instead of over-rotating the bone.
+                float[] accumulator = rotAccum.computeIfAbsent(bone, ignored -> new float[4]);
+                accumulator[0] += rotation[0] * DEG_TO_RAD * weight;
+                accumulator[1] += rotation[1] * DEG_TO_RAD * weight;
+                accumulator[2] += -rotation[2] * DEG_TO_RAD * weight;
+                accumulator[3] += weight;
             }
             float[] position = sample(track.position, sampleTime, keyframeContext);
             if (position != null) {
-                bone.addPosition(position[0] * weight, -position[1] * weight, position[2] * weight);
+                float[] accumulator = posAccum.computeIfAbsent(bone, ignored -> new float[4]);
+                accumulator[0] += position[0] * weight;
+                accumulator[1] += -position[1] * weight;
+                accumulator[2] += position[2] * weight;
+                accumulator[3] += weight;
             }
             float[] scale = sample(track.scale, sampleTime, keyframeContext);
             if (scale != null) {
@@ -1794,7 +1871,8 @@ public final class OpenYsmAnimationSet {
         }
         Map<String, Double> variables = OpenYsmPlayerAnimationState.getGuiVariables(snapshot.uuid, this.modelId);
         MolangBindings bindings = new MolangBindings(variables, Collections.emptyMap());
-        return MolangContext.controller(snapshot, this.modelId, clip.name, bindings, false, false, false, sampleTime);
+        return MolangContext.controller(snapshot, this.modelId, clip.name, bindings, false, false, false, sampleTime)
+                .withRuntimeVariables(OpenYsmPlayerAnimationState.getRuntimeVariables(snapshot.uuid, this.modelId));
     }
 
     private float[] sample(List<Keyframe> frames, float time, MolangContext context) {

@@ -166,6 +166,13 @@ public final class OpenYsmGl4PlayerModel extends PlayerModel<AbstractClientPlaye
         matrixStackIn.push();
         try {
             bone.setRotation(0.0F, 0.0F, 0.0F);
+            // First-person arm rendering never passes through LivingRenderer.render, so the
+            // Blockbench->entity flip (scale(-1,-1,1)) + vertical seat that the third-person path
+            // inherits are absent here. Without them the arm draws upside-down/mirrored and
+            // off-screen (looks like nothing renders). Apply them so the bone lands in the
+            // first-person arm frame. The 1.5 seat aligns the shoulder; tune if needed.
+            matrixStackIn.translate(0.0D, 1.5D, 0.0D);
+            matrixStackIn.scale(-1.0F, -1.0F, 1.0F);
             matrixStackIn.scale(this.bakedModel.getWidthScale(), this.bakedModel.getHeightScale(), this.bakedModel.getWidthScale());
             this.renderer.renderRecursively(matrixStackIn, bone, bufferIn, packedLightIn, packedOverlayIn, red, green, blue, alpha);
             return true;

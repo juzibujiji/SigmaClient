@@ -112,6 +112,8 @@ public final class YesSteveModel {
             clearPlayerModelCache();
             OpenYsmPlayerAnimationState.clearAll();
             OpenYsmControllerRuntime.clearAll();
+            com.elfmcys.yesstevemodel.client.animation.OpenYsmMainStateRuntime.clearAll();
+            com.elfmcys.yesstevemodel.client.animation.OpenYsmExtraActionRuntime.clearAll();
             OpenYsmPlayerModelState.clearAll();
         }
         saveClientConfig();
@@ -154,6 +156,8 @@ public final class YesSteveModel {
         if (!entry.get().getId().equals(previousModelId)) {
             OpenYsmPlayerAnimationState.clearModel(previousModelId);
             OpenYsmControllerRuntime.clearModel(previousModelId);
+            com.elfmcys.yesstevemodel.client.animation.OpenYsmMainStateRuntime.clearModel(previousModelId);
+            com.elfmcys.yesstevemodel.client.animation.OpenYsmExtraActionRuntime.clearModel(previousModelId);
             OpenYsmAnimationEventDispatcher.clearModel(previousModelId);
         }
         clearPlayerModelCache();

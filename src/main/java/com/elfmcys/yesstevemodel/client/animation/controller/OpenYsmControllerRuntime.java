@@ -240,7 +240,8 @@ public final class OpenYsmControllerRuntime {
             MolangBindings bindings = new MolangBindings(variables, Collections.emptyMap());
             MolangContext context = MolangContext.controller(snapshot, modelId, controllerName, bindings,
                     finishSummary.allFinished, finishSummary.anyFinished, playingExtraAnimation,
-                    controllerAnimTimeSeconds);
+                    controllerAnimTimeSeconds)
+                    .withRuntimeVariables(OpenYsmPlayerAnimationState.getRuntimeVariables(snapshot.uuid, modelId));
             return EvaluationResult.valid((float) MolangEvaluator.evaluate(parsed, context).asDouble());
         } catch (MolangParser.ParseException exception) {
             debugExpressionFailure(snapshot, controllerName, expression, expressionKind, owner, exception.getMessage());
