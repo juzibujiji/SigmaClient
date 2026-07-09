@@ -207,6 +207,10 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     private transient volatile Thread audioThread = null;
 
+    // 播放线程"代际"计数：每次 initializeAudioPlayback 递增，
+    // 旧线程发现自己的代际号过期时立即退出，避免多个播放线程并发抢音频线导致卡死。
+    private transient volatile int playbackGeneration = 0;
+
     private int currentVideoIndex2;
 
     private long totalDuration = 0L;
@@ -1469,13 +1473,20 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
         if (this.videoManager != null) {
 
-            while (this.audioThread != null && this.audioThread.isAlive()) {
+            // 递增代际号：旧线程会检测到自己已过期并主动退出。
+            final int myGeneration = ++this.playbackGeneration;
 
-                this.audioThread.interrupt();
-
+            // 中断旧播放线程，并 join 等待其真正结束（最多等 2 秒），
+            // 避免多个播放线程同时抢占 sourceDataLine 导致卡死。
+            Thread old = this.audioThread;
+            if (old != null && old.isAlive()) {
+                old.interrupt();
+                try {
+                    old.join(2000L);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
             }
-
-
 
             this.audioThread = new Thread(
 
@@ -1494,6 +1505,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
 
                         for (int index = this.currentVideoIndex; index < this.videoManager.videoList.size(); index++) {
+
+                            // 代际检查：若已有更新的播放线程启动，本线程立即退出。
+                            if (myGeneration != this.playbackGeneration) {
+                                return;
+                            }
 
                             URL songUrl;
 
@@ -1558,6 +1574,11 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
 
                             this.currentVideoIndex2 = index;
+
+                            // 同步 currentVideoIndex，否则帧循环里的
+                            // currentVideoIndex2 != currentVideoIndex 判断会在自动切歌后
+                            // 第一帧就误判为"用户切歌"而立即 return 退出线程。
+                            this.currentVideoIndex = index;
 
                             this.currentVideo = this.videoManager.videoList.get(index);
 
@@ -2048,15 +2069,19 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
 
 
-                                                // Check for stop
+                                                // Check for stop（中断，或被更新的播放线程取代）
 
-                                                if (Thread.interrupted()) {
+                                                if (Thread.interrupted() || myGeneration != this.playbackGeneration) {
 
                                                     this.sourceDataLine.close();
 
                                                     bitstream.close();
 
-                                                    this.playing = false; // Reset playing state on interrupt
+                                                    // 仅当自己仍是当前代际时才重置 playing，
+                                                    // 避免误关掉接替线程的播放状态。
+                                                    if (myGeneration == this.playbackGeneration) {
+                                                        this.playing = false;
+                                                    }
 
                                                     return;
 
@@ -2078,7 +2103,19 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                                             fileStream.close();
 
-                                            this.playing = false; // Reset playing state after loop finishes
+                                            // 当前歌曲自然播放结束：保持 playing=true，
+                                            // 让外层循环继续播放下一首（避免卡在 while(!playing) 死等）。
+                                            // 同时按 repeat 模式决定下一首索引。
+                                            if (this.repeat == AudioRepeatMode.LOOP_CURRENT) {
+                                                index--; // 单曲循环：重播当前歌
+                                            } else if (this.repeat == AudioRepeatMode.REPEAT
+                                                    && index == this.videoManager.videoList.size() - 1) {
+                                                index = -1; // 列表循环：播完最后一首回到开头
+                                            } else if (this.repeat == AudioRepeatMode.NO_REPEAT
+                                                    && index == this.videoManager.videoList.size() - 1) {
+                                                this.playing = false; // 顺序播放到列表末尾：停止
+                                            }
+                                            // 其余情况保持 playing=true，for 循环自然 index++ 播下一首
 
                                         } catch (Exception e) {
 
