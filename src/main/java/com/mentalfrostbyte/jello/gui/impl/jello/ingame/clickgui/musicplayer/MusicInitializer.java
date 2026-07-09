@@ -56,7 +56,6 @@ public class MusicInitializer implements Runnable {
             queue.method13514(true);
             queue.setSelfVisible(false);
             queue.setListening(false);
-            MusicPlayer.registerQueue(this.musicPlayer2, this.thumbnail, queue);
             if (this.thumbnail.videoList != null) {
                 for (int i = 0; i < this.thumbnail.videoList.size(); i++) {
                     YoutubeVideoData song = this.thumbnail.videoList.get(i);

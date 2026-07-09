@@ -298,11 +298,6 @@ public class SearchBox extends AnimatedIconPanel {
                                                     );
 
                                             var7x.onClick((var2, var3xx) -> {
-                                                if (var3xx == 2 && this.getParent() instanceof MusicPlayer musicPlayer) {
-                                                    musicPlayer.addMidFavor(var4);
-                                                    return;
-                                                }
-
                                                 this.field20843.playSong(null, var4);
                                             });
 

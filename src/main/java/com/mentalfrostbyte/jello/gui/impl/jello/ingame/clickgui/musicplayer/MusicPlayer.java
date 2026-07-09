@@ -40,9 +40,6 @@ import java.util.*;
 
 public class MusicPlayer extends AnimatedIconPanel {
     private static final String NETEASE_PLAYLIST_PREFIX = "netease_playlist:";
-    private static final String MID_FAVOR_ID = "mid_favor";
-    private static final String MID_FAVOR_NAME = "mid favor";
-    private static final Thumbnails MID_FAVOR_THUMBNAILS = createMidFavorThumbnails();
     private final int width = 250;
     private final int height = 40;
     private final int field20847 = 64;
@@ -50,7 +47,6 @@ public class MusicPlayer extends AnimatedIconPanel {
     private String field20849 = "Music Player";
     private final ScrollableContentPanel musicTabs;
     private ScrollableContentPanel field20852;
-    private ScrollableContentPanel midFavorQueue;
     private final CustomGuiScreen musicControls;
     private final MusicManager musicManager = Client.getInstance().musicManager;
     public static Map<String, Thumbnails> videoMap = new LinkedHashMap<>();
@@ -80,19 +76,12 @@ public class MusicPlayer extends AnimatedIconPanel {
 
     public ClickGuiScreen parent;
 
-    private static Thumbnails createMidFavorThumbnails() {
-        Thumbnails thumbnails = new Thumbnails(MID_FAVOR_NAME, MID_FAVOR_ID, YoutubeContentType.SEARCH);
-        thumbnails.isUpdated = true;
-        return thumbnails;
-    }
-
     private static synchronized void ensureBaseVideoSources() {
         addVideoSourceIfMissing(new Thumbnails("Bundled Music", "bundled_music", YoutubeContentType.BUNDLED));
         addVideoSourceIfMissing(new Thumbnails("Local Music", "local_music", YoutubeContentType.LOCAL));
         addVideoSourceIfMissing(new Thumbnails("\u7f51\u6613\u4e91\u70ed\u6b4c", "netease_hot", YoutubeContentType.NETEASE));
         addVideoSourceIfMissing(new Thumbnails("\u7f51\u6613\u4e91\u65b0\u6b4c", "netease_new", YoutubeContentType.NETEASE));
-        addVideoSourceIfMissing(MID_FAVOR_THUMBNAILS);
-        getMidFavorThumbnails().isUpdated = true;
+        addVideoSourceIfMissing(new Thumbnails("Wuthering Waves", "netease_artist:61908633", YoutubeContentType.NETEASE));
     }
 
     private static void addVideoSourceIfMissing(Thumbnails thumbnails) {
@@ -358,30 +347,6 @@ public class MusicPlayer extends AnimatedIconPanel {
         this.musicManager.playSong(manager, video);
     }
 
-    public void addMidFavor(YoutubeVideoData song) {
-        if (song == null || song.videoId == null) {
-            return;
-        }
-
-        Thumbnails midFavor = getMidFavorThumbnails();
-        boolean added = addMidFavorSongIfMissing(midFavor, song);
-        if (added) {
-            this.appendMidFavorButton(song, midFavor.videoList.size() - 1);
-        }
-
-        Client.getInstance().notificationManager.send(
-                new Notification(
-                        MID_FAVOR_NAME,
-                        (added ? "Added: " : "Already in mid favor: ") + notificationSongTitle(song),
-                        3000));
-    }
-
-    public static void registerQueue(MusicPlayer player, Thumbnails thumbnail, ScrollableContentPanel queue) {
-        if (player != null && isMidFavor(thumbnail)) {
-            player.midFavorQueue = queue;
-        }
-    }
-
     public static ThumbnailButton addTrackButton(
             MusicPlayer player,
             ScrollableContentPanel queue,
@@ -406,80 +371,9 @@ public class MusicPlayer extends AnimatedIconPanel {
                 song);
         queue.addToList(thumbnail);
         thumbnail.onClick((parent, mouseButton) -> {
-            if (mouseButton == 2) {
-                player.addMidFavor(song);
-                return;
-            }
-
             MusicPlayer.playSong(player, manager, song);
         });
         return thumbnail;
-    }
-
-    private void appendMidFavorButton(YoutubeVideoData song, int index) {
-        if (this.midFavorQueue == null || this.midFavorQueue.isntQueue(song.videoId)) {
-            return;
-        }
-
-        addTrackButton(this, this.midFavorQueue, getMidFavorThumbnails(), song, index);
-    }
-
-    private static synchronized boolean addMidFavorSongIfMissing(Thumbnails midFavor, YoutubeVideoData song) {
-        String songKey = midFavorSongKey(song);
-        for (YoutubeVideoData existing : midFavor.videoList) {
-            if (songKey.equals(midFavorSongKey(existing))) {
-                return false;
-            }
-        }
-
-        midFavor.videoList.add(song);
-        return true;
-    }
-
-    private static boolean isMidFavor(Thumbnails thumbnail) {
-        return thumbnail != null && MID_FAVOR_ID.equals(thumbnail.videoId);
-    }
-
-    private static Thumbnails getMidFavorThumbnails() {
-        for (Thumbnails existing : videos) {
-            if (MID_FAVOR_ID.equals(existing.videoId)) {
-                return existing;
-            }
-        }
-
-        return MID_FAVOR_THUMBNAILS;
-    }
-
-    private static String midFavorSongKey(YoutubeVideoData song) {
-        if (song == null) {
-            return "";
-        }
-
-        if (song.neteaseSongId > 0) {
-            return "netease:" + song.neteaseSongId;
-        }
-
-        String videoId = normalizeMidFavorKeyPart(song.videoId);
-        if (!videoId.isEmpty()) {
-            return videoId;
-        }
-
-        String fullUrl = normalizeMidFavorKeyPart(song.fullUrl);
-        if (!fullUrl.isEmpty()) {
-            return fullUrl;
-        }
-
-        return normalizeMidFavorKeyPart(song.title);
-    }
-
-    private static String normalizeMidFavorKeyPart(String value) {
-        return value == null ? "" : value.trim();
-    }
-
-    private static String notificationSongTitle(YoutubeVideoData song) {
-        String title = song.title == null || song.title.trim().isEmpty() ? "Unknown track" : song.title.trim();
-        title = title.replace('\n', ' ').replace('\r', ' ');
-        return title.length() <= 60 ? title : title.substring(0, 57) + "...";
     }
 
     @Override
@@ -741,29 +635,33 @@ public class MusicPlayer extends AnimatedIconPanel {
                     (float) this.getWidthA(),
                     (float) this.field20848,
                     var5,
-                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1)
+            );
             RenderUtil.drawRoundedRect(
                     (float) this.getXA(),
                     (float) (this.getYA() + this.getHeightA() - this.field20848),
                     (float) (this.getXA() + this.getWidthA()),
                     (float) (this.getYA() + this.getHeightA() - 5),
-                    RenderUtil2.applyAlpha(overlayColor, 0.85F * var1));
+                    RenderUtil2.applyAlpha(/*overlayColor*/ClientColors.DEEP_TEAL.getColor(), 0.43F * var1)
+            );
             RenderUtil.drawRoundedRect(
                     (float) this.getXA(),
                     (float) (this.getYA() + this.getHeightA() - 5),
                     (float) (this.getXA() + this.width),
                     (float) (this.getYA() + this.getHeightA()),
-                    RenderUtil2.applyAlpha(overlayColor, 0.85F * var1));
+                    RenderUtil2.applyAlpha(/*overlayColor*/ClientColors.DEEP_TEAL.getColor(), 0.43F * var1)
+            );
             RenderUtil.drawImage(
                     (float) (this.getXA() + (this.width - 114) / 2),
                     (float) (this.getYA() + this.getHeightA() - 170),
                     114.0F,
                     114.0F,
                     var4,
-                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1));
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1)
+            );
             RenderUtil.drawRoundedRect(
-                    (float) (this.getXA() + (this.width - 114) / 2), (float) (this.getYA() + this.getHeightA() - 170),
-                    114.0F, 114.0F, 14.0F, var1);
+                    (float) (this.getXA() + (this.width - 114) / 2), (float) (this.getYA() + this.getHeightA() - 170), 114.0F, 114.0F, 14.0F, var1
+            );
         } else {
             RenderUtil.drawImage(
                     (float) this.getXA(),
@@ -771,29 +669,33 @@ public class MusicPlayer extends AnimatedIconPanel {
                     (float) this.getWidthA(),
                     (float) this.field20848,
                     Resources.bgPNG,
-                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1));
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1 * var1)
+            );
             RenderUtil.drawRoundedRect(
                     (float) this.getXA(),
                     (float) (this.getYA() + this.getHeightA() - this.field20848),
                     (float) (this.getXA() + this.getWidthA()),
                     (float) (this.getYA() + this.getHeightA() - 5),
-                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.85F * var1));
+                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.43F * var1)
+            );
             RenderUtil.drawRoundedRect(
                     (float) this.getXA(),
                     (float) (this.getYA() + this.getHeightA() - 5),
                     (float) (this.getXA() + this.width),
                     (float) (this.getYA() + this.getHeightA()),
-                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.85F * var1));
+                    RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.43F * var1)
+            );
             RenderUtil.drawImage(
                     (float) (this.getXA() + (this.width - 114) / 2),
                     (float) (this.getYA() + this.getHeightA() - 170),
                     114.0F,
                     114.0F,
                     Resources.artworkPNG,
-                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1));
+                    RenderUtil2.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), var1)
+            );
             RenderUtil.drawRoundedRect(
-                    (float) (this.getXA() + (this.width - 114) / 2), (float) (this.getYA() + this.getHeightA() - 170),
-                    114.0F, 114.0F, 14.0F, var1);
+                    (float) (this.getXA() + (this.width - 114) / 2), (float) (this.getYA() + this.getHeightA() - 170), 114.0F, 114.0F, 14.0F, var1
+            );
         }
 
         // Restore GL state after cover art texture rendering to prevent state leak

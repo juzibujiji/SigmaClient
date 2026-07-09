@@ -192,7 +192,10 @@ public class Thumbnails {
                     tracks = NeteaseRequestApi.getPlaylistDetail(NeteaseRequestApi.PLAYLIST_NEW_SONGS, 30, 0);
                 } else if (this.videoId != null && this.videoId.startsWith("netease_playlist:")) {
                     long playlistId = Long.parseLong(this.videoId.substring("netease_playlist:".length()));
-                    tracks = NeteaseRequestApi.getPlaylistDetail(playlistId, 100, 0);
+                    tracks = NeteaseRequestApi.getPlaylistDetail(playlistId, 1000, 0);
+                } else if (this.videoId != null && this.videoId.startsWith("netease_artist:")) {
+                    long artistId = Long.parseLong(this.videoId.substring("netease_artist:".length()));
+                    tracks = NeteaseRequestApi.getArtistAllSongs(artistId, 300);
                 } else {
                     tracks = NeteaseApiSearch.search(this.name, 30, 0);
                 }

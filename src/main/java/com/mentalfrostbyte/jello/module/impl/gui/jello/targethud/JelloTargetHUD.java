@@ -109,7 +109,6 @@ public class JelloTargetHUD extends RenderModule {
     }
 
     private Entity currentTarget;
-    private boolean posInit = false;
 
     // ===== Skija 图标缓存 =====
     private Image iconDiamond, iconSpeed, iconStrength, iconResist, iconRegen, iconMs;
@@ -225,13 +224,6 @@ public class JelloTargetHUD extends RenderModule {
 
         // ===== 坐标 =====
         TargetHUD parent = (TargetHUD) Client.getInstance().moduleManager.getModuleByClass(TargetHUD.class);
-        if (!posInit) {
-            posInit = true;
-            int sw = mc.getMainWindow().getScaledWidth();
-            int sh = mc.getMainWindow().getScaledHeight();
-            parent.setX(sw - W_PANEL - 20.0F);
-            parent.setY(sh - 100.0F - 60.0F);
-        }
         float posX = parent.getX();
         float posY = parent.getY();
 

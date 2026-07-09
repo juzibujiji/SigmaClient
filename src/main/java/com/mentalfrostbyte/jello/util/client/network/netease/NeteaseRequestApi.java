@@ -62,26 +62,38 @@ public class NeteaseRequestApi {
                 return tracks;
             }
 
+            // 网易云 /weapi/v6/playlist/detail 的 playlist.tracks 最多只返回前 100 首
+            // （无论 n 传多大），完整曲目 ID 全在 playlist.trackIds 里。
+            // 因此以 trackIds 为准，分批调 song/detail 拉取全部歌曲详情。
+            JsonArray trackIds = playlist.has("trackIds") && !playlist.get("trackIds").isJsonNull()
+                    ? playlist.getAsJsonArray("trackIds")
+                    : null;
+
+            if (trackIds != null && trackIds.size() > 0) {
+                int total = trackIds.size();
+                int start = Math.min(offset, total);
+                int end = Math.min(start + limit, total);
+
+                List<Long> ids = new ArrayList<>();
+                for (int i = start; i < end; i++) {
+                    ids.add(trackIds.get(i).getAsJsonObject().get("id").getAsLong());
+                }
+
+                // 分批拉详情（每批 500，避免单次请求过大）
+                final int batchSize = 500;
+                for (int i = 0; i < ids.size(); i += batchSize) {
+                    List<Long> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
+                    long[] arr = batch.stream().mapToLong(Long::longValue).toArray();
+                    tracks.addAll(NeteaseApiSearch.getSongDetail(arr));
+                }
+                return tracks;
+            }
+
+            // 兜底：没有 trackIds 时用内联 tracks（≤100 首）
             JsonArray tracksArr = playlist.has("tracks") && !playlist.get("tracks").isJsonNull()
                     ? playlist.getAsJsonArray("tracks")
                     : null;
             if (tracksArr == null || tracksArr.size() == 0) {
-                JsonArray trackIds = playlist.has("trackIds") && !playlist.get("trackIds").isJsonNull()
-                        ? playlist.getAsJsonArray("trackIds")
-                        : null;
-                if (trackIds == null || trackIds.size() == 0) {
-                    return tracks;
-                }
-
-                List<Long> ids = new ArrayList<>();
-                int start = Math.min(offset, trackIds.size());
-                int end = Math.min(start + limit, trackIds.size());
-                for (int i = start; i < end; i++) {
-                    ids.add(trackIds.get(i).getAsJsonObject().get("id").getAsLong());
-                }
-                if (!ids.isEmpty()) {
-                    return NeteaseApiSearch.getSongDetail(ids.stream().mapToLong(Long::longValue).toArray());
-                }
                 return tracks;
             }
 
@@ -350,6 +362,101 @@ public class NeteaseRequestApi {
             }
         } catch (Exception e) {
             System.err.println("[NeteaseRequestApi] getSimiSongs failed: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return tracks;
+    }
+
+    /**
+     * 获取某位艺术家的全部歌曲（分页拉取，用于 Wuthering Waves 等艺术家专属列表）。
+     * <p>
+     * 使用 /weapi/v1/artist/songs 端点，支持 limit + offset 翻页，
+     * 可拉取该艺术家名下的所有歌曲（而非仅热门 50 首）。
+     *
+     * @param artistId 网易云艺术家 ID
+     * @param maxTotal 最多拉取的歌曲总数上限（防止艺术家曲库过大）
+     * @return 该艺术家的歌曲列表
+     */
+    public static List<NeteaseApiSearch.NeteaseTrack> getArtistAllSongs(long artistId, int maxTotal) {
+        List<NeteaseApiSearch.NeteaseTrack> tracks = new ArrayList<>();
+        try {
+            int pageSize = 100;
+            int offset = 0;
+            boolean more = true;
+
+            while (more && tracks.size() < maxTotal) {
+                JsonObject data = new JsonObject();
+                data.addProperty("id", String.valueOf(artistId));
+                data.addProperty("order", "hot"); // hot=热度排序，time=时间排序
+                data.addProperty("limit", pageSize);
+                data.addProperty("offset", offset);
+                data.addProperty("csrf_token", "");
+
+                String[] enc = NeteaseApiEncrypt.encrypt(data.toString());
+                String body = "params=" + enc(enc[0]) + "&encSecKey=" + enc(enc[1]);
+
+                String resp = NeteaseApiLogin.postRequest(BASE + "/weapi/v1/artist/songs", body, getCookie());
+                JsonObject json = JsonParser.parseString(resp).getAsJsonObject();
+                if (json.get("code").getAsInt() != 200) {
+                    System.err.println("[NeteaseRequestApi] getArtistAllSongs bad code: " + json.get("code"));
+                    break;
+                }
+
+                JsonArray songs = json.has("songs") && !json.get("songs").isJsonNull()
+                        ? json.getAsJsonArray("songs") : null;
+                if (songs == null || songs.size() == 0) {
+                    break;
+                }
+
+                for (JsonElement elem : songs) {
+                    if (tracks.size() >= maxTotal) break;
+                    tracks.add(parseSongObject(elem.getAsJsonObject()));
+                }
+
+                // more 字段指示是否还有下一页
+                more = json.has("more") && !json.get("more").isJsonNull() && json.get("more").getAsBoolean();
+                offset += pageSize;
+            }
+        } catch (Exception e) {
+            System.err.println("[NeteaseRequestApi] getArtistAllSongs failed: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return tracks;
+    }
+
+    /**
+     * 获取某位艺术家的热门歌曲（约 50 首）。保留作为轻量备用接口。
+     *
+     * @param artistId 网易云艺术家 ID
+     * @return 该艺术家的热门歌曲列表
+     */
+    public static List<NeteaseApiSearch.NeteaseTrack> getArtistTopSongs(long artistId) {
+        List<NeteaseApiSearch.NeteaseTrack> tracks = new ArrayList<>();
+        try {
+            JsonObject data = new JsonObject();
+            data.addProperty("id", artistId);
+            data.addProperty("csrf_token", "");
+
+            String[] enc = NeteaseApiEncrypt.encrypt(data.toString());
+            String body = "params=" + enc(enc[0]) + "&encSecKey=" + enc(enc[1]);
+
+            // /weapi/artist/top/song 返回艺术家热门歌曲，字段为 songs[]
+            String resp = NeteaseApiLogin.postRequest(BASE + "/weapi/artist/top/song", body, getCookie());
+            JsonObject json = JsonParser.parseString(resp).getAsJsonObject();
+            if (json.get("code").getAsInt() != 200) {
+                System.err.println("[NeteaseRequestApi] getArtistTopSongs bad code: " + json.get("code"));
+                return tracks;
+            }
+
+            JsonArray songs = json.has("songs") && !json.get("songs").isJsonNull()
+                    ? json.getAsJsonArray("songs") : null;
+            if (songs == null) return tracks;
+
+            for (JsonElement elem : songs) {
+                tracks.add(parseSongObject(elem.getAsJsonObject()));
+            }
+        } catch (Exception e) {
+            System.err.println("[NeteaseRequestApi] getArtistTopSongs failed: " + e.getMessage());
             e.printStackTrace();
         }
         return tracks;
