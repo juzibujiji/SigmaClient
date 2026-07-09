@@ -15,12 +15,79 @@ public final class MolangParser {
 
     public static MolangExpression parse(String source) throws ParseException {
         MolangParser parser = new MolangParser(source);
-        MolangExpression.Node node = parser.parseExpression();
+        MolangExpression.Node node = parser.parseProgram();
         parser.skipWhitespace();
         if (!parser.isAtEnd()) {
             throw parser.error("Unexpected token");
         }
         return new MolangExpression(source, node);
+    }
+
+    /**
+     * A program is one or more ';'-separated statements; the value of the last statement is
+     * returned. YSM models drive variables from dummy bones with scripts like
+     * {@code v.bv=0;v.by=0;} so trailing separators are permitted.
+     */
+    private MolangExpression.Node parseProgram() throws ParseException {
+        List<MolangExpression.Node> statements = new ArrayList<>();
+        statements.add(parseStatement());
+        while (match(";")) {
+            skipWhitespace();
+            if (isAtEnd()) {
+                break;
+            }
+            statements.add(parseStatement());
+        }
+        if (statements.size() == 1) {
+            return statements.get(0);
+        }
+        List<MolangExpression.Node> sequence = List.copyOf(statements);
+        return context -> {
+            MolangValue last = MolangValue.ZERO;
+            for (MolangExpression.Node statement : sequence) {
+                last = statement.evaluate(context);
+            }
+            return last;
+        };
+    }
+
+    /** A statement is either a variable/temp assignment ({@code v.x = expr}) or an expression. */
+    private MolangExpression.Node parseStatement() throws ParseException {
+        skipWhitespace();
+        int savedIndex = this.index;
+        if (isIdentifierStart(peek())) {
+            String identifier = readIdentifier();
+            String lower = identifier.toLowerCase(Locale.ROOT);
+            String variableName = null;
+            boolean temp = false;
+            if (lower.startsWith("variable.")) {
+                variableName = lower.substring("variable.".length());
+            } else if (lower.startsWith("v.")) {
+                variableName = lower.substring("v.".length());
+            } else if (lower.startsWith("temp.")) {
+                variableName = lower.substring("temp.".length());
+                temp = true;
+            } else if (lower.startsWith("t.")) {
+                variableName = lower.substring("t.".length());
+                temp = true;
+            }
+            if (variableName != null && !variableName.isEmpty()) {
+                skipWhitespace();
+                if (peek() == '=' && peekNext() != '=') {
+                    this.index++;
+                    MolangExpression.Node value = parseExpression();
+                    String name = variableName;
+                    boolean isTemp = temp;
+                    return context -> {
+                        MolangValue result = value.evaluate(context);
+                        context.setVariable(isTemp, name, result.asDouble());
+                        return result;
+                    };
+                }
+            }
+            this.index = savedIndex;
+        }
+        return parseExpression();
     }
 
     private MolangExpression.Node parseExpression() throws ParseException {
@@ -31,8 +98,8 @@ public final class MolangParser {
         MolangExpression.Node condition = parseOr();
         if (match("?")) {
             MolangExpression.Node ifTrue = parseExpression();
-            expect(":");
-            MolangExpression.Node ifFalse = parseConditional();
+            // Molang's binary conditional form "cond ? value" evaluates to 0 when false.
+            MolangExpression.Node ifFalse = match(":") ? parseConditional() : context -> MolangValue.ZERO;
             return context -> condition.evaluate(context).asBoolean()
                     ? ifTrue.evaluate(context)
                     : ifFalse.evaluate(context);
@@ -193,6 +260,9 @@ public final class MolangParser {
             if ("false".equals(lower)) {
                 return context -> MolangValue.ZERO;
             }
+            if ("math.pi".equals(lower)) {
+                return context -> MolangValue.of(Math.PI);
+            }
             if (match("(")) {
                 List<MolangExpression.Node> args = new ArrayList<>();
                 if (!check(")")) {
@@ -214,14 +284,28 @@ public final class MolangParser {
 
     private MolangExpression.Node functionNode(String name, List<MolangExpression.Node> args) throws ParseException {
         return switch (name) {
-            case "math.sin" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.sin(args.get(0).evaluate(context).asDouble())));
-            case "math.cos" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.cos(args.get(0).evaluate(context).asDouble())));
+            // Bedrock molang trigonometry is DEGREE-based (walk/hair expressions use anim_time*360).
+            case "math.sin" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.sin(Math.toRadians(args.get(0).evaluate(context).asDouble()))));
+            case "math.cos" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.cos(Math.toRadians(args.get(0).evaluate(context).asDouble()))));
+            case "math.asin" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.toDegrees(Math.asin(Math.max(-1.0D, Math.min(1.0D, args.get(0).evaluate(context).asDouble()))))));
+            case "math.acos" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.toDegrees(Math.acos(Math.max(-1.0D, Math.min(1.0D, args.get(0).evaluate(context).asDouble()))))));
+            case "math.atan" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.toDegrees(Math.atan(args.get(0).evaluate(context).asDouble()))));
+            case "math.atan2" -> requireArgs(name, args, 2, context -> MolangValue.of(Math.toDegrees(Math.atan2(args.get(0).evaluate(context).asDouble(), args.get(1).evaluate(context).asDouble()))));
+            case "math.exp" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.exp(args.get(0).evaluate(context).asDouble())));
+            case "math.ln" -> requireArgs(name, args, 1, context -> {
+                double value = args.get(0).evaluate(context).asDouble();
+                return MolangValue.of(value <= 0.0D ? 0.0D : Math.log(value));
+            });
             case "math.abs" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.abs(args.get(0).evaluate(context).asDouble())));
             case "math.sqrt" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.sqrt(Math.max(0.0D, args.get(0).evaluate(context).asDouble()))));
             case "math.floor" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.floor(args.get(0).evaluate(context).asDouble())));
             case "math.ceil" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.ceil(args.get(0).evaluate(context).asDouble())));
             case "math.round" -> requireArgs(name, args, 1, context -> MolangValue.of(Math.round(args.get(0).evaluate(context).asDouble())));
             case "math.trunc" -> requireArgs(name, args, 1, context -> MolangValue.of((long) args.get(0).evaluate(context).asDouble()));
+            case "math.hermite_blend" -> requireArgs(name, args, 1, context -> {
+                double t = args.get(0).evaluate(context).asDouble();
+                return MolangValue.of(3.0D * t * t - 2.0D * t * t * t);
+            });
             case "math.min" -> requireArgs(name, args, 2, context -> MolangValue.of(Math.min(args.get(0).evaluate(context).asDouble(), args.get(1).evaluate(context).asDouble())));
             case "math.max" -> requireArgs(name, args, 2, context -> MolangValue.of(Math.max(args.get(0).evaluate(context).asDouble(), args.get(1).evaluate(context).asDouble())));
             case "math.pow" -> requireArgs(name, args, 2, context -> MolangValue.of(Math.pow(args.get(0).evaluate(context).asDouble(), args.get(1).evaluate(context).asDouble())));
@@ -240,6 +324,12 @@ public final class MolangParser {
                 double end = args.get(1).evaluate(context).asDouble();
                 double delta = args.get(2).evaluate(context).asDouble();
                 return MolangValue.of(start + (end - start) * delta);
+            });
+            case "math.lerprotate" -> requireArgs(name, args, 3, context -> {
+                double start = args.get(0).evaluate(context).asDouble();
+                double end = args.get(1).evaluate(context).asDouble();
+                double delta = args.get(2).evaluate(context).asDouble();
+                return MolangValue.of(start + wrapDegrees(end - start) * delta);
             });
             case "math.random" -> requireArgs(name, args, 2, context -> {
                 double min = args.get(0).evaluate(context).asDouble();

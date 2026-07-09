@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class OpenYsmPlayerAnimationState {
     private static final Map<UUID, State> STATES = new ConcurrentHashMap<>();
     private static final Map<UUID, Map<String, Map<String, Double>>> GUI_VARIABLES = new ConcurrentHashMap<>();
+    private static final Map<UUID, Map<String, Map<String, Double>>> RUNTIME_VARIABLES = new ConcurrentHashMap<>();
 
     private OpenYsmPlayerAnimationState() {
     }
@@ -70,11 +71,15 @@ public final class OpenYsmPlayerAnimationState {
         for (Map<String, Map<String, Double>> byModel : GUI_VARIABLES.values()) {
             byModel.remove(modelId);
         }
+        for (Map<String, Map<String, Double>> byModel : RUNTIME_VARIABLES.values()) {
+            byModel.remove(modelId);
+        }
     }
 
     public static void clearAll() {
         STATES.clear();
         GUI_VARIABLES.clear();
+        RUNTIME_VARIABLES.clear();
     }
 
     public static void setGuiVariable(UUID playerId, String modelId, String variableName, double value) {
@@ -97,6 +102,21 @@ public final class OpenYsmPlayerAnimationState {
         }
         Map<String, Double> variables = byModel.get(modelId);
         return variables == null ? java.util.Collections.emptyMap() : new HashMap<>(variables);
+    }
+
+    /**
+     * Live, mutable per-player/per-model molang variable store used by animation expression
+     * assignments (e.g. a "molang" driver bone running {@code v.bv=...} each frame). Values
+     * persist across frames and are shared by every expression evaluated for the same player
+     * and model, mirroring real YSM's single {@code v.*} namespace.
+     */
+    public static Map<String, Double> getRuntimeVariables(UUID playerId, String modelId) {
+        if (playerId == null || modelId == null || modelId.isEmpty()) {
+            return null;
+        }
+        return RUNTIME_VARIABLES
+                .computeIfAbsent(playerId, ignored -> new ConcurrentHashMap<>())
+                .computeIfAbsent(modelId, ignored -> new ConcurrentHashMap<>());
     }
 
     public static final class State {

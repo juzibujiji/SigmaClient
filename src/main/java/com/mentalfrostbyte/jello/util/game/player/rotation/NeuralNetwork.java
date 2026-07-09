@@ -176,11 +176,6 @@ public class NeuralNetwork {
             outputs[i] = tanh(sum); // Changed to tanh
         }
 
-        // Log expected vs predicted for debugging
-        Client.logger.info("JelloAI Training - Expected: [" +
-                expectedOutputs[0] + ", " + expectedOutputs[1] + "], Predicted: [" +
-                outputs[0] + ", " + outputs[1] + "], Weight: " + weight);
-
         // Calculate error
         float totalError = 0;
         float[] outputErrors = new float[OUTPUT_SIZE];

@@ -34,6 +34,10 @@ public final class MolangContext {
     private final boolean anyAnimationFinished;
     private final boolean playingExtraAnimation;
     private final double controllerAnimTimeSeconds;
+    /** Live per-player/per-model variable store for expression assignments; null = read-only context. */
+    private Map<String, Double> runtimeVariables;
+    /** Context-scoped temp variables written by {@code t.x = ...} expressions. */
+    private Map<String, Double> contextTemps;
 
     private MolangContext(PlayerStateSnapshot snapshot, String modelId, String controllerName, MolangBindings bindings,
                           boolean allAnimationsFinished, boolean anyAnimationFinished,
@@ -46,6 +50,26 @@ public final class MolangContext {
         this.anyAnimationFinished = anyAnimationFinished;
         this.playingExtraAnimation = playingExtraAnimation;
         this.controllerAnimTimeSeconds = Math.max(0.0D, controllerAnimTimeSeconds);
+    }
+
+    public MolangContext withRuntimeVariables(Map<String, Double> variables) {
+        this.runtimeVariables = variables;
+        return this;
+    }
+
+    public void setVariable(boolean temp, String name, double value) {
+        if (name == null || name.isEmpty() || !Double.isFinite(value)) {
+            return;
+        }
+        String key = name.toLowerCase(Locale.ROOT);
+        if (temp) {
+            if (this.contextTemps == null) {
+                this.contextTemps = new java.util.HashMap<>();
+            }
+            this.contextTemps.put(key, value);
+        } else if (this.runtimeVariables != null) {
+            this.runtimeVariables.put(key, value);
+        }
     }
 
     public static MolangContext controller(PlayerStateSnapshot snapshot, String modelId, String controllerName) {
@@ -98,6 +122,12 @@ public final class MolangContext {
         if (key.startsWith("variable.") || key.startsWith("v.")) {
             int prefixLength = key.startsWith("variable.") ? "variable.".length() : "v.".length();
             String name = key.substring(prefixLength);
+            if (this.runtimeVariables != null) {
+                Double runtimeValue = this.runtimeVariables.get(name);
+                if (runtimeValue != null) {
+                    return MolangValue.of(runtimeValue);
+                }
+            }
             if (!this.bindings.hasVariable(name)) {
                 debugUnknown("variable", name);
             }
@@ -106,6 +136,12 @@ public final class MolangContext {
         if (key.startsWith("temp.") || key.startsWith("t.")) {
             int prefixLength = key.startsWith("temp.") ? "temp.".length() : "t.".length();
             String name = key.substring(prefixLength);
+            if (this.contextTemps != null) {
+                Double tempValue = this.contextTemps.get(name);
+                if (tempValue != null) {
+                    return MolangValue.of(tempValue);
+                }
+            }
             if (!this.bindings.hasTemp(name)) {
                 debugUnknown("temp", name);
             }
@@ -324,8 +360,13 @@ public final class MolangContext {
             case "moon_phase" -> this.snapshot.world == null ? 0.0D : this.snapshot.world.getMoonPhase();
             case "delta_time" -> 1.0D / 20.0D;
             case "is_first_person" -> isFirstPerson() ? 1.0D : 0.0D;
-            case "modified_move_speed" -> Math.abs(this.snapshot.limbSwingAmount);
-            case "ground_speed" -> Math.abs(this.snapshot.limbSwingAmount);
+            // Feed the second-order spring the raw per-tick horizontal velocity (blocks/sec), like
+            // the reference's 20*|deltaMovement.xz|. limbSwingAmount is vanilla-pre-smoothed and
+            // 0..1-scaled, so it never delivers the sharp step the spring needs to overshoot/trail
+            // (skirt swung forward with no backward inertia). deltaX/Z are pos-prevPos per tick.
+            case "modified_move_speed", "ground_speed" -> 20.0D * Math.sqrt(
+                    this.snapshot.deltaX * this.snapshot.deltaX + this.snapshot.deltaZ * this.snapshot.deltaZ);
+            case "vertical_speed" -> 20.0D * this.snapshot.deltaY;
             case "cardinal_facing_2d" -> this.snapshot.cardinalFacing2d;
             case "is_on_ground" -> this.snapshot.onGround ? 1.0D : 0.0D;
             case "is_sneaking" -> this.snapshot.sneaking ? 1.0D : 0.0D;

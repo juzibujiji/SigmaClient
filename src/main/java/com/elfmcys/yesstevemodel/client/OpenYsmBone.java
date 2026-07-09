@@ -194,6 +194,13 @@ public final class OpenYsmBone {
             this.parent.translateRotateChain(matrixStackIn);
         }
         this.renderer.translateRotate(matrixStackIn);
+        // The GeoBone render path (GeoRenderer.translateRotateScale) applies per-bone scale, but
+        // vanilla ModelRenderer.translateRotate does not. Held-item locators walk THIS chain, so
+        // without matching the scale a scaled ancestor (idle breathing / limb scale) moves the
+        // rendered hand while the item stays put -> item floats off the hand. Mirror the guard.
+        if (this.scaleX != 1.0F || this.scaleY != 1.0F || this.scaleZ != 1.0F) {
+            matrixStackIn.scale(this.scaleX, this.scaleY, this.scaleZ);
+        }
     }
 
     private void syncGeoBonePose() {

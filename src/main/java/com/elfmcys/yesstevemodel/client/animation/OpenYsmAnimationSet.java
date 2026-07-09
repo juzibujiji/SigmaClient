@@ -42,6 +42,7 @@ public final class OpenYsmAnimationSet {
     private static final int MAX_EVENTS_PER_CLIP = 256;
     private static final int MAX_EVENT_TEXT_LENGTH = 512;
     private static final int MAX_BLEND_WEIGHT_EXPRESSION_LENGTH = 256;
+    private static final int MAX_KEYFRAME_EXPRESSION_LENGTH = 512;
     private static final int MAX_FUNCTION_CONTROLLER_SCRIPT_LENGTH = 8192;
     private static final int MAX_FUNCTION_CONTROLLER_ANIMATIONS = 64;
     private static final Pattern SET_ANIMATION_PATTERN = Pattern.compile(
@@ -295,14 +296,18 @@ public final class OpenYsmAnimationSet {
         Set<String> mainTouched = new LinkedHashSet<>();
         Set<String> conditionalTouched = new LinkedHashSet<>();
         for (Clip clip : this.clips.values()) {
-            if (clip.sourceType == AnimationSourceType.MAIN && !clip.isGuiPreviewAction) {
+            if (clip.isMainState && !clip.isGuiPreviewAction) {
+                // Only real selectable main states (idle/walk/run/sneak/...) prove a bone is
+                // part of the always-visible body. The main animation file also carries
+                // author config/organizational animations ('gui', part-toggle or art-frame
+                // clips) that never auto-play; bones only they touch must stay hidden.
                 mainTouched.addAll(clip.touchedBones);
-            } else if (clip.sourceType == AnimationSourceType.ARM
-                    || clip.sourceType == AnimationSourceType.EXTRA
-                    || clip.sourceType == AnimationSourceType.CUSTOM
-                    || clip.sourceType == AnimationSourceType.CONTROLLER_REFERENCED
-                    || clip.sourceType == AnimationSourceType.GUI_PREVIEW
-                    || clip.isControllerReferenced) {
+            } else if (isBuiltinParallelName(clip.name)) {
+                // Always-on parallel clips run every frame with weight 1; treating them as
+                // visibility proof keeps e.g. physics-driven hair bones visible, matching
+                // OpenYSM where bones are visible unless actively hidden.
+                mainTouched.addAll(clip.touchedBones);
+            } else {
                 conditionalTouched.addAll(clip.touchedBones);
             }
         }
@@ -391,9 +396,27 @@ public final class OpenYsmAnimationSet {
                 ? null
                 : selectMainState(snapshot);
         if (main != null) {
-            active.mainStateClip = main;
-            active.setTime(main, elapsedSeconds);
-            active.setWeight(main, evaluateClipBlendWeight(main, snapshot));
+            if (context == AnimationRenderContext.GAME) {
+                // Per-state timing + short cross-fade: PLAY_ONCE states (jump/climb) sample from
+                // their own start, and flickery state switches blend instead of snapping.
+                OpenYsmMainStateRuntime.Result blend = OpenYsmMainStateRuntime.advance(snapshot.uuid, this.modelId,
+                        main.name, snapshot.ageInTicks);
+                active.mainStateClip = main;
+                active.setTime(main, blend.currentElapsedSeconds);
+                active.setWeight(main, evaluateClipBlendWeight(main, snapshot) * blend.currentWeight);
+                if (blend.previousName != null && blend.previousWeight > 0.0F) {
+                    Clip previous = findMainClip(blend.previousName);
+                    if (previous != null && previous != main) {
+                        active.addControllerClip(previous, ControllerLayer.MAIN, blend.previousElapsedSeconds,
+                                evaluateClipBlendWeight(previous, snapshot) * blend.previousWeight,
+                                "builtin.main_state_blend", blend.previousName);
+                    }
+                }
+            } else {
+                active.mainStateClip = main;
+                active.setTime(main, elapsedSeconds);
+                active.setWeight(main, evaluateClipBlendWeight(main, snapshot));
+            }
         }
 
         for (Clip hand : selectHandClips(snapshot)) {
@@ -402,6 +425,8 @@ public final class OpenYsmAnimationSet {
             active.setWeight(hand, evaluateClipBlendWeight(hand, snapshot));
         }
 
+        String activeExtraName = null;
+        float activeExtraElapsed = 0.0F;
         if (extraState != null && this.modelId.equals(extraState.getModelId())) {
             Clip extra = this.clips.get(extraState.getAnimationName());
             if (extra != null && isWheelVisible(extra)) {
@@ -413,6 +438,25 @@ public final class OpenYsmAnimationSet {
                     active.actionSource = extraState.getSource();
                     active.setTime(extra, elapsed);
                     active.setWeight(extra, evaluateClipBlendWeight(extra, snapshot));
+                    activeExtraName = extra.name;
+                    activeExtraElapsed = elapsed;
+                }
+            }
+        }
+        // Blend an ended/stopped extra action OUT over a short window instead of hard-cutting to
+        // idle. Only in GAME context (mirrors the main-state cross-fade guard) so the tracker is
+        // advanced from exactly one context per frame. The fading clip is sampled frozen at its
+        // stop frame (LoopMode.time clamps PLAY_ONCE to length) at a decaying weight, over the main
+        // state which sits underneath at full weight.
+        if (context == AnimationRenderContext.GAME) {
+            OpenYsmExtraActionRuntime.FadeOut fadeOut = OpenYsmExtraActionRuntime.advance(
+                    snapshot.uuid, this.modelId, activeExtraName, activeExtraElapsed, snapshot.ageInTicks);
+            if (activeExtraName == null && fadeOut != null) {
+                Clip fading = this.clips.get(fadeOut.name);
+                if (fading != null && isWheelVisible(fading)) {
+                    active.extraActionClip = Optional.of(fading);
+                    active.setTime(fading, fadeOut.freezeElapsedSeconds);
+                    active.setWeight(fading, evaluateClipBlendWeight(fading, snapshot) * fadeOut.weight);
                 }
             }
         }
@@ -485,12 +529,23 @@ public final class OpenYsmAnimationSet {
     }
 
     public void apply(Map<String, OpenYsmBone> bones, ActiveAnimationSet active, float partialTicks) {
+        apply(bones, active, partialTicks, null);
+    }
+
+    public void apply(Map<String, OpenYsmBone> bones, ActiveAnimationSet active, float partialTicks,
+                      PlayerStateSnapshot snapshot) {
         if (bones == null || active == null) {
             return;
         }
 
         try (AutoCloseable ignored = MolangContext.pushBones(bones)) {
             for (ActiveAnimationSet.ActiveClip activeClip : active.activeClipsInOrder()) {
+                // A clip whose blend/controller weight evaluated to 0 is inactive this frame:
+                // it must not un-hide condition-driven (default-hidden) bones it touches,
+                // otherwise sub-models appear before their condition is met.
+                if (activeClip.getWeight() <= 0.0F) {
+                    continue;
+                }
                 for (String boneName : activeClip.getClip().touchedBones) {
                     OpenYsmBone bone = bones.get(boneName);
                     if (bone != null) {
@@ -499,8 +554,32 @@ public final class OpenYsmAnimationSet {
                 }
             }
 
+            // Weighted-BLEND same-bone rotation/position across all simultaneous clips instead of a
+            // raw additive sum. The reference blends by weight within/across controllers (fma of
+            // blendWeight, never a magnitude sum); our old additive path doubled the rotation of any
+            // bone touched by 2+ active clips -> forearm over-rotated past its joint and folded, and
+            // long hair/skirt chains touched by several always-on parallels compounded inward down
+            // the chain. Single-contributor bones (rest/walk) are unchanged (sum(w)=w -> delta).
+            // Scale stays multiplicative and is applied directly inside applyClip.
+            Map<OpenYsmBone, float[]> rotAccum = new java.util.IdentityHashMap<>(); // [wx, wy, wz, totalW]
+            Map<OpenYsmBone, float[]> posAccum = new java.util.IdentityHashMap<>(); // [wx, wy, wz, totalW]
             for (ActiveAnimationSet.ActiveClip activeClip : active.activeClipsInOrder()) {
-                applyClip(bones, activeClip.getClip(), activeClip.getTimeSeconds(), activeClip.getWeight());
+                applyClip(bones, activeClip.getClip(), activeClip.getTimeSeconds(), activeClip.getWeight(),
+                        snapshot, rotAccum, posAccum);
+            }
+            for (Map.Entry<OpenYsmBone, float[]> entry : rotAccum.entrySet()) {
+                float totalWeight = entry.getValue()[3];
+                if (totalWeight > 0.0F) {
+                    entry.getKey().addRotation(entry.getValue()[0] / totalWeight,
+                            entry.getValue()[1] / totalWeight, entry.getValue()[2] / totalWeight);
+                }
+            }
+            for (Map.Entry<OpenYsmBone, float[]> entry : posAccum.entrySet()) {
+                float totalWeight = entry.getValue()[3];
+                if (totalWeight > 0.0F) {
+                    entry.getKey().addPosition(entry.getValue()[0] / totalWeight,
+                            entry.getValue()[1] / totalWeight, entry.getValue()[2] / totalWeight);
+                }
             }
         } catch (Exception exception) {
             if (isDebugEnabled()) {
@@ -695,9 +774,9 @@ public final class OpenYsmAnimationSet {
             return;
         }
         if (channel.isJsonPrimitive() || channel.isJsonArray() || isSingleKeyframeObject(channel)) {
-            float[] vector = vectorFromJson(channel, defaultValue);
+            ChannelVector vector = channelVectorFromJson(channel, defaultValue);
             if (vector != null) {
-                out.add(new Keyframe(0.0F, vector));
+                out.add(new Keyframe(0.0F, vector.values, vector.expressions, vector.values, vector.expressions, 0));
             }
             return;
         }
@@ -710,9 +789,9 @@ public final class OpenYsmAnimationSet {
             if (timestamp == null) {
                 continue;
             }
-            float[] vector = vectorFromJson(entry.getValue(), defaultValue);
+            ChannelVector vector = channelVectorFromJson(entry.getValue(), defaultValue);
             if (vector != null) {
-                out.add(new Keyframe(timestamp, vector));
+                out.add(new Keyframe(timestamp, vector.values, vector.expressions, vector.values, vector.expressions, 0));
             }
         }
         out.sort(Comparator.comparingDouble(frame -> frame.timestamp));
@@ -723,8 +802,8 @@ public final class OpenYsmAnimationSet {
             return;
         }
         for (RawYsmModel.RawKeyframe frame : channel) {
-            float[] post = vectorFromObjects(frame.postData, defaultValue);
-            float[] pre = frame.hasPreData ? vectorFromObjects(frame.preData, defaultValue) : post;
+            ChannelVector post = channelVectorFromObjects(frame.postData, defaultValue);
+            ChannelVector pre = frame.hasPreData ? channelVectorFromObjects(frame.preData, defaultValue) : post;
             if (post == null) {
                 post = pre;
             }
@@ -732,7 +811,8 @@ public final class OpenYsmAnimationSet {
                 pre = post;
             }
             if (post != null) {
-                out.add(new Keyframe(frame.timestamp, pre, post, frame.interpolationMode));
+                out.add(new Keyframe(frame.timestamp, pre.values, pre.expressions,
+                        post.values, post.expressions, frame.interpolationMode));
             }
         }
         out.sort(Comparator.comparingDouble(frame -> frame.timestamp));
@@ -1541,22 +1621,14 @@ public final class OpenYsmAnimationSet {
     }
 
     private Clip selectMainState(PlayerStateSnapshot snapshot) {
-        String preferred;
-        if (snapshot.sneaking) {
-            preferred = snapshot.isMoving() ? "sneak" : "sneaking";
-        } else if (snapshot.sprinting && snapshot.isMoving()) {
-            preferred = "run";
-        } else if (snapshot.isMoving()) {
-            preferred = "walk";
-        } else {
-            preferred = "idle";
-        }
-        Clip clip = findMainClip(preferred);
-        if (clip != null) {
-            return clip;
+        for (String preferred : preferredMainStates(snapshot)) {
+            Clip clip = findMainClip(preferred);
+            if (clip != null) {
+                return clip;
+            }
         }
         for (String fallback : MAIN_STATE_PRIORITY) {
-            clip = findMainClip(fallback);
+            Clip clip = findMainClip(fallback);
             if (clip != null) {
                 return clip;
             }
@@ -1564,9 +1636,83 @@ public final class OpenYsmAnimationSet {
         return null;
     }
 
+    /**
+     * Candidate main-state names in priority order, mirroring real YSM's controller layering:
+     * death > sleep > riding (boat/pig/mount/seat) > elytra > swim > tread water > climb >
+     * creative flight > jump > sneak > run > walk > idle. Each candidate falls through to the
+     * next when the model does not ship that animation.
+     */
+    private static List<String> preferredMainStates(PlayerStateSnapshot snapshot) {
+        List<String> preferred = new ArrayList<>(4);
+        if (snapshot.dead) {
+            preferred.add("death");
+        }
+        if (snapshot.sleeping) {
+            preferred.add("sleep");
+        }
+        if (snapshot.riding) {
+            if (snapshot.ridingBoat) {
+                preferred.add("boat");
+            } else if (snapshot.ridingPig) {
+                preferred.add("ride_pig");
+            }
+            preferred.add(snapshot.ridingLiving ? "ride" : "sit");
+            preferred.add(snapshot.ridingLiving ? "sit" : "ride");
+        }
+        if (snapshot.elytraFlying) {
+            preferred.add("elytra_fly");
+        }
+        if (snapshot.swimming) {
+            preferred.add("swim");
+        } else if (snapshot.inWater && !snapshot.onGround) {
+            preferred.add("swim_stand");
+            preferred.add("swim");
+        }
+        if (snapshot.climbing && !snapshot.onGround) {
+            preferred.add("climbing");
+            preferred.add("climb");
+        }
+        if (snapshot.creativeFlying && !snapshot.onGround) {
+            preferred.add("fly");
+        }
+        if (snapshot.sneaking) {
+            preferred.add(snapshot.isMoving() ? "sneak" : "sneaking");
+        } else if (!snapshot.onGround && !snapshot.inWater && snapshot.deltaY > 0.01D) {
+            preferred.add("jump");
+        }
+        if (snapshot.sprinting && snapshot.isMoving()) {
+            preferred.add("run");
+        }
+        if (snapshot.isMoving()) {
+            preferred.add("walk");
+        }
+        preferred.add("idle");
+        return preferred;
+    }
+
     private Clip findMainClip(String name) {
         Clip clip = this.clips.get(name);
         return clip != null && clip.sourceType == AnimationSourceType.MAIN ? clip : null;
+    }
+
+    /**
+     * Whether this model drives its main body/limb motion itself, either through
+     * main-state clips (idle/walk/run/...) or through a MAIN-layer animation controller.
+     * YSM models drive limbs entirely through these; the vanilla biped pose copy
+     * is only a fallback for models without them.
+     */
+    public boolean hasMainStateAnimations() {
+        for (Clip clip : this.clips.values()) {
+            if (clip.isMainState) {
+                return true;
+            }
+        }
+        for (ControllerDefinition definition : this.controllerDefinitions.values()) {
+            if (definition.getLayer().replacesHardcodedMain()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<Clip> selectHandClips(PlayerStateSnapshot snapshot) {
@@ -1634,7 +1780,9 @@ public final class OpenYsmAnimationSet {
                     : OpenYsmPlayerAnimationState.getGuiVariables(snapshot.uuid, this.modelId);
             MolangBindings bindings = new MolangBindings(variables, Collections.emptyMap());
             MolangContext context = MolangContext.controller(snapshot, this.modelId, "blend_weight", bindings,
-                    false, false);
+                    false, false)
+                    .withRuntimeVariables(snapshot == null ? null
+                            : OpenYsmPlayerAnimationState.getRuntimeVariables(snapshot.uuid, this.modelId));
             double value = MolangEvaluator.evaluate(parsed, context).asDouble();
             return Double.isFinite(value) ? Math.max(0.0F, (float)value) : 0.0F;
         } catch (Exception exception) {
@@ -1666,27 +1814,44 @@ public final class OpenYsmAnimationSet {
         return null;
     }
 
-    private void applyClip(Map<String, OpenYsmBone> bones, Clip clip, float elapsedSeconds, float weight) {
+    private void applyClip(Map<String, OpenYsmBone> bones, Clip clip, float elapsedSeconds, float weight,
+                           PlayerStateSnapshot snapshot,
+                           Map<OpenYsmBone, float[]> rotAccum, Map<OpenYsmBone, float[]> posAccum) {
         if (weight <= 0.0F) {
             return;
         }
         float sampleTime = clip.loopMode.time(elapsedSeconds, clip.length);
+        MolangContext keyframeContext = keyframeContext(clip, snapshot, sampleTime);
         for (Map.Entry<String, BoneTrack> entry : clip.boneTracks.entrySet()) {
             OpenYsmBone bone = bones.get(entry.getKey());
             if (bone == null) {
                 continue;
             }
             BoneTrack track = entry.getValue();
-            float[] rotation = sample(track.rotation, sampleTime);
+            float[] rotation = sample(track.rotation, sampleTime, keyframeContext);
             if (rotation != null) {
-                bone.addRotation(-rotation[0] * DEG_TO_RAD * weight, -rotation[1] * DEG_TO_RAD * weight,
-                        rotation[2] * DEG_TO_RAD * weight);
+                // Keyframe rotations are raw bedrock degrees. Our render (vanilla model) space
+                // differs from bedrock by the 24-y pivot flip diag(1,-1,1), an improper transform
+                // mapping bedrock (bx,by,bz) -> (-bx,+by,-bz). X and Y net to positive here (the
+                // extra base-pose X/Y negation cancels against the flip for the near-zero base),
+                // while Z must be negated to stay in the same convention as the base rotation
+                // (see bakeYsmBone). Accumulate weighted (not summed) — divided by total weight in
+                // apply() so 2+ clips blend instead of over-rotating the bone.
+                float[] accumulator = rotAccum.computeIfAbsent(bone, ignored -> new float[4]);
+                accumulator[0] += rotation[0] * DEG_TO_RAD * weight;
+                accumulator[1] += rotation[1] * DEG_TO_RAD * weight;
+                accumulator[2] += -rotation[2] * DEG_TO_RAD * weight;
+                accumulator[3] += weight;
             }
-            float[] position = sample(track.position, sampleTime);
+            float[] position = sample(track.position, sampleTime, keyframeContext);
             if (position != null) {
-                bone.addPosition(position[0] * weight, -position[1] * weight, position[2] * weight);
+                float[] accumulator = posAccum.computeIfAbsent(bone, ignored -> new float[4]);
+                accumulator[0] += position[0] * weight;
+                accumulator[1] += -position[1] * weight;
+                accumulator[2] += position[2] * weight;
+                accumulator[3] += weight;
             }
-            float[] scale = sample(track.scale, sampleTime);
+            float[] scale = sample(track.scale, sampleTime, keyframeContext);
             if (scale != null) {
                 bone.setScale(1.0F + (scale[0] - 1.0F) * weight,
                         1.0F + (scale[1] - 1.0F) * weight,
@@ -1695,12 +1860,28 @@ public final class OpenYsmAnimationSet {
         }
     }
 
-    private float[] sample(List<Keyframe> frames, float time) {
+    /**
+     * Evaluation context for molang expression keyframes: exposes query.anim_time as the clip's
+     * looped sample time plus the player snapshot queries and this player's GUI variables
+     * (part-toggle / expression config forms write those).
+     */
+    private MolangContext keyframeContext(Clip clip, PlayerStateSnapshot snapshot, float sampleTime) {
+        if (snapshot == null) {
+            return null;
+        }
+        Map<String, Double> variables = OpenYsmPlayerAnimationState.getGuiVariables(snapshot.uuid, this.modelId);
+        MolangBindings bindings = new MolangBindings(variables, Collections.emptyMap());
+        return MolangContext.controller(snapshot, this.modelId, clip.name, bindings, false, false, false, sampleTime)
+                .withRuntimeVariables(OpenYsmPlayerAnimationState.getRuntimeVariables(snapshot.uuid, this.modelId));
+    }
+
+    private float[] sample(List<Keyframe> frames, float time, MolangContext context) {
         if (frames.isEmpty()) {
             return null;
         }
         if (frames.size() == 1 || time <= frames.get(0).timestamp) {
-            return frames.get(0).postValues;
+            Keyframe first = frames.get(0);
+            return resolveKeyframeValues(first.postValues, first.postExpressions, context);
         }
         Keyframe previous = frames.get(0);
         for (int i = 1; i < frames.size(); i++) {
@@ -1711,13 +1892,40 @@ public final class OpenYsmAnimationSet {
                 if (previous.interpolationMode == 1 || next.interpolationMode == 1) {
                     Keyframe before = i > 1 ? frames.get(i - 2) : previous;
                     Keyframe after = i + 1 < frames.size() ? frames.get(i + 1) : next;
-                    return catmullRom(before.postValues, previous.postValues, next.preValues, after.preValues, alpha);
+                    return catmullRom(resolveKeyframeValues(before.postValues, before.postExpressions, context),
+                            resolveKeyframeValues(previous.postValues, previous.postExpressions, context),
+                            resolveKeyframeValues(next.preValues, next.preExpressions, context),
+                            resolveKeyframeValues(after.preValues, after.preExpressions, context), alpha);
                 }
-                return lerp(previous.postValues, next.preValues, alpha);
+                return lerp(resolveKeyframeValues(previous.postValues, previous.postExpressions, context),
+                        resolveKeyframeValues(next.preValues, next.preExpressions, context), alpha);
             }
             previous = next;
         }
-        return frames.get(frames.size() - 1).postValues;
+        Keyframe last = frames.get(frames.size() - 1);
+        return resolveKeyframeValues(last.postValues, last.postExpressions, context);
+    }
+
+    private static float[] resolveKeyframeValues(float[] values, MolangExpression[] expressions, MolangContext context) {
+        if (expressions == null || context == null) {
+            return values;
+        }
+        float[] resolved = new float[]{values[0], values[1], values[2]};
+        for (int i = 0; i < 3; i++) {
+            MolangExpression expression = expressions[i];
+            if (expression == null) {
+                continue;
+            }
+            try {
+                double value = MolangEvaluator.evaluate(expression, context).asDouble();
+                if (Double.isFinite(value)) {
+                    resolved[i] = (float) value;
+                }
+            } catch (Exception ignored) {
+                // keep the numeric fallback for this component
+            }
+        }
+        return resolved;
     }
 
     private static float[] lerp(float[] a, float[] b, float alpha) {
@@ -1802,8 +2010,34 @@ public final class OpenYsmAnimationSet {
         String lower = name.toLowerCase(Locale.ROOT);
         return lower.equals("idle") || lower.equals("walk") || lower.equals("run")
                 || lower.equals("sneak") || lower.equals("sneaking") || lower.equals("swim")
-                || lower.equals("swimming") || lower.equals("fly") || lower.equals("flying")
-                || lower.equals("jump") || lower.equals("fall") || lower.equals("sleep");
+                || lower.equals("swimming") || lower.equals("swim_stand") || lower.equals("fly")
+                || lower.equals("flying") || lower.equals("jump") || lower.equals("fall")
+                || lower.equals("sleep") || lower.equals("death") || lower.equals("elytra_fly")
+                || lower.equals("climb") || lower.equals("climbing") || lower.equals("boat")
+                || lower.equals("ride") || lower.equals("ride_pig") || lower.equals("sit");
+    }
+
+    /**
+     * Names of the always-on clips scheduled by {@code addBuiltinAlwaysOnClips}:
+     * pre_parallel0-7 / parallel0-7 and the legacy Hair_Physics alias.
+     */
+    private static boolean isBuiltinParallelName(String name) {
+        String lower = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        if (lower.equals("hair_physics")) {
+            return true;
+        }
+        String digits = lower.startsWith("pre_parallel") ? lower.substring("pre_parallel".length())
+                : lower.startsWith("parallel") ? lower.substring("parallel".length())
+                : null;
+        if (digits == null || digits.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < digits.length(); i++) {
+            if (!Character.isDigit(digits.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isHandConditionName(String name) {
@@ -1899,6 +2133,137 @@ public final class OpenYsmAnimationSet {
             vector[i] = ((Number) value).floatValue();
         }
         return vector;
+    }
+
+    /** Numeric values plus optional per-component molang expressions for one keyframe vector. */
+    private static final class ChannelVector {
+        final float[] values;
+        final MolangExpression[] expressions;
+
+        ChannelVector(float[] values, MolangExpression[] expressions) {
+            this.values = values;
+            this.expressions = expressions;
+        }
+    }
+
+    private static ChannelVector channelVectorFromObjects(Object[] values, float defaultValue) {
+        if (values == null || values.length == 0) {
+            return null;
+        }
+        float[] vector = new float[]{defaultValue, defaultValue, defaultValue};
+        MolangExpression[] expressions = null;
+        boolean anyComponent = false;
+        for (int i = 0; i < 3 && i < values.length; i++) {
+            Object value = values[i];
+            if (value instanceof Number) {
+                vector[i] = ((Number) value).floatValue();
+                anyComponent = true;
+            } else if (value instanceof String) {
+                MolangExpression parsed = parseKeyframeExpression((String) value, vector, i);
+                if (parsed != null) {
+                    if (expressions == null) {
+                        expressions = new MolangExpression[3];
+                    }
+                    expressions[i] = parsed;
+                }
+                anyComponent = true;
+            }
+        }
+        return anyComponent ? new ChannelVector(vector, expressions) : null;
+    }
+
+    private static ChannelVector channelVectorFromJson(JsonElement element, float defaultValue) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        try {
+            if (element.isJsonPrimitive()) {
+                JsonPrimitive primitive = element.getAsJsonPrimitive();
+                if (primitive.isNumber()) {
+                    float value = primitive.getAsFloat();
+                    return new ChannelVector(new float[]{value, value, value}, null);
+                }
+                if (primitive.isString()) {
+                    float[] vector = new float[]{defaultValue, defaultValue, defaultValue};
+                    MolangExpression parsed = parseKeyframeExpression(primitive.getAsString(), vector, 0);
+                    if (parsed == null) {
+                        // Numeric string was folded into vector[0]; broadcast it like a plain number.
+                        return new ChannelVector(new float[]{vector[0], vector[0], vector[0]}, null);
+                    }
+                    return new ChannelVector(vector, new MolangExpression[]{parsed, parsed, parsed});
+                }
+                return null;
+            }
+            if (element.isJsonArray()) {
+                JsonArray array = element.getAsJsonArray();
+                float[] vector = new float[]{defaultValue, defaultValue, defaultValue};
+                MolangExpression[] expressions = null;
+                for (int i = 0; i < 3 && i < array.size(); i++) {
+                    JsonElement value = array.get(i);
+                    if (!value.isJsonPrimitive()) {
+                        return null;
+                    }
+                    JsonPrimitive primitive = value.getAsJsonPrimitive();
+                    if (primitive.isNumber()) {
+                        vector[i] = primitive.getAsFloat();
+                    } else if (primitive.isString()) {
+                        MolangExpression parsed = parseKeyframeExpression(primitive.getAsString(), vector, i);
+                        if (parsed != null) {
+                            if (expressions == null) {
+                                expressions = new MolangExpression[3];
+                            }
+                            expressions[i] = parsed;
+                        }
+                    } else {
+                        return null;
+                    }
+                }
+                return new ChannelVector(vector, expressions);
+            }
+            if (element.isJsonObject()) {
+                JsonObject object = element.getAsJsonObject();
+                if (object.has("post")) {
+                    return channelVectorFromJson(object.get("post"), defaultValue);
+                }
+                if (object.has("pre")) {
+                    return channelVectorFromJson(object.get("pre"), defaultValue);
+                }
+                if (object.has("vector")) {
+                    return channelVectorFromJson(object.get("vector"), defaultValue);
+                }
+            }
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * Parses one keyframe component. Plain numeric strings are folded into {@code vector[index]}
+     * and null is returned; molang strings return the parsed expression (vector keeps the default
+     * as fallback for evaluation failures). Unparseable strings keep the default silently — this
+     * matches real YSM where a broken expression contributes nothing.
+     */
+    private static MolangExpression parseKeyframeExpression(String text, float[] vector, int index) {
+        String trimmed = text == null ? "" : text.trim();
+        if (trimmed.isEmpty() || trimmed.length() > MAX_KEYFRAME_EXPRESSION_LENGTH) {
+            return null;
+        }
+        try {
+            vector[index] = Float.parseFloat(trimmed);
+            return null;
+        } catch (NumberFormatException ignored) {
+            // fall through to molang parsing
+        }
+        try {
+            return MolangParser.parse(trimmed);
+        } catch (MolangParser.ParseException exception) {
+            if (isDebugEnabled()) {
+                YesSteveModel.LOGGER.info("[DEBUG-animation-state] keyframe expression parse failed expression={} reason={}",
+                        trimmed, exception.getMessage());
+            }
+            return null;
+        }
     }
 
     private static Float parseTimestamp(String key) {
@@ -2190,16 +2555,26 @@ public final class OpenYsmAnimationSet {
         public final float timestamp;
         public final float[] preValues;
         public final float[] postValues;
+        /** Per-component molang expressions; null array or null entry = use the numeric value. */
+        public final MolangExpression[] preExpressions;
+        public final MolangExpression[] postExpressions;
         public final int interpolationMode;
 
         private Keyframe(float timestamp, float[] values) {
-            this(timestamp, values, values, 0);
+            this(timestamp, values, null, values, null, 0);
         }
 
         private Keyframe(float timestamp, float[] preValues, float[] postValues, int interpolationMode) {
+            this(timestamp, preValues, null, postValues, null, interpolationMode);
+        }
+
+        private Keyframe(float timestamp, float[] preValues, MolangExpression[] preExpressions,
+                         float[] postValues, MolangExpression[] postExpressions, int interpolationMode) {
             this.timestamp = timestamp;
             this.preValues = preValues == null ? postValues : preValues;
             this.postValues = postValues == null ? preValues : postValues;
+            this.preExpressions = preValues == null ? postExpressions : preExpressions;
+            this.postExpressions = postValues == null ? preExpressions : postExpressions;
             this.interpolationMode = interpolationMode;
         }
     }

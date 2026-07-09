@@ -34,6 +34,11 @@ public class JelloAI {
     // Rotation speed constants and limits
     public static final float BASE_MAX_YAW_CHANGE = 30.0f;
     public static final float BASE_MAX_PITCH_CHANGE = 15.0f;
+
+    // Max deviation the network may add on top of the analytic aim direction.
+    // Keeps aim on target even while the network is untrained.
+    private static final float MAX_AI_YAW_OFFSET = 5.0f;
+    private static final float MAX_AI_PITCH_OFFSET = 3.0f;
     private static float currentMaxYawChange = BASE_MAX_YAW_CHANGE;
     private static float currentMaxPitchChange = BASE_MAX_PITCH_CHANGE;
 
@@ -41,6 +46,7 @@ public class JelloAI {
     private static final float[] cachedInputs = new float[NeuralNetwork.INPUT_SIZE];
     private static final float[] cachedNormalized = new float[2];
     private static final float[] cachedIdealRotation = new float[2];
+    private static final float[] cachedBlended = new float[2];
 
     // Human-like noise config
     private static boolean enableNoise = true;
@@ -118,20 +124,42 @@ public class JelloAI {
     public static float[] getRotationsToPosition(double x, double y, double z) {
         if (mc.player == null) return new float[2];
 
-        // Fill inputs using the static cached array
+        // Analytic aim is the backbone; the network only nudges it
+        calculateIdealRotations(x, y, z, cachedIdealRotation);
         fillPositionInputs(x, y, z, cachedInputs);
+        float[] blended = blendWithPrediction(cachedIdealRotation[0], cachedIdealRotation[1], cachedInputs);
 
-        // Predict rotations
-        float[] rotations = neuralNetwork.predict(cachedInputs);
-        if (rotations == null || rotations.length < 2) {
-            return new float[2];
+        return new float[] {blended[0], blended[1]};
+    }
+
+    /**
+     * Blend the analytic ideal rotation with the network prediction.
+     * The network contribution is clamped to a few degrees and scaled by its
+     * confidence, so an untrained (or badly trained) network can never pull
+     * the aim off the target.
+     */
+    private static float[] blendWithPrediction(float idealYaw, float idealPitch, float[] inputs) {
+        float yawDegrees = MathHelper.wrapDegrees(idealYaw);
+        float pitchDegrees = MathHelper.clamp(idealPitch, -90f, 90f);
+
+        float[] rotations = neuralNetwork.predict(inputs);
+        if (rotations != null && rotations.length >= 2) {
+            float nnYaw = MathHelper.wrapDegrees(rotations[0] * 180f);
+            float nnPitch = MathHelper.clamp(rotations[1] * 90f, -90f, 90f);
+
+            float confidence = neuralNetwork.getConfidence();
+            float yawOffset = MathHelper.clamp(MathHelper.wrapDegrees(nnYaw - yawDegrees),
+                    -MAX_AI_YAW_OFFSET, MAX_AI_YAW_OFFSET) * confidence;
+            float pitchOffset = MathHelper.clamp(nnPitch - pitchDegrees,
+                    -MAX_AI_PITCH_OFFSET, MAX_AI_PITCH_OFFSET) * confidence;
+
+            yawDegrees = MathHelper.wrapDegrees(yawDegrees + yawOffset);
+            pitchDegrees = MathHelper.clamp(pitchDegrees + pitchOffset, -90f, 90f);
         }
 
-        // Convert normalized rotations to game angles
-        float yawDegrees = MathHelper.wrapDegrees(rotations[0] * 180f);
-        float pitchDegrees = MathHelper.clamp(rotations[1] * 90f, -90f, 90f);
-
-        return new float[] {yawDegrees, pitchDegrees};
+        cachedBlended[0] = yawDegrees;
+        cachedBlended[1] = pitchDegrees;
+        return cachedBlended;
     }
 
     /**
@@ -152,16 +180,13 @@ public class JelloAI {
         // 2. Fill inputs in the static cached array
         fillBlockInputs(pos, cachedInputs);
 
-        // Predict target rotations
-        float[] rotations = neuralNetwork.predict(cachedInputs);
-        if (rotations == null || rotations.length < 2) {
-            return;
-        }
+        // 3. Analytic aim blended with the network's small learned deviation
+        calculateIdealBlockRotations(pos, cachedIdealRotation);
+        float[] blended = blendWithPrediction(cachedIdealRotation[0], cachedIdealRotation[1], cachedInputs);
+        float yawDegrees = blended[0];
+        float pitchDegrees = blended[1];
 
-        float yawDegrees = MathHelper.wrapDegrees(rotations[0] * 180f);
-        float pitchDegrees = MathHelper.clamp(rotations[1] * 90f, -90f, 90f);
-
-        // 3. Noise injection
+        // 4. Noise injection
         if (enableNoise) {
             float noiseYaw = (float) ((Math.random() - 0.5) * 1.5);
             float noisePitch = (float) ((Math.random() - 0.5) * 1.0);
@@ -169,12 +194,11 @@ public class JelloAI {
             pitchDegrees = MathHelper.clamp(pitchDegrees + noisePitch, -90f, 90f);
         }
 
-        // 4. Set target rotation
+        // 5. Set target rotation
         rotationManager.setTargetRotation(yawDegrees, pitchDegrees);
 
-        // 5. Training Throttling: only submit samples every N ticks
+        // 6. Training Throttling: only submit samples every N ticks
         if (tickCounter % TRAINING_SAMPLE_INTERVAL == 0) {
-            calculateIdealBlockRotations(pos, cachedIdealRotation);
             normalizeRotations(cachedIdealRotation[0], cachedIdealRotation[1], cachedNormalized);
 
             // Pass cloned arrays to ensure training thread gets immutable snapshot
@@ -200,16 +224,13 @@ public class JelloAI {
         // 2. Fill inputs in the static cached array
         fillEntityInputs(entity, cachedInputs);
 
-        // Predict target rotations
-        float[] rotations = neuralNetwork.predict(cachedInputs);
-        if (rotations == null || rotations.length < 2) {
-            return;
-        }
+        // 3. Analytic aim blended with the network's small learned deviation
+        calculateIdealRotations(entity, cachedIdealRotation);
+        float[] blended = blendWithPrediction(cachedIdealRotation[0], cachedIdealRotation[1], cachedInputs);
+        float yawDegrees = blended[0];
+        float pitchDegrees = blended[1];
 
-        float yawDegrees = MathHelper.wrapDegrees(rotations[0] * 180f);
-        float pitchDegrees = MathHelper.clamp(rotations[1] * 90f, -90f, 90f);
-
-        // 3. Noise injection
+        // 4. Noise injection
         if (enableNoise) {
             float noiseYaw = (float) ((Math.random() - 0.5) * 1.5);
             float noisePitch = (float) ((Math.random() - 0.5) * 1.0);
@@ -217,12 +238,11 @@ public class JelloAI {
             pitchDegrees = MathHelper.clamp(pitchDegrees + noisePitch, -90f, 90f);
         }
 
-        // 4. Set target rotation
+        // 5. Set target rotation
         rotationManager.setTargetRotation(yawDegrees, pitchDegrees);
 
-        // 5. Training Throttling: only submit samples every N ticks
+        // 6. Training Throttling: only submit samples every N ticks
         if (tickCounter % TRAINING_SAMPLE_INTERVAL == 0) {
-            calculateIdealRotations(entity, cachedIdealRotation);
             normalizeRotations(cachedIdealRotation[0], cachedIdealRotation[1], cachedNormalized);
 
             // Pass cloned arrays to ensure training thread gets immutable snapshot

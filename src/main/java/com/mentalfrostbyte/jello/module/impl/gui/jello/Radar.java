@@ -22,6 +22,10 @@ import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
  *   <li>Warning Distance — 近敌告警距离（格），目标进入该距离触发锁定告警</li>
  *   <li>Background — 是否在 RWR/TWS 背后绘制半透明黑底</li>
  *   <li>Sound — 告警音效开关：目标在告警距离内播放锁定告警，其余距离播放扫描提示音</li>
+ *   <li>Enemy Lock — 敌锁定：检测其他玩家的头部视线是否正瞄准自己（末影人式判定），
+ *       激活时 RWR 上方闪烁 LOCKED 绿框警示牌并触发锁定告警音</li>
+ *   <li>Enemy Track — 敌跟踪：投掷物弹道逐 tick 推演，预测是否命中自己，
+ *       激活时 RWR 上方闪烁 INBOUND 绿框警示牌并触发锁定告警音</li>
  * </ul>
  * <p>
  * 快捷键 Alt+R：按下时锁定/切换准星最近的目标，被锁定目标在 RWR 与 TWS 中额外套一层粗体绿框。
@@ -42,12 +46,14 @@ public class Radar extends ModuleWithModuleSettings implements Draggable {
     public ColorSetting color = new ColorSetting("Color", "Radar display color", 0xFF61FF6A);
     public BooleanSetting background = new BooleanSetting("Background", "Draw translucent black backdrop behind RWR/TWS", true);
     public BooleanSetting sound = new BooleanSetting("Sound", "Play lock/scan warning sounds", true);
+    public BooleanSetting enemyLock = new BooleanSetting("Enemy Lock", "Warn when another player is aiming at you", true);
+    public BooleanSetting enemyTrack = new BooleanSetting("Enemy Track", "Predict projectile paths and warn when on hit course", true);
 
     public Radar() {
         super(ModuleCategory.GUI, "Radar", "Aircraft style threat radar", "Mode",
                 new WarThunderRadar()
         );
-        this.registerSetting(x, y, scale, range, warningDistance, scanRate, realistic, color, background, sound);
+        this.registerSetting(x, y, scale, range, warningDistance, scanRate, realistic, color, background, sound, enemyLock, enemyTrack);
     }
 
     public void setX(float v) {
