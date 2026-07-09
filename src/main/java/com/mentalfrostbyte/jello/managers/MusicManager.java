@@ -460,84 +460,49 @@ public class MusicManager extends Manager implements MinecraftUtil {
                     for (int i = 0; (float) i < maxWidth; i++) {
                         float alphaValue = 1.0F - (float) (i + 1) / maxWidth;
                         float heightRatio = (float) mc.getMainWindow().getHeight() / 1080.0F;
-
                         float height = ((float) (Math.sqrt(this.amplitudes.get(i)) / 12.0) - 5.0F) * heightRatio;
-
                         RenderUtil.drawRoundedRect2(
                                 (float) i * width,
                                 (float) mc.getMainWindow().getHeight() - height,
                                 width,
                                 height,
-                                RenderUtil2.applyAlpha(accentColor, 0.2F * alphaValue));
+                                RenderUtil2.applyAlpha(/*accentColor*/ClientColors.MID_GREY.getColor(), 0.2F * alphaValue)
+                        );
                     }
 
                     RenderUtil.initStencilBuffer();
 
-
                     for (int i = 0; (float) i < maxWidth; i++) {
                         float heightRatio = (float) mc.getMainWindow().getHeight() / 1080.0F;
                         float height = ((float) (Math.sqrt(this.amplitudes.get(i)) / 12.0) - 5.0F) * heightRatio;
-                        RenderUtil.drawRoundedRect2((float) i * width, (float) mc.getMainWindow().getHeight() - height,
-                                width, height, RenderUtil2.applyAlpha(accentColor, 0.95F));
+                        RenderUtil.drawRoundedRect2((float) i * width, (float) mc.getMainWindow().getHeight() - height, width, height, /*RenderUtil2.applyAlpha(accentColor, 0.95F)*/ClientColors.LIGHT_GREYISH_BLUE.getColor());
                     }
 
                     RenderUtil.configureStencilTest();
                     if (this.hasReadySongArtwork()) {
-                        RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(),
-                                (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
+                        RenderUtil.drawImage(0.0F, 0.0F, (float) mc.getMainWindow().getWidth(), (float) mc.getMainWindow().getHeight(), this.songThumbnail, 0.4F);
                         GL11.glDisable(GL11.GL_TEXTURE_2D);
-
                         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-
                         GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-
                         RenderSystem.color4f(1.0f, 1.0f, 1.0f, 1.0f);
-
                     }
-
-
 
                     RenderUtil.restorePreviousStencilBuffer();
-
-
-
                     double var9 = 0.0;
-
                     float var16 = 4750;
 
-
-
                     for (int i = 0; i < 3; i++) {
-
                         var9 = Math.max(var9, Math.sqrt(this.amplitudes.get(i)) - 1000.0);
-
                     }
 
-
-
-                    float scale = 1.0F
-
-                            + (float) Math.round((float) (var9 / (double) (var16 - 1000)) * 0.14F * 75.0F) / 75.0F;
-
+                    float scale = 1.0F + (float) Math.round((float) (var9 / (double) (var16 - 1000)) * 0.14F * 75.0F) / 75.0F;
                     GL11.glPushMatrix();
-
                     GL11.glTranslated(60.0, mc.getMainWindow().getHeight() - 55, 0.0);
-
                     GL11.glScalef(scale, scale, 0.0F);
-
                     GL11.glTranslated(-60.0, -(mc.getMainWindow().getHeight() - 55), 0.0);
-
-                    RenderUtil.drawImage(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F,
-
-                            this.notificationImage);
-
-                    RenderUtil.drawRoundedRect(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F,
-
-                            14.0F, 0.3F);
-
+                    RenderUtil.drawImage(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F, this.notificationImage);
+                    RenderUtil.drawRoundedRect(10.0F, (float) (mc.getMainWindow().getHeight() - 110), 100.0F, 100.0F, 14.0F, 0.3F);
                     GL11.glPopMatrix();
-
-
 
                     GL11.glDisable(GL11.GL_TEXTURE_2D);
 
