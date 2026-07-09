@@ -52,7 +52,10 @@ public class BlockFly extends ModuleWithModuleSettings {
                 // block-place pipeline (post.Post, blockplace.FabricatedPlace /
                 // PositionPlace / AirLiquidPlace, badpackets.BadPacketsX/Y/W,
                 // movement.Rotations GCD filter). See BlockFlyGrimSemiMode javadoc.
-                new BlockFlyGrimSemiMode()
+                new BlockFlyGrimSemiMode(),
+                // SouthSide: OpenSSNGScaffoldAndClutch port — telly/snap scaffold with
+                // FallingPlayer clutch self-save.
+                new BlockFlySouthSideMode()
         );
         this.registerSetting(
                 new ModeSetting("ItemSpoof", "Item spoofing mode", 2, "None", "Switch", "Spoof", "LiteSpoof"));
@@ -365,7 +368,10 @@ public class BlockFly extends ModuleWithModuleSettings {
 
     @EventTarget
     public void onFOV(EventGetFovModifier event) {
-        if (this.isEnabled() && this.getBooleanValueFromSettingName("KeepFOV") && MovementUtil.isMoving()) {
+        if (this.isEnabled()
+                // SouthSide mode owns its FoV via its own Keep FoV setting.
+                && !(this.getModWithTypeSetToName() instanceof BlockFlySouthSideMode)
+                && this.getBooleanValueFromSettingName("KeepFOV") && MovementUtil.isMoving()) {
             event.fovModifier = this.getNumberValueBySettingName("FOV Modifier") + (float) MovementUtil.getSpeedBoost() * 0.13F;
         }
     }
