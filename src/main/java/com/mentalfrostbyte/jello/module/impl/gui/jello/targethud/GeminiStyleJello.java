@@ -138,7 +138,6 @@ public class GeminiStyleJello extends RenderModule {
     private final Map<String, PotionState> potionStates = new LinkedHashMap<>();
 
     private Entity currentTarget;
-    private boolean posInit = false;
 
     // ===== crafatar 头像缓存（异步拉取，Skija 解码不需要 GL 上下文）=====
     private static final Map<UUID, Image> AVATAR_CACHE = new ConcurrentHashMap<>();
@@ -237,13 +236,6 @@ public class GeminiStyleJello extends RenderModule {
 
         // ===== 坐标 =====
         TargetHUD parent = (TargetHUD) Client.getInstance().moduleManager.getModuleByClass(TargetHUD.class);
-        if (!posInit) {
-            posInit = true;
-            int sw = mc.getMainWindow().getScaledWidth();
-            int sh = mc.getMainWindow().getScaledHeight();
-            parent.setX(sw - W_PANEL - 20.0F);
-            parent.setY(sh - 160.0F);
-        }
         float posX = parent.getX();
         float posY = parent.getY();
 

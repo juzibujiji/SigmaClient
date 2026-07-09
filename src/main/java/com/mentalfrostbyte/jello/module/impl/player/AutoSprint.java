@@ -14,13 +14,13 @@ public class AutoSprint extends Module {
     public AutoSprint() {
         super(ModuleCategory.PLAYER, "AutoSprint", "Sprints for you");
         this.registerSetting(new BooleanSetting("NoJumpDelay", "Removes delay onJump.", false));
-        this.registerSetting(new BooleanSetting("KeepSprint", "Attack Entity Sprint.", true) {
+        this.registerSetting(new BooleanSetting("KeepSprint", "Attack Entity Sprint.", true));
+        this.registerSetting(new BooleanSetting("KeepSprintAndMotion", "Attack Entity KeepSprintAndMotion.", false){
             @Override
             public boolean isHidden() {
-                return getBooleanValueFromSettingName("KeepSprintAndMotion");
+                return !getBooleanValueFromSettingName("KeepSprint");
             }
         });
-        this.registerSetting(new BooleanSetting("KeepSprintAndMotion", "Attack Entity KeepSprintAndMotion.", false));
     }
 
     @EventTarget
