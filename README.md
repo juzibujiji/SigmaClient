@@ -16,8 +16,11 @@ Some parts of the code have been modified to fit this project. These modificatio
 
 This project itself is licensed under **GPL-3.0**, while the original MIT-licensed portions remain subject to their original MIT License terms.
 
+# haha
 
 wait for weekends
+
+when time，play WuWa ＞ cod1ng
 
 WTF
 
