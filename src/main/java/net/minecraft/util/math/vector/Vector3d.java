@@ -1,6 +1,7 @@
 package net.minecraft.util.math.vector;
 
 import java.util.EnumSet;
+import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import net.minecraft.dispenser.IPosition;
 import net.minecraft.util.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -77,8 +78,12 @@ public class Vector3d implements IPosition
      */
     public Vector3d normalize()
     {
-        double d0 = (double)MathHelper.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
-        return d0 < 1.0E-4D ? ZERO : new Vector3d(this.x / d0, this.y / d0, this.z / d0);
+        double lengthSquared = this.x * this.x + this.y * this.y + this.z * this.z;
+        boolean modernMovement = PacketFixFor1_21Plus.isEnabled()
+                && PacketFixFor1_21Plus.isTargetAtLeast1_21_3Protocol();
+        double length = modernMovement ? Math.sqrt(lengthSquared) : (double)MathHelper.sqrt(lengthSquared);
+        double threshold = modernMovement ? 1.0E-5F : 1.0E-4D;
+        return length < threshold ? ZERO : new Vector3d(this.x / length, this.y / length, this.z / length);
     }
 
     public double dotProduct(Vector3d vec)

@@ -7,6 +7,8 @@ import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveFlying;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveRideable;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventStep;
 import com.mentalfrostbyte.jello.util.game.world.BoundingBox;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import it.unimi.dsi.fastutil.objects.Object2DoubleArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2DoubleMap;
@@ -603,16 +605,24 @@ public abstract class Entity implements INameable, ICommandSource {
 
             pos = this.maybeBackOffFromEdge(pos, typeIn);
             Vector3d vector3d = this.getAllowedMovement(pos);
+            double allowedLengthSquared = vector3d.lengthSquared();
+            boolean modernSmallMovement = PacketFixFor1_21Plus.isEnabled()
+                    && PacketFixFor1_21Plus.isTargetAtLeast1_21_3Protocol()
+                    && pos.lengthSquared() - allowedLengthSquared < 1.0E-7D;
 
-            if (vector3d.lengthSquared() > 1.0E-7D) {
+            if (allowedLengthSquared > 1.0E-7D || modernSmallMovement) {
                 this.setBoundingBox(this.getBoundingBox().offset(vector3d));
                 this.resetPositionToBB();
             }
 
             this.world.getProfiler().endSection();
             this.world.getProfiler().startSection("rest");
-            this.collidedHorizontally = !MathHelper.epsilonEquals(pos.x, vector3d.x)
-                    || !MathHelper.epsilonEquals(pos.z, vector3d.z);
+            boolean legacyExactHorizontalCollision = ViaLoadingBase.getInstance().getTargetVersion()
+                    .olderThanOrEqualTo(ProtocolVersion.v1_12_2);
+            this.collidedHorizontally = legacyExactHorizontalCollision
+                    ? pos.x != vector3d.x || pos.z != vector3d.z
+                    : !MathHelper.epsilonEquals(pos.x, vector3d.x)
+                            || !MathHelper.epsilonEquals(pos.z, vector3d.z);
             this.collidedVertically = pos.y != vector3d.y;
             this.onGround = this.collidedVertically && pos.y < 0.0D;
             BlockPos blockpos = this.getOnPosition();
@@ -844,8 +854,10 @@ public abstract class Entity implements INameable, ICommandSource {
 
             // MODIFICATION START: only enter this branch if the event wasn't cancelled
             if (horizontalMag(vector3d1) > horizontalMag(vector3d) && !cancelled) {
+                double remainingY = ViaLoadingBase.getInstance().getTargetVersion()
+                        .olderThanOrEqualTo(ProtocolVersion.v1_13_2) ? 0.0D : vec.y;
                 return vector3d1
-                        .add(collideBoundingBoxHeuristically(this, new Vector3d(0.0D, -vector3d1.y + vec.y, 0.0D),
+                        .add(collideBoundingBoxHeuristically(this, new Vector3d(0.0D, -vector3d1.y + remainingY, 0.0D),
                                 axisalignedbb.offset(vector3d1), this.world, iselectioncontext, reuseablestream));
             }
             // MODIFICATION END
@@ -888,7 +900,8 @@ public abstract class Entity implements INameable, ICommandSource {
             }
         }
 
-        boolean flag = Math.abs(d0) < Math.abs(d2);
+        boolean flag = ViaLoadingBase.getInstance().getTargetVersion().newerThan(ProtocolVersion.v1_13_2)
+                && Math.abs(d0) < Math.abs(d2);
 
         if (flag && d2 != 0.0D) {
             d2 = VoxelShapes.getAllowedOffset(Direction.Axis.Z, collisionBox, potentialHits.createStream(), d2);
@@ -928,7 +941,8 @@ public abstract class Entity implements INameable, ICommandSource {
             }
         }
 
-        boolean flag = Math.abs(d0) < Math.abs(d2);
+        boolean flag = ViaLoadingBase.getInstance().getTargetVersion().newerThan(ProtocolVersion.v1_13_2)
+                && Math.abs(d0) < Math.abs(d2);
 
         if (flag && d2 != 0.0D) {
             d2 = VoxelShapes.getAllowedOffset(Direction.Axis.Z, collisionBox, worldIn, d2, selectionContext,
@@ -984,10 +998,12 @@ public abstract class Entity implements INameable, ICommandSource {
 
     protected void doBlockCollisions() {
         AxisAlignedBB axisalignedbb = this.getBoundingBox();
-        BlockPos blockpos = new BlockPos(axisalignedbb.minX + 0.001D, axisalignedbb.minY + 0.001D,
-                axisalignedbb.minZ + 0.001D);
-        BlockPos blockpos1 = new BlockPos(axisalignedbb.maxX - 0.001D, axisalignedbb.maxY - 0.001D,
-                axisalignedbb.maxZ - 0.001D);
+        double collisionMargin = PacketFixFor1_21Plus.isEnabled()
+                && PacketFixFor1_21Plus.isTargetAtLeast1_21_3Protocol() ? 1.0E-5F : 0.001D;
+        BlockPos blockpos = new BlockPos(axisalignedbb.minX + collisionMargin,
+                axisalignedbb.minY + collisionMargin, axisalignedbb.minZ + collisionMargin);
+        BlockPos blockpos1 = new BlockPos(axisalignedbb.maxX - collisionMargin,
+                axisalignedbb.maxY - collisionMargin, axisalignedbb.maxZ - collisionMargin);
         BlockPos.Mutable blockpos$mutable = new BlockPos.Mutable();
 
         if (this.world.isAreaLoaded(blockpos, blockpos1)) {
@@ -1276,6 +1292,12 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public boolean isInLava() {
+        if (ViaLoadingBase.getInstance().getTargetVersion().olderThanOrEqualTo(ProtocolVersion.v1_13_2)) {
+            AxisAlignedBB legacyLavaBox = this.getBoundingBox().grow(-0.1D, -0.4D, -0.1D);
+            return this.world.getStatesInArea(legacyLavaBox)
+                    .anyMatch(state -> state.getFluidState().isTagged(FluidTags.LAVA));
+        }
+
         return !this.firstUpdate && this.eyesFluidLevel.getDouble(FluidTags.LAVA) > 0.0D;
     }
 
@@ -2339,6 +2361,11 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public void setSwimming(boolean swimming) {
+        if (swimming && ViaLoadingBase.getInstance().getTargetVersion()
+                .olderThanOrEqualTo(ProtocolVersion.v1_12_2)) {
+            return;
+        }
+
         this.setFlag(4, swimming);
     }
 
@@ -3300,7 +3327,11 @@ public abstract class Entity implements INameable, ICommandSource {
     }
 
     public boolean handleFluidAcceleration(ITag<Fluid> fluidTag, double p_210500_2_) {
-        AxisAlignedBB axisalignedbb = this.getBoundingBox().shrink(0.001D);
+        boolean legacyFluidMovement = ViaLoadingBase.getInstance().getTargetVersion()
+                .olderThanOrEqualTo(ProtocolVersion.v1_12_2);
+        AxisAlignedBB axisalignedbb = legacyFluidMovement
+                ? this.getBoundingBox().grow(0.0D, -0.4D, 0.0D).shrink(0.001D)
+                : this.getBoundingBox().shrink(0.001D);
         int i = MathHelper.floor(axisalignedbb.minX);
         int j = MathHelper.ceil(axisalignedbb.maxX);
         int k = MathHelper.floor(axisalignedbb.minY);
@@ -3328,14 +3359,14 @@ public abstract class Entity implements INameable, ICommandSource {
                             double d1 = (double) ((float) i2
                                     + fluidstate.getActualHeight(this.world, blockpos$mutable));
 
-                            if (d1 >= axisalignedbb.minY) {
+                            if (legacyFluidMovement || d1 >= axisalignedbb.minY) {
                                 flag1 = true;
-                                d0 = Math.max(d1 - axisalignedbb.minY, d0);
+                                d0 = Math.max(d1 - axisalignedbb.minY + (legacyFluidMovement ? 0.4D : 0.0D), d0);
 
                                 if (flag) {
                                     Vector3d vector3d1 = fluidstate.getFlow(this.world, blockpos$mutable);
 
-                                    if (d0 < 0.4D) {
+                                    if (!legacyFluidMovement && d0 < 0.4D) {
                                         vector3d1 = vector3d1.scale(d0);
                                     }
 

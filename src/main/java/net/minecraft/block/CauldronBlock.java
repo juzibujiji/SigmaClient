@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.ServerPlayerEntity;
@@ -36,6 +38,12 @@ public class CauldronBlock extends Block
     public static final IntegerProperty LEVEL = BlockStateProperties.LEVEL_0_3;
     private static final VoxelShape INSIDE = makeCuboidShape(2.0D, 4.0D, 2.0D, 14.0D, 16.0D, 14.0D);
     protected static final VoxelShape SHAPE = VoxelShapes.combineAndSimplify(VoxelShapes.fullCube(), VoxelShapes.or(makeCuboidShape(0.0D, 0.0D, 4.0D, 16.0D, 3.0D, 12.0D), makeCuboidShape(4.0D, 0.0D, 0.0D, 12.0D, 3.0D, 16.0D), makeCuboidShape(2.0D, 0.0D, 2.0D, 14.0D, 3.0D, 14.0D), INSIDE), IBooleanFunction.ONLY_FIRST);
+    private static final VoxelShape LEGACY_COLLISION_SHAPE = VoxelShapes.or(
+            makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 5.0D, 16.0D),
+            makeCuboidShape(0.0D, 0.0D, 0.0D, 2.0D, 16.0D, 16.0D),
+            makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 16.0D, 2.0D),
+            makeCuboidShape(14.0D, 0.0D, 0.0D, 16.0D, 16.0D, 16.0D),
+            makeCuboidShape(0.0D, 0.0D, 14.0D, 16.0D, 16.0D, 16.0D));
 
     public CauldronBlock(AbstractBlock.Properties properties)
     {
@@ -45,7 +53,18 @@ public class CauldronBlock extends Block
 
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            return VoxelShapes.fullCube();
+        }
+
         return SHAPE;
+    }
+
+    public VoxelShape getCollisionShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
+    {
+        return JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2)
+                ? LEGACY_COLLISION_SHAPE : super.getCollisionShape(state, worldIn, pos, context);
     }
 
     public VoxelShape getRaytraceShape(BlockState state, IBlockReader worldIn, BlockPos pos)

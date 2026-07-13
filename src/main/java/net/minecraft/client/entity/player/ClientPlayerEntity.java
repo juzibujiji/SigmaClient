@@ -103,6 +103,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     private boolean prevHorizontalCollision;
     private boolean isCrouching;
     private boolean clientSneakState;
+    private boolean minorHorizontalCollision;
 
     /**
      * the last sprinting state sent to the server
@@ -802,8 +803,11 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         boolean flag = this.movementInput.jump;
         boolean flag1 = this.movementInput.sneaking;
         boolean flag2 = this.isUsingSwimmingAnimation();
-        this.isCrouching = !this.abilities.isFlying && !this.isSwimming() && this.isPoseClear(Pose.CROUCHING)
-                && (this.isSneaking() || !this.isSleeping() && !this.isPoseClear(Pose.STANDING));
+        ProtocolVersion targetVersion = JelloPortal.getVersion();
+        this.isCrouching = targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_13_2)
+                ? this.isSneaking() && !this.isSleeping()
+                : !this.abilities.isFlying && !this.isSwimming() && this.isPoseClear(Pose.CROUCHING)
+                        && (this.isSneaking() || !this.isSleeping() && !this.isPoseClear(Pose.STANDING));
         this.movementInput.tickMovement(this.isForcedDown());
         boolean vanillaMovement = PacketFixFor1_21Plus.shouldUseGrimVanillaMovement();
 
@@ -867,7 +871,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             }
         }
 
-        if (!this.isSprinting() && (!this.isInWater() || this.canSwim()) && this.isUsingSwimmingAnimation() && flag4
+        boolean canWaterSprint = targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_12_2)
+                || !this.isInWater() || this.canSwim();
+
+        if (!this.isSprinting() && canWaterSprint && this.isUsingSwimmingAnimation() && flag4
                 && !this.isHandActive() && !this.isPotionActive(Effects.BLINDNESS)
                 && this.mc.gameSettings.keyBindSprint.isKeyDown()) {
             this.setSprinting(true);
@@ -875,7 +882,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
 
         if (this.isSprinting()) {
             boolean flag5 = !this.movementInput.isMovingForward() || !flag4;
-            boolean flag6 = flag5 || this.collidedHorizontally || this.isInWater() && !this.canSwim();
+            boolean hardHorizontalCollision = targetVersion.newerThan(ProtocolVersion.v1_17_1)
+                    ? this.collidedHorizontally && !this.minorHorizontalCollision
+                    : this.collidedHorizontally;
+            boolean flag6 = flag5 || hardHorizontalCollision || !canWaterSprint;
 
             if (this.isSwimming()) {
                 if (!this.onGround && !this.movementInput.sneaking && flag5 || !this.isInWater()) {
@@ -1075,6 +1085,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             double d0 = this.getPosX();
             double d1 = this.getPosZ();
             super.move(typeIn, pos);
+            this.updateMinorHorizontalCollision(this.getPosX() - d0, this.getPosZ() - d1);
             this.updateAutoJump((float) (this.getPosX() - d0), (float) (this.getPosZ() - d1));
             return;
         }
@@ -1092,7 +1103,34 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         double d0 = this.getPosX();
         double d1 = this.getPosZ();
         super.move(typeIn, eventMove.vector);
+        this.updateMinorHorizontalCollision(this.getPosX() - d0, this.getPosZ() - d1);
         this.updateAutoJump((float) (this.getPosX() - d0), (float) (this.getPosZ() - d1));
+    }
+
+    private void updateMinorHorizontalCollision(double movementX, double movementZ) {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_17_1)
+                || this.movementInput == null) {
+            this.minorHorizontalCollision = false;
+            return;
+        }
+
+        double horizontalLengthSquared = movementX * movementX + movementZ * movementZ;
+        if (horizontalLengthSquared < 1.0E-5F) {
+            this.minorHorizontalCollision = false;
+            return;
+        }
+
+        float yawRadians = this.rotationYaw * ((float)Math.PI / 180.0F);
+        double sin = MathHelper.sin(yawRadians);
+        double cos = MathHelper.cos(yawRadians);
+        double inputX = (double)this.movementInput.moveStrafe * cos
+                - (double)this.movementInput.moveForward * sin;
+        double inputZ = (double)this.movementInput.moveForward * cos
+                + (double)this.movementInput.moveStrafe * sin;
+        double inputLengthSquared = inputX * inputX + inputZ * inputZ;
+        this.minorHorizontalCollision = inputLengthSquared >= 1.0E-5F
+                && Math.acos((inputX * movementX + inputZ * movementZ)
+                        / Math.sqrt(inputLengthSquared * horizontalLengthSquared)) < 0.13962634F;
     }
 
     public boolean isAutoJumpEnabled() {

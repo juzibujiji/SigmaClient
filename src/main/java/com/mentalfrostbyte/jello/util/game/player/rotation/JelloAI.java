@@ -58,7 +58,11 @@ public class JelloAI {
     /**
      * Initialize the AI system
      */
-    public static void init() {
+    public static synchronized void init() {
+        if (instance != null) {
+            rotationManager.initialize();
+            return;
+        }
         instance = new JelloAI();
         rotationManager.initialize();
         neuralNetwork.initialize();

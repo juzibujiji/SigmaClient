@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import java.util.Random;
 import javax.annotation.Nullable;
 import net.minecraft.item.BlockItemUseContext;
@@ -22,6 +24,8 @@ public class SnowBlock extends Block
 {
     public static final IntegerProperty LAYERS = BlockStateProperties.LAYERS_1_8;
     protected static final VoxelShape[] SHAPES = new VoxelShape[] {VoxelShapes.empty(), Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 2.0D, 16.0D), Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 4.0D, 16.0D), Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 6.0D, 16.0D), Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 8.0D, 16.0D), Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 10.0D, 16.0D), Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 12.0D, 16.0D), Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 14.0D, 16.0D), Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 16.0D, 16.0D)};
+    private static final VoxelShape LEGACY_SINGLE_LAYER_COLLISION_SHAPE = Block.makeCuboidShape(
+            0.0D, -0.00001D, 0.0D, 16.0D, 0.0D, 16.0D);
 
     protected SnowBlock(AbstractBlock.Properties properties)
     {
@@ -54,6 +58,11 @@ public class SnowBlock extends Block
 
     public VoxelShape getCollisionShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2) && state.get(LAYERS) == 1)
+        {
+            return LEGACY_SINGLE_LAYER_COLLISION_SHAPE;
+        }
+
         return SHAPES[state.get(LAYERS) - 1];
     }
 

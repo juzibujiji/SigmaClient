@@ -12,7 +12,7 @@ public class LazyValue<T>
         this.supplier = supplierIn;
     }
 
-    public T getValue()
+    public synchronized T getValue()
     {
         Supplier<T> supplier = this.supplier;
 

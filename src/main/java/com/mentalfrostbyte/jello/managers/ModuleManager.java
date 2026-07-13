@@ -96,6 +96,7 @@ public class ModuleManager {
         this.register(new HackDetector());
         this.register(new AutoLog());
         this.register(new BackTrack());
+        this.register(new LagRange());
         this.register(new FastBow());
         this.register(new HitSounds());
         this.register(new KillAura());

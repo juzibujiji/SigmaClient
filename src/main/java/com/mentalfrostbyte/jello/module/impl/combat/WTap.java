@@ -6,7 +6,7 @@ import com.mentalfrostbyte.jello.module.impl.combat.wtap.*;
 
 public class WTap extends ModuleWithModuleSettings {
     public WTap() {
-        super(ModuleCategory.COMBAT, "WTap", "Increase the knockback you give to players",
+        super(ModuleCategory.COMBAT, "WTap", "Resets sprint with human-like timing to increase dealt knockback",
                 new NormalWTap(), new LegitWTap());
     }
 }

@@ -148,7 +148,7 @@ public class BlockFlySouthSideMode extends Module {
         this.registerSetting(fovValue = new NumberSetting<>("Fov", "Fov", 1.1F, 1.0F, 2.1F, 0.05F));
         this.registerSetting(mark = new BooleanSetting("Mark", "Mark", true));
         this.registerSetting(duplicateRotPlace = new BooleanSetting("DuplicateRotPlace", "DuplicateRotPlace", true));
-        this.registerSetting(interactItem = new BooleanSetting("Interact Item Before Place", "Interact Item Before Place", false));
+        this.registerSetting(interactItem = new BooleanSetting("Use Item On Pass", "Use item only after block placement returns PASS", false));
         this.registerSetting(markSideColor = new ColorSetting("Mark Side Color", "Mark Side Color", 0x46FFFFFF));
         this.registerSetting(markLineColor = new ColorSetting("Mark Line Color", "Mark Line Color", 0x96FFFFFF));
         this.registerSetting(blockCount = new BooleanSetting("BlockCount", "BlockCount", true));
@@ -432,7 +432,11 @@ public class BlockFlySouthSideMode extends Module {
     }
 
     private SSRotation getBRot(boolean forceRotation) {
-        SSRotation rotation = blockData != null ? SSRotationUtils.getClosestToBlockFace(blockData.pos(), blockData.facing(), SSRotationUtils.getServerRotation().yaw, SSRotationUtils.getServerRotation().pitch) : null;
+        if (blockData == null) {
+            return null;
+        }
+
+        SSRotation rotation = SSRotationUtils.getClosestToBlockFace(blockData.pos(), blockData.facing(), SSRotationUtils.getServerRotation().yaw, SSRotationUtils.getServerRotation().pitch);
         if (rotation == null) {
             if (SSRotationUtils.normalizeYawDiff(mc.player.rotationYaw + 100f, SSRotationUtils.getServerRotation().yaw) < SSRotationUtils.normalizeYawDiff(mc.player.rotationYaw - 100f, SSRotationUtils.getServerRotation().yaw)) {
                 rotation = new SSRotation(mc.player.rotationYaw + 100f, SSRotationUtils.getServerRotation().pitch);
@@ -509,22 +513,22 @@ public class BlockFlySouthSideMode extends Module {
         return rotation;
     }
 
-    private void place() {
-        if (blockData != null && !SSBlinkUtils.blinking) {
+    private boolean place() {
+        if (blockData != null && blockSlot != null && !SSBlinkUtils.blinking) {
             if (SSRotationUtils.getRotation() == null) {
-                return;
+                return false;
             }
 
             if (mc.playerController == null) {
-                return;
+                return false;
             }
 
             if (!canPlace) {
-                return;
+                return false;
             }
             BlockRayTraceResult block = SSClientRayTraceUtil.getFacedBlock(SSRotationUtils.getRotation().yaw, SSRotationUtils.getRotation().pitch);
             if (!SSClientRayTraceUtil.didHitBlockFace(mc.player, SSRotationUtils.getRotation().yaw, SSRotationUtils.getRotation().pitch, blockData.pos(), blockData.facing(), true)) {
-                return;
+                return false;
             }
             if (this.blockSlot.hand().equals(Hand.MAIN_HAND)) {
                 mc.player.inventory.currentItem = this.blockSlot.slot();
@@ -532,7 +536,7 @@ public class BlockFlySouthSideMode extends Module {
             if (duplicateRotPlace.getCurrentValue() && SSPlayerUtils.lastPitchDiff > 2.0d) {
                 double xDiff = Math.abs(SSPlayerUtils.lastPitchDiff - SSPlayerUtils.lastPlacePitchDiff);
                 if (xDiff < 0.0001d) {
-                    return;
+                    return false;
                 }
             }
             if (blockFly.getCurrentValue()) {
@@ -548,15 +552,18 @@ public class BlockFlySouthSideMode extends Module {
                     SSPacketOrderManager.swap = true;
                 }
             }
-            if (interactItem.getCurrentValue()) {
-                mc.playerController.processRightClick(mc.player, mc.world, Hand.MAIN_HAND);
-//                mc.playerController.processRightClick(mc.player, mc.world, Hand.MAIN_HAND);
-            }
             if (block == null) {
-                return;
+                return false;
             }
+
+            // Vanilla order: use the target block first, then fall back to an item-use packet only
+            // after a PASS. Grim PacketOrderN flags the inverse USE_ITEM -> block-place sequence.
             ActionResultType result = mc.playerController.func_217292_a(mc.player, mc.world, this.blockSlot.hand(), block);
             SSPacketOrderManager.rightClicking = true;
+            if (result == ActionResultType.PASS && interactItem.getCurrentValue()) {
+                mc.playerController.processRightClick(mc.player, mc.world, this.blockSlot.hand());
+                SSPacketOrderManager.rightClicking = true;
+            }
             if (result == ActionResultType.SUCCESS) {
                 placeCount++;
                 lastPlacePosition = blockData.pos().offset(blockData.facing());
@@ -569,7 +576,9 @@ public class BlockFlySouthSideMode extends Module {
                     mc.player.swingArm(this.blockSlot.hand());
                 }
             }
+            return true;
         }
+        return false;
     }
 
     /** Upstream: onPlace(PlaceEvent) { event.setCancelled(true); } — suppress manual right-click placing. */
@@ -584,15 +593,13 @@ public class BlockFlySouthSideMode extends Module {
     @EventTarget
     public void onRotationApplied(SSRotationAppliedEvent event) {
         if (!this.isEnabled() || mc.player == null || mc.world == null) return;
-//        if (SSPlayerUtils.onGroundTicks == 1 && safeMode.getCurrentValue()) {
-//            double diff = SSRotationUtils.yawDiffDirectly(mc.player.rotationYaw, SSRotationUtils.getServerRotation().yaw);
-//            SSChatUtils.info("sp");
-//            SSPacketUtils.spoofRotation(new SSRotation(SSRotationUtils.getServerRotation().getYaw() + SSRotationUtils.smooth((float) diff, (float) (diff / 2f)), mc.player.rotationPitch));
-//        }
-        if (abuseRotation.getCurrentValue() && SSRotationUtils.rotation != null) {
+        boolean placed = place();
+        // Keep the original rotation-abuse setting, but only emit its item-use packets after
+        // this tick has emitted the matching block-use packet. This avoids PacketOrderN's
+        // invalid USE_ITEM -> block-place sequence without reintroducing the old placement gate.
+        if (placed && abuseRotation.getCurrentValue() && SSRotationUtils.rotation != null) {
             rotationAbuse(30f, SSRotationUtils.rotation.yaw);
         }
-        place();
     }
 
     /** Upstream: onPostTick(TickEvent) with Stage.POST. */
@@ -704,6 +711,12 @@ public class BlockFlySouthSideMode extends Module {
             }
         }
 //                }
+        // A target can disappear between ray-trace updates; avoid the old null dereference
+        // without clearing a previously retained target at the beginning of every rotation tick.
+        if (blockData == null) {
+            return;
+        }
+
         if (!reachable && rotateCount < 8) {
             if (dbgV.getCurrentValue() && rotateCount == 1) {
                 SSChatUtils.info("working");
@@ -714,7 +727,10 @@ public class BlockFlySouthSideMode extends Module {
             rotateCount = 0;
         }
         rot = getBRot(forceRotation);
-        if (duplicateRotPlace.getCurrentValue() && rot != null) {
+        if (rot == null) {
+            return;
+        }
+        if (duplicateRotPlace.getCurrentValue()) {
             rot.pitch -= SSRandomUtils.generateRandomFloat(0.001f, 0.003f);
             rot.yaw -= SSRandomUtils.generateRandomFloat(0.0001f, 0.0003f);
             do {

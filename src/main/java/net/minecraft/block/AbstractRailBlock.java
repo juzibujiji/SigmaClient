@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.block.material.PushReaction;
 import net.minecraft.item.BlockItemUseContext;
 import net.minecraft.state.Property;
@@ -9,6 +11,7 @@ import net.minecraft.util.Direction;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.shapes.ISelectionContext;
 import net.minecraft.util.math.shapes.VoxelShape;
+import net.minecraft.util.math.shapes.VoxelShapes;
 import net.minecraft.world.IBlockReader;
 import net.minecraft.world.IWorldReader;
 import net.minecraft.world.World;
@@ -17,6 +20,9 @@ public abstract class AbstractRailBlock extends Block
 {
     protected static final VoxelShape FLAT_AABB = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 2.0D, 16.0D);
     protected static final VoxelShape ASCENDING_AABB = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 8.0D, 16.0D);
+    private static final VoxelShape ASCENDING_1_10_AABB = VoxelShapes.fullCube();
+    private static final VoxelShape ASCENDING_1_9_AABB = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 2.5D, 16.0D);
+    private static final VoxelShape ASCENDING_1_8_AABB = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 10.0D, 16.0D);
     private final boolean disableCorners;
 
     public static boolean isRail(World worldIn, BlockPos pos)
@@ -43,7 +49,27 @@ public abstract class AbstractRailBlock extends Block
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
         RailShape railshape = state.isIn(this) ? state.get(this.getShapeProperty()) : null;
-        return railshape != null && railshape.isAscending() ? ASCENDING_AABB : FLAT_AABB;
+
+        if (railshape == null || !railshape.isAscending())
+        {
+            return FLAT_AABB;
+        }
+
+        ProtocolVersion targetVersion = JelloPortal.getVersion();
+
+        if (targetVersion.equalTo(ProtocolVersion.v1_10))
+        {
+            return ASCENDING_1_10_AABB;
+        }
+
+        if (targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_9)
+                && targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_9_3))
+        {
+            return ASCENDING_1_9_AABB;
+        }
+
+        return targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_8)
+                ? ASCENDING_1_8_AABB : ASCENDING_AABB;
     }
 
     public boolean isValidPosition(BlockState state, IWorldReader worldIn, BlockPos pos)

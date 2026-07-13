@@ -1,9 +1,11 @@
 package de.florianmichael.viamcp.fixes;
 
 import com.viaversion.viaversion.api.connection.UserConnection;
+import com.viaversion.viaversion.api.connection.StorableObject;
 import com.viaversion.viaversion.api.protocol.Protocol;
 import com.viaversion.viaversion.api.protocol.packet.PacketWrapper;
 import com.viaversion.viaversion.api.protocol.packet.ServerboundPacketType;
+import com.viaversion.viaversion.api.protocol.packet.State;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import com.viaversion.viaversion.protocols.v1_21_2to1_21_4.packet.ServerboundPackets1_21_4;
 import com.viaversion.viaversion.protocols.v1_21_4to1_21_5.Protocol1_21_4To1_21_5;
@@ -49,7 +51,6 @@ public final class PacketFixFor1_21Plus {
     private static final int INPUT_SPRINT = 64;
     private static final int DOUBLE_BYTES = 8;
     private static final int FLOAT_BYTES = 4;
-    private static final Queue<Boolean> MOVEMENT_HORIZONTAL_COLLISIONS = new ConcurrentLinkedQueue<>();
     private static final String[] MOVEMENT_1_21_5_INPUT_PROTOCOLS = {
             "Protocol1_21_4To1_21_5",
             "Protocol1_21_5To1_21_4",
@@ -83,9 +84,14 @@ public final class PacketFixFor1_21Plus {
     }
 
     public static boolean shouldUseMovementFlags() {
+        return shouldUseMovementFlags(activeUserConnection());
+    }
+
+    private static boolean shouldUseMovementFlags(UserConnection connection) {
         return isEnabled()
                 && isTargetAtLeast1_21_3Protocol()
-                && hasActiveProtocolNamed(MOVEMENT_1_21_3_PROTOCOLS);
+                && isPlayState(connection)
+                && hasProtocolNamed(connection, MOVEMENT_1_21_3_PROTOCOLS);
     }
 
     public static boolean shouldUseVanilla1_21MovementCadence() {
@@ -93,9 +99,11 @@ public final class PacketFixFor1_21Plus {
     }
 
     public static boolean shouldUseVanilla1_21MovementPhysics() {
+        UserConnection connection = activeUserConnection();
         return isEnabled()
                 && isTargetAtLeast1_21_3Protocol()
-                && hasActiveProtocolNamed(MOVEMENT_1_21_3_PROTOCOLS);
+                && isPlayState(connection)
+                && hasProtocolNamed(connection, MOVEMENT_1_21_3_PROTOCOLS);
     }
 
     public static boolean shouldUseGrimVanillaMovement() {
@@ -104,17 +112,24 @@ public final class PacketFixFor1_21Plus {
     }
 
     public static boolean shouldUseVanilla1_21_5InputPhysics() {
+        UserConnection connection = activeUserConnection();
         return isEnabled()
                 && targetVersion().newerThanOrEqualTo(ProtocolVersion.v1_21_5)
-                && hasActiveProtocolNamed(MOVEMENT_1_21_5_INPUT_PROTOCOLS);
+                && isPlayState(connection)
+                && hasProtocolNamed(connection, MOVEMENT_1_21_5_INPUT_PROTOCOLS);
     }
 
     public static boolean shouldSendPlayerInput() {
+        return shouldSendPlayerInput(activeUserConnection());
+    }
+
+    private static boolean shouldSendPlayerInput(UserConnection connection) {
         ProtocolVersion targetVersion = targetVersion();
         return isEnabled()
                 && isAtLeast1_21_3Protocol(targetVersion)
                 && targetVersion.newerThanOrEqualTo(ProtocolVersion.v1_21_5)
-                && hasProtocol(activeUserConnection(), playerInputProtocol(targetVersion));
+                && isPlayState(connection)
+                && hasProtocol(connection, playerInputProtocol(targetVersion));
     }
 
     public static int getPositionPacketInterval(boolean legacy) {
@@ -140,21 +155,22 @@ public final class PacketFixFor1_21Plus {
     }
 
     public static void rememberMovementPacket(boolean horizontalCollision) {
-        if (!shouldUseMovementFlags()) {
-            MOVEMENT_HORIZONTAL_COLLISIONS.clear();
+        UserConnection connection = activeUserConnection();
+        if (!shouldUseMovementFlags(connection)) {
+            clearMovementFlags(connection);
             return;
         }
 
-        MOVEMENT_HORIZONTAL_COLLISIONS.offer(horizontalCollision);
+        movementFlagState(connection).horizontalCollisions.offer(horizontalCollision);
     }
 
     public static boolean sendPlayerInputPacket(ClientPlayerEntity player) {
-        if (!shouldSendPlayerInput() || player == null || player.connection == null) {
+        if (player == null || player.connection == null) {
             return false;
         }
 
         UserConnection connection = player.connection.getNetworkManager().getViaUserConnection();
-        if (connection == null) {
+        if (!shouldSendPlayerInput(connection)) {
             return false;
         }
 
@@ -248,8 +264,22 @@ public final class PacketFixFor1_21Plus {
         return null;
     }
 
-    public static ChannelOutboundHandlerAdapter createServerboundMovementFlagHandler() {
-        return new ServerboundMovementFlagHandler();
+    public static ChannelOutboundHandlerAdapter createServerboundMovementFlagHandler(UserConnection connection) {
+        return new ServerboundMovementFlagHandler(connection);
+    }
+
+    /**
+     * ViaVersion changes the server-side state to CONFIGURATION while a modern
+     * proxy transfers the client to another backend. Custom PLAY packets and raw
+     * PLAY packet rewrites must stop until that state returns to PLAY.
+     */
+    public static boolean isPlayState(UserConnection connection) {
+        return connection != null
+                && connection.isActive()
+                && !connection.isPendingDisconnect()
+                && connection.getProtocolInfo() != null
+                && connection.getProtocolInfo().getClientState() == State.PLAY
+                && connection.getProtocolInfo().getServerState() == State.PLAY;
     }
 
     public static boolean hasProtocol(UserConnection connection, Class<? extends Protocol> protocolClass) {
@@ -259,8 +289,7 @@ public final class PacketFixFor1_21Plus {
                 && connection.getProtocolInfo().getPipeline().contains(protocolClass);
     }
 
-    private static boolean hasActiveProtocolNamed(String... protocolNames) {
-        UserConnection connection = activeUserConnection();
+    private static boolean hasProtocolNamed(UserConnection connection, String... protocolNames) {
         if (connection == null || connection.getProtocolInfo() == null) {
             return false;
         }
@@ -293,8 +322,9 @@ public final class PacketFixFor1_21Plus {
         return loadingBase == null ? ProtocolVersion.v1_16_4 : loadingBase.getTargetVersion();
     }
 
-    private static void rewriteServerboundMovementFlags(ByteBuf buf) {
-        if (!shouldUseMovementFlags() || !buf.isReadable()) {
+    private static void rewriteServerboundMovementFlags(ByteBuf buf, UserConnection connection) {
+        if (!shouldUseMovementFlags(connection) || !buf.isReadable()) {
+            clearMovementFlags(connection);
             return;
         }
 
@@ -311,7 +341,7 @@ public final class PacketFixFor1_21Plus {
         }
 
         int flags = buf.getUnsignedByte(flagsIndex);
-        Boolean queuedHorizontalCollision = MOVEMENT_HORIZONTAL_COLLISIONS.poll();
+        Boolean queuedHorizontalCollision = movementFlagState(connection).horizontalCollisions.poll();
         boolean horizontalCollision = queuedHorizontalCollision != null
                 ? queuedHorizontalCollision
                 : horizontalCollision();
@@ -424,13 +454,44 @@ public final class PacketFixFor1_21Plus {
     }
 
     private static final class ServerboundMovementFlagHandler extends ChannelOutboundHandlerAdapter {
+        private final UserConnection connection;
+
+        private ServerboundMovementFlagHandler(UserConnection connection) {
+            this.connection = connection;
+        }
+
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
             if (msg instanceof ByteBuf) {
-                rewriteServerboundMovementFlags((ByteBuf) msg);
+                rewriteServerboundMovementFlags((ByteBuf) msg, this.connection);
             }
 
             super.write(ctx, msg, promise);
+        }
+    }
+
+    private static MovementFlagState movementFlagState(UserConnection connection) {
+        return (MovementFlagState) connection.getStoredObjects().computeIfAbsent(
+                MovementFlagState.class, ignored -> new MovementFlagState());
+    }
+
+    private static void clearMovementFlags(UserConnection connection) {
+        if (connection == null) {
+            return;
+        }
+
+        MovementFlagState state = connection.get(MovementFlagState.class);
+        if (state != null) {
+            state.horizontalCollisions.clear();
+        }
+    }
+
+    private static final class MovementFlagState implements StorableObject {
+        private final Queue<Boolean> horizontalCollisions = new ConcurrentLinkedQueue<>();
+
+        @Override
+        public void onRemove() {
+            this.horizontalCollisions.clear();
         }
     }
 }

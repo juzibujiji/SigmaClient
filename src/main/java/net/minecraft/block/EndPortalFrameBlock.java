@@ -1,6 +1,8 @@
 package net.minecraft.block;
 
 import com.google.common.base.Predicates;
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.block.pattern.BlockPattern;
 import net.minecraft.block.pattern.BlockPatternBuilder;
 import net.minecraft.block.pattern.BlockStateMatcher;
@@ -28,6 +30,8 @@ public class EndPortalFrameBlock extends Block
     protected static final VoxelShape BASE_SHAPE = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 13.0D, 16.0D);
     protected static final VoxelShape EYE_SHAPE = Block.makeCuboidShape(4.0D, 13.0D, 4.0D, 12.0D, 16.0D, 12.0D);
     protected static final VoxelShape BASE_WITH_EYE_SHAPE = VoxelShapes.or(BASE_SHAPE, EYE_SHAPE);
+    private static final VoxelShape LEGACY_EYE_SHAPE = Block.makeCuboidShape(5.0D, 13.0D, 5.0D, 11.0D, 16.0D, 11.0D);
+    private static final VoxelShape LEGACY_BASE_WITH_EYE_SHAPE = VoxelShapes.or(BASE_SHAPE, LEGACY_EYE_SHAPE);
     private static BlockPattern portalShape;
 
     public EndPortalFrameBlock(AbstractBlock.Properties properties)
@@ -43,7 +47,22 @@ public class EndPortalFrameBlock extends Block
 
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            return BASE_SHAPE;
+        }
+
         return state.get(EYE) ? BASE_WITH_EYE_SHAPE : BASE_SHAPE;
+    }
+
+    public VoxelShape getCollisionShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
+    {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            return state.get(EYE) ? LEGACY_BASE_WITH_EYE_SHAPE : BASE_SHAPE;
+        }
+
+        return super.getCollisionShape(state, worldIn, pos, context);
     }
 
     public BlockState getStateForPlacement(BlockItemUseContext context)

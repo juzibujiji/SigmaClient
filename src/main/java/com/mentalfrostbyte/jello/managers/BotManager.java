@@ -1,7 +1,7 @@
 package com.mentalfrostbyte.jello.managers;
 
-import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
+import com.mentalfrostbyte.jello.event.impl.game.world.EventTick;
 import com.mentalfrostbyte.jello.managers.data.Manager;
 import com.mentalfrostbyte.jello.managers.util.combat.AntiBotBase;
 import com.mentalfrostbyte.jello.util.game.world.EntityUtil;
@@ -29,7 +29,7 @@ public class BotManager extends Manager {
 
     @EventTarget
     @HighestPriority
-    public void onPlayerTick(EventUpdate var1) {
+    public void onPlayerTick(EventTick var1) {
         if (this.antiBot != null) {
             for (PlayerEntity entity : EntityUtil.getPlayerEntities()) {
                 if (!this.antiBot.isBot(entity)) {

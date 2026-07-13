@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import javax.annotation.Nullable;
 import net.minecraft.entity.item.FallingBlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -38,6 +40,8 @@ public class AnvilBlock extends FallingBlock
     private static final VoxelShape PART_UPPER_Z = Block.makeCuboidShape(3.0D, 10.0D, 0.0D, 13.0D, 16.0D, 16.0D);
     private static final VoxelShape X_AXIS_AABB = VoxelShapes.or(PART_BASE, PART_LOWER_X, PART_MID_X, PART_UPPER_X);
     private static final VoxelShape Z_AXIS_AABB = VoxelShapes.or(PART_BASE, PART_LOWER_Z, PART_MID_Z, PART_UPPER_Z);
+    private static final VoxelShape LEGACY_X_AXIS_AABB = Block.makeCuboidShape(0.0D, 0.0D, 2.0D, 16.0D, 16.0D, 14.0D);
+    private static final VoxelShape LEGACY_Z_AXIS_AABB = Block.makeCuboidShape(2.0D, 0.0D, 0.0D, 14.0D, 16.0D, 16.0D);
     private static final ITextComponent containerName = new TranslationTextComponent("container.repair");
 
     public AnvilBlock(AbstractBlock.Properties properties)
@@ -77,6 +81,12 @@ public class AnvilBlock extends FallingBlock
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
         Direction direction = state.get(FACING);
+
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            return direction.getAxis() == Direction.Axis.X ? LEGACY_X_AXIS_AABB : LEGACY_Z_AXIS_AABB;
+        }
+
         return direction.getAxis() == Direction.Axis.X ? X_AXIS_AABB : Z_AXIS_AABB;
     }
 

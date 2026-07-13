@@ -2,6 +2,8 @@ package net.minecraft.util;
 
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveInput;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveButton;
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import net.minecraft.client.GameSettings;
 import team.sdhq.eventBus.EventBus;
@@ -27,7 +29,9 @@ public class MovementInputFromOptions extends MovementInput {
                 this.gameSettings.keyBindBack.isKeyDown(),
                 this.gameSettings.keyBindLeft.isKeyDown(),
                 this.gameSettings.keyBindRight.isKeyDown(),
-                this.gameSettings.keyBindJump.isKeyDown(),
+                this.gameSettings.keyBindJump.isKeyDown()
+                        && (!this.gameSettings.keyBindSneak.isKeyDown()
+                                || JelloPortal.getVersion().newerThan(ProtocolVersion.v1_14)),
                 this.gameSettings.keyBindSneak.isKeyDown()
         );
         EventBus.call(eventMoveButton);

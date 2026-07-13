@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import java.util.List;
 import java.util.Optional;
 import javax.annotation.Nullable;
@@ -56,6 +58,7 @@ public class BedBlock extends HorizontalBlock implements ITileEntityProvider
     protected static final VoxelShape SOUTH_FACING_SHAPE = VoxelShapes.or(BED_BASE_SHAPE, CORNER_SW, CORNER_SE);
     protected static final VoxelShape WEST_FACING_SHAPE = VoxelShapes.or(BED_BASE_SHAPE, CORNER_NW, CORNER_SW);
     protected static final VoxelShape EAST_FACING_SHAPE = VoxelShapes.or(BED_BASE_SHAPE, CORNER_NE, CORNER_SE);
+    private static final VoxelShape LEGACY_BED_SHAPE = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 9.0D, 16.0D);
     private final DyeColor color;
 
     public BedBlock(DyeColor colorIn, AbstractBlock.Properties properties)
@@ -245,6 +248,11 @@ public class BedBlock extends HorizontalBlock implements ITileEntityProvider
 
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_13_2))
+        {
+            return LEGACY_BED_SHAPE;
+        }
+
         Direction direction = getFootDirection(state).getOpposite();
 
         switch (direction)

@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import java.util.Arrays;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
@@ -43,6 +45,12 @@ public class PistonHeadBlock extends DirectionalBlock
     protected static final VoxelShape SHORT_NORTH_ARM_AABB = Block.makeCuboidShape(6.0D, 6.0D, 4.0D, 10.0D, 10.0D, 16.0D);
     protected static final VoxelShape SHORT_EAST_ARM_AABB = Block.makeCuboidShape(0.0D, 6.0D, 6.0D, 12.0D, 10.0D, 10.0D);
     protected static final VoxelShape SHORT_WEST_ARM_AABB = Block.makeCuboidShape(4.0D, 6.0D, 6.0D, 16.0D, 10.0D, 10.0D);
+    private static final VoxelShape LEGACY_UP_ARM_AABB = Block.makeCuboidShape(6.0D, 0.0D, 6.0D, 10.0D, 12.0D, 10.0D);
+    private static final VoxelShape LEGACY_DOWN_ARM_AABB = Block.makeCuboidShape(6.0D, 4.0D, 6.0D, 10.0D, 16.0D, 10.0D);
+    private static final VoxelShape LEGACY_SOUTH_ARM_AABB = Block.makeCuboidShape(4.0D, 6.0D, 0.0D, 12.0D, 10.0D, 12.0D);
+    private static final VoxelShape LEGACY_NORTH_ARM_AABB = Block.makeCuboidShape(4.0D, 6.0D, 4.0D, 12.0D, 10.0D, 16.0D);
+    private static final VoxelShape LEGACY_EAST_ARM_AABB = Block.makeCuboidShape(0.0D, 6.0D, 4.0D, 12.0D, 10.0D, 12.0D);
+    private static final VoxelShape LEGACY_WEST_ARM_AABB = Block.makeCuboidShape(6.0D, 4.0D, 4.0D, 10.0D, 12.0D, 16.0D);
     private static final VoxelShape[] EXTENDED_SHAPES = getShapesForExtension(true);
     private static final VoxelShape[] UNEXTENDED_SHAPES = getShapesForExtension(false);
 
@@ -82,6 +90,56 @@ public class PistonHeadBlock extends DirectionalBlock
         }
     }
 
+    private static VoxelShape getLegacyHeadShape(Direction direction)
+    {
+        switch (direction)
+        {
+            case DOWN:
+                return PISTON_EXTENSION_DOWN_AABB;
+
+            case UP:
+                return PISTON_EXTENSION_UP_AABB;
+
+            case NORTH:
+                return PISTON_EXTENSION_NORTH_AABB;
+
+            case SOUTH:
+                return PISTON_EXTENSION_SOUTH_AABB;
+
+            case WEST:
+                return PISTON_EXTENSION_WEST_AABB;
+
+            case EAST:
+            default:
+                return PISTON_EXTENSION_EAST_AABB;
+        }
+    }
+
+    private static VoxelShape getLegacy1_8CollisionShape(Direction direction)
+    {
+        switch (direction)
+        {
+            case DOWN:
+                return VoxelShapes.or(PISTON_EXTENSION_DOWN_AABB, LEGACY_DOWN_ARM_AABB);
+
+            case UP:
+                return VoxelShapes.or(PISTON_EXTENSION_UP_AABB, LEGACY_UP_ARM_AABB);
+
+            case NORTH:
+                return VoxelShapes.or(PISTON_EXTENSION_NORTH_AABB, LEGACY_NORTH_ARM_AABB);
+
+            case SOUTH:
+                return VoxelShapes.or(PISTON_EXTENSION_SOUTH_AABB, LEGACY_SOUTH_ARM_AABB);
+
+            case WEST:
+                return VoxelShapes.or(PISTON_EXTENSION_WEST_AABB, LEGACY_WEST_ARM_AABB);
+
+            case EAST:
+            default:
+                return VoxelShapes.or(PISTON_EXTENSION_EAST_AABB, LEGACY_EAST_ARM_AABB);
+        }
+    }
+
     public PistonHeadBlock(AbstractBlock.Properties properties)
     {
         super(properties);
@@ -95,7 +153,29 @@ public class PistonHeadBlock extends DirectionalBlock
 
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            return getLegacyHeadShape(state.get(FACING));
+        }
+
         return (state.get(SHORT) ? EXTENDED_SHAPES : UNEXTENDED_SHAPES)[state.get(FACING).ordinal()];
+    }
+
+    public VoxelShape getCollisionShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
+    {
+        ProtocolVersion targetVersion = JelloPortal.getVersion();
+
+        if (targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_8))
+        {
+            return getLegacy1_8CollisionShape(state.get(FACING));
+        }
+
+        if (targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            return getLegacyHeadShape(state.get(FACING));
+        }
+
+        return super.getCollisionShape(state, worldIn, pos, context);
     }
 
     private boolean isExtended(BlockState baseState, BlockState extendedState)

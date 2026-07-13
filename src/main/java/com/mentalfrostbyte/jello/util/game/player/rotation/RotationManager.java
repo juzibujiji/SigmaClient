@@ -59,8 +59,15 @@ public class RotationManager {
      * Set target rotation and start rotating
      */
     public void setTargetRotation(float yaw, float pitch) {
-        // Ensure yaw is properly wrapped to [-180, 180]
-        targetYaw = MathHelper.wrapDegrees(yaw);
+        if (!Float.isFinite(yaw) || !Float.isFinite(pitch)
+                || !Float.isFinite(currentYaw) || !Float.isFinite(currentPitch)) {
+            return;
+        }
+
+        // Vanilla yaw is intentionally unbounded. Expand the requested wrapped yaw
+        // to the nearest equivalent angle so crossing 180/-180 never becomes a raw
+        // 360-degree packet delta (for example 179 -> -179 must become 179 -> 181).
+        targetYaw = currentYaw + MathHelper.wrapDegrees(yaw - currentYaw);
 
         // Clamp pitch to valid range
         targetPitch = MathHelper.clamp(pitch, -90.0f, 90.0f);
@@ -109,14 +116,14 @@ public class RotationManager {
         float pitchMove = Math.signum(pitchDiff) * totalPitchSpeed * timeDelta;
 
         // Additional safety check to prevent server kicks - limit per-tick rotation
-        yawMove = MathHelper.clamp(yawMove, -40.0f, 180.0f);
-        pitchMove = MathHelper.clamp(pitchMove, -40.0f, 180.0f);
+        yawMove = MathHelper.clamp(yawMove, -36.0f, 36.0f);
+        pitchMove = MathHelper.clamp(pitchMove, -18.0f, 18.0f);
 
         // Apply movement (capped to prevent overshooting)
         if (Math.abs(yawMove) > Math.abs(yawDiff)) {
-            currentYaw = targetYaw;
+            currentYaw += yawDiff;
         } else {
-            currentYaw = MathHelper.wrapDegrees(currentYaw + yawMove);
+            currentYaw += yawMove;
         }
 
         if (Math.abs(pitchMove) > Math.abs(pitchDiff)) {

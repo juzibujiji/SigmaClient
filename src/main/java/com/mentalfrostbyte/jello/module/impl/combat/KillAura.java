@@ -6,6 +6,7 @@ import com.mentalfrostbyte.jello.event.impl.game.render.EventRender2DOffset;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender3D;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
+import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventPlace;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventStopUseItem;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventUseItem;
@@ -38,6 +39,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.ProjectileHelper;
 import net.minecraft.item.SwordItem;
 import net.minecraft.network.play.server.SEntityStatusPacket;
+import net.minecraft.network.play.server.SAnimateHandPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.EntityRayTraceResult;
@@ -64,6 +66,7 @@ public class KillAura extends Module {
     private final BooleanSetting hitEvent;
     public HashMap<Entity, Animation> entityAnimation = new HashMap<>();
     public static InteractAutoBlock autoBlock;
+    private PredictionAutoBlock predictionAutoBlock;
     private int attackTimer;
     private int animationTimer;
     private float eventUpdateYaw, eventUpdatePitch;
@@ -96,7 +99,7 @@ public class KillAura extends Module {
         super(ModuleCategory.COMBAT, "KillAura", "Automatically attacks entities");
         this.registerSetting(new ModeSetting("Mode", "Mode", 0, "Single", "Switch", "Multi", "Multi2"));
         this.registerSetting(new ModeSetting("Autoblock Mode", "Autoblock Mode", 0, "None", "Fake", "NCP", "Basic1",
-                "Basic2", "Basic3", "Vanilla"));
+                "Basic2", "Basic3", "Vanilla", "Prediction"));
         this.registerSetting(
                 new NumberSetting<>("Unblock Rate", "Unlock Ticks for Vanilla AutoBlock mode.", 0, 0, 2, 1) {
                     @Override
@@ -165,6 +168,7 @@ public class KillAura extends Module {
     public void initialize() {
         this.targets = new ArrayList<TimedEntity>();
         autoBlock = new InteractAutoBlock(this);
+        this.predictionAutoBlock = new PredictionAutoBlock(this, autoBlock);
         super.initialize();
     }
 
@@ -173,6 +177,9 @@ public class KillAura extends Module {
         this.targets = new ArrayList<TimedEntity>();
         targetEntity = null;
         targetData = null;
+        if (this.predictionAutoBlock != null) {
+            this.predictionAutoBlock.reset();
+        }
         this.attackTimer = (int) autoBlock.getCpsTiming(0);
         this.animationTimer = 0;
         this.attackDelay = 0;
@@ -198,6 +205,12 @@ public class KillAura extends Module {
 
     @Override
     public void onDisable() {
+        if (this.predictionAutoBlock != null) {
+            this.predictionAutoBlock.reset();
+        }
+        if (autoBlock != null && autoBlock.isBlocking()) {
+            autoBlock.stopAutoBlock();
+        }
         targetEntity = null;
         targetData = null;
         this.targets = null;
@@ -213,6 +226,9 @@ public class KillAura extends Module {
 
     @EventTarget
     public void onWorldLoadd(EventLoadWorld var1) {
+        if (this.predictionAutoBlock != null) {
+            this.predictionAutoBlock.reset();
+        }
         if (this.isEnabled() && this.getBooleanValueFromSettingName("Disable on death")) {
             Client.getInstance().notificationManager.send(new Notification("Aura", "Aura disabled due to respawn"));
             this.toggle();
@@ -247,6 +263,7 @@ public class KillAura extends Module {
             if (!this.getStringSettingValueByName("Autoblock Mode").equals("None")
                     && !this.getStringSettingValueByName("Autoblock Mode").equals("Fake")
                     && !this.getStringSettingValueByName("Autoblock Mode").equals("Vanilla")
+                    && !this.getStringSettingValueByName("Autoblock Mode").equals("Prediction")
                     && (mc.player.getHeldItemMainhand().getItem() instanceof SwordItem
                             || this.blockDelay != mc.player.inventory.currentItem)
                     && targetEntity != null) {
@@ -275,7 +292,8 @@ public class KillAura extends Module {
                 autoBlock.stopAutoBlock();
             }
 
-            if (autoBlock.isBlocking()
+            if (!"Prediction".equals(this.getStringSettingValueByName("Autoblock Mode"))
+                    && autoBlock.isBlocking()
                     && (!(mc.player.getHeldItemMainhand().getItem() instanceof SwordItem) || targetEntity == null)) {
                 autoBlock.setBlockingState(false);
             }
@@ -311,8 +329,9 @@ public class KillAura extends Module {
                 if (rotationMode.currentValue.equals("JelloAI") && targetEntity != null) {
                     // Let JelloAI handle the rotations
                     JelloAI.faceEntity(targetEntity);
+                    JelloAI.updateRotations();
 
-                    // Update current rotation with JelloAI values
+                    // Publish the final value from this tick to every rotation consumer.
                     this.currentRotation.yaw = JelloAI.getCurrentYaw();
                     this.currentRotation.pitch = JelloAI.getCurrentPitch();
 
@@ -347,11 +366,6 @@ public class KillAura extends Module {
                     RotationCore.currentPitch = currentRotation.pitch;
                 }
 
-                // Update JelloAI rotations every tick
-                if (rotationMode.currentValue.equals("JelloAI")) {
-                    JelloAI.updateRotations();
-                }
-
                 mc.gameRenderer.getMouseOver(1.0F); // might fix issue with slow raytrace update
 
                 if (!this.hitEvent.currentValue) {
@@ -363,6 +377,20 @@ public class KillAura extends Module {
                 }
             }
         }
+    }
+
+    @EventTarget
+    public void onRunTicks(EventRunTicks event) {
+        if (!event.isPre() || !this.isEnabled() || this.predictionAutoBlock == null) {
+            return;
+        }
+
+        if (Client.getInstance().moduleManager.getModuleByClass(BlockFly.class).enabled) {
+            this.predictionAutoBlock.tick(null);
+            return;
+        }
+
+        this.updatePredictionAutoBlock();
     }
 
     @EventTarget
@@ -390,38 +418,8 @@ public class KillAura extends Module {
 
         if (this.isEnabled() && this.targets != null && !this.targets.isEmpty()) {
             if (this.getBooleanValueFromSettingName("Silent")) {
-                // If using JelloAI, use its rotation values
-                if (rotationMode.currentValue.equals("JelloAI")) {
-                    // Use reflection to set the fields since they're private
-                    try {
-                        // Get the field and make it accessible
-                        java.lang.reflect.Field yawField = event.getClass().getDeclaredField("yaw");
-                        java.lang.reflect.Field pitchField = event.getClass().getDeclaredField("pitch");
-
-                        yawField.setAccessible(true);
-                        pitchField.setAccessible(true);
-
-                        // Set the values
-                        yawField.set(event, JelloAI.getCurrentYaw());
-                        pitchField.set(event, JelloAI.getCurrentPitch());
-                    } catch (Exception e) {
-                        Client.logger.error("Error setting rotation values", e);
-                    }
-                } else {
-                    // Use reflection for non-JelloAI rotations too
-                    try {
-                        java.lang.reflect.Field yawField = event.getClass().getDeclaredField("yaw");
-                        java.lang.reflect.Field pitchField = event.getClass().getDeclaredField("pitch");
-
-                        yawField.setAccessible(true);
-                        pitchField.setAccessible(true);
-
-                        yawField.set(event, this.currentRotation.yaw);
-                        pitchField.set(event, this.currentRotation.pitch);
-                    } catch (Exception e) {
-                        Client.logger.error("Error setting rotation values", e);
-                    }
-                }
+                event.setYaw(this.currentRotation.yaw);
+                event.setPitch(this.currentRotation.pitch);
             }
 
             if (!event.isPre()) {
@@ -518,6 +516,9 @@ public class KillAura extends Module {
     }
 
     public boolean isAutoblockActive() {
+        if ("Prediction".equals(this.getStringSettingValueByName("Autoblock Mode"))) {
+            return targetEntity != null && autoBlock != null && autoBlock.isBlocking();
+        }
         return targetEntity != null
                 && mc.player.getHeldItemMainhand() != null
                 && mc.player.getHeldItemMainhand().getItem() instanceof SwordItem
@@ -854,7 +855,8 @@ public class KillAura extends Module {
 
                     if (canAttack) {
                         // Existing attack code
-                        if (autoBlock.isBlocking()) {
+                        if (autoBlock.isBlocking()
+                                && !"Prediction".equals(this.getStringSettingValueByName("Autoblock Mode"))) {
                             autoBlock.stopAutoBlock();
                         }
 
@@ -899,6 +901,12 @@ public class KillAura extends Module {
 
     @EventTarget
     public void onReceivePacket(EventReceivePacket event) {
+        if (this.predictionAutoBlock != null
+                && event.packet instanceof SAnimateHandPacket animate
+                && (animate.getAnimationType() == 0 || animate.getAnimationType() == 3)) {
+            this.predictionAutoBlock.recordSwing(animate.getEntityID());
+        }
+
         // Handle hit detection for JelloAI learning
         if (rotationMode.currentValue.equals("JelloAI") && lastAttackEntity != null &&
                 System.currentTimeMillis() - lastAttackTime < 500) {
@@ -916,5 +924,14 @@ public class KillAura extends Module {
                 }
             }
         }
+    }
+
+    private void updatePredictionAutoBlock() {
+        if (this.predictionAutoBlock == null) {
+            return;
+        }
+
+        Entity selected = targetData != null ? targetData.getEntity() : targetEntity;
+        this.predictionAutoBlock.tick(selected instanceof LivingEntity ? (LivingEntity) selected : null);
     }
 }

@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.block.material.Material;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.BoatEntity;
@@ -15,6 +17,7 @@ import net.minecraft.world.server.ServerWorld;
 public class LilyPadBlock extends BushBlock
 {
     protected static final VoxelShape LILY_PAD_AABB = Block.makeCuboidShape(1.0D, 0.0D, 1.0D, 15.0D, 1.5D, 15.0D);
+    private static final VoxelShape LEGACY_LILY_PAD_AABB = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 0.25D, 16.0D);
 
     protected LilyPadBlock(AbstractBlock.Properties builder)
     {
@@ -33,6 +36,11 @@ public class LilyPadBlock extends BushBlock
 
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_8))
+        {
+            return LEGACY_LILY_PAD_AABB;
+        }
+
         return LILY_PAD_AABB;
     }
 

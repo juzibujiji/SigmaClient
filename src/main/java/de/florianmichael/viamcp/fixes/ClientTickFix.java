@@ -50,7 +50,7 @@ public class ClientTickFix {
 
         try {
             UserConnection connection = getActiveConnection(mc);
-            if (connection == null) {
+            if (!PacketFixFor1_21Plus.isPlayState(connection)) {
                 return;
             }
 

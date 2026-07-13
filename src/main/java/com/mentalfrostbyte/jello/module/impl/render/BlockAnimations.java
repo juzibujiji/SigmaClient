@@ -5,6 +5,7 @@ import com.mentalfrostbyte.jello.event.impl.player.EventHandAnimation;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.combat.KillAura;
+import com.mentalfrostbyte.jello.module.impl.combat.AutoClicker;
 import com.mentalfrostbyte.jello.module.impl.player.OldHitting;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.ModeSetting;
@@ -100,6 +101,12 @@ public class BlockAnimations extends Module {
         }
 
         if (mc.gameSettings.keyBindUseItem.isKeyDown() && mc.player.getHeldItemMainhand().getItem() instanceof SwordItem) {
+            return true;
+        }
+
+        Module autoClickerModule = Client.getInstance().moduleManager.getModuleByClass(AutoClicker.class);
+        if (autoClickerModule instanceof AutoClicker autoClicker && autoClicker.isBlockHitBlocking()
+                && mc.player.getHeldItemMainhand().getItem() instanceof SwordItem) {
             return true;
         }
 

@@ -1472,7 +1472,8 @@ public abstract class LivingEntity extends Entity {
             if (block.isIn(BlockTags.CLIMBABLE)) {
                 this.field_233624_bE_ = Optional.of(blockpos);
                 return true;
-            } else if (block instanceof TrapDoorBlock && this.canGoThroughtTrapDoorOnLadder(blockpos, blockstate)) {
+            } else if (ViaLoadingBase.getInstance().getTargetVersion().newerThan(ProtocolVersion.v1_8)
+                    && block instanceof TrapDoorBlock && this.canGoThroughtTrapDoorOnLadder(blockpos, blockstate)) {
                 this.field_233624_bE_ = Optional.of(blockpos);
                 return true;
             } else {
@@ -2135,6 +2136,8 @@ public abstract class LivingEntity extends Entity {
     public void travel(Vector3d travelVector) {
         if (this.isServerWorld() || this.canPassengerSteer()) {
             final boolean use1_21Movement = PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics();
+            final ProtocolVersion targetVersion = ViaLoadingBase.getInstance().getTargetVersion();
+            final boolean legacyWaterMovement = targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_12_2);
             double d0 = this.getFinalGravity();
             boolean flag = this.getMotion().y <= 0.0D;
 
@@ -2149,7 +2152,8 @@ public abstract class LivingEntity extends Entity {
 
             if (this.isInWater() && this.shouldSwimInFluids() && !this.func_230285_a_(fluidstate.getFluid())) {
                 double d8 = this.getPosY();
-                float f5 = this.isSprinting() ? 0.9F : this.getBaseMovementSpeedMultiplier();
+                float f5 = legacyWaterMovement ? this.getWaterSlowDown()
+                        : this.isSprinting() ? 0.9F : this.getBaseMovementSpeedMultiplier();
                 float f6 = 0.02F;
                 float f7 = (float) EnchantmentHelper.getDepthStriderModifier(this);
 
@@ -2174,12 +2178,16 @@ public abstract class LivingEntity extends Entity {
                 this.move(MoverType.SELF, this.getMotion());
                 Vector3d vector3d6 = this.getMotion();
 
-                if (this.collidedHorizontally && this.isOnLadder()) {
+                if (targetVersion.newerThan(ProtocolVersion.v1_13_2)
+                        && this.collidedHorizontally && this.isOnLadder()) {
                     vector3d6 = new Vector3d(vector3d6.x, 0.2D, vector3d6.z);
                 }
 
                 this.setMotion(vector3d6.mul((double) f5, (double) 0.8F, (double) f5));
-                Vector3d vector3d2 = this.applyFluidMovingSpeed(d0, flag, this.getMotion());
+                Vector3d vector3d2 = legacyWaterMovement && !this.hasNoGravity()
+                        ? this.getMotion().add(0.0D, -0.02D, 0.0D)
+                        : this.applyFluidMovingSpeed(d0,
+                                targetVersion.newerThan(ProtocolVersion.v1_13_2) && flag, this.getMotion());
                 this.setMotion(vector3d2);
 
                 if (this.collidedHorizontally && this.isOffsetPositionInLiquid(vector3d2.x, vector3d2.y + (double) 0.6F - this.getPosY() + d8, vector3d2.z)) {
@@ -2308,7 +2316,8 @@ public abstract class LivingEntity extends Entity {
         this.move(MoverType.SELF, this.getMotion());
         Vector3d vector3d = this.getMotion();
 
-        if ((this.collidedHorizontally || this.isJumping) && this.isOnLadder()) {
+        if ((this.collidedHorizontally || ViaLoadingBase.getInstance().getTargetVersion()
+                .newerThan(ProtocolVersion.v1_13_2) && this.isJumping) && this.isOnLadder()) {
             vector3d = new Vector3d(vector3d.x, 0.2D, vector3d.z);
         }
 
@@ -2777,7 +2786,9 @@ public abstract class LivingEntity extends Entity {
             this.updateSpinAttack(axisalignedbb, this.getBoundingBox());
         }
 
-        this.collideWithNearbyEntities();
+        if (ViaLoadingBase.getInstance().getTargetVersion().newerThan(ProtocolVersion.v1_8)) {
+            this.collideWithNearbyEntities();
+        }
         this.world.getProfiler().endSection();
 
         if (!this.world.isRemote && this.isWaterSensitive() && this.isInWaterRainOrBubbleColumn()) {

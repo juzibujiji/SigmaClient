@@ -20,6 +20,7 @@ public class AntiKnockback extends ModuleWithModuleSettings {
                 new GommeAntiKB(),
                 new VulcanAntiKB(),
                 new LegitAntiKB(),
+                new HypixelAttackReduceAntiKB(),
                 new GrimAntiKB()
         );
     }

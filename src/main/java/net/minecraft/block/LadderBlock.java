@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import javax.annotation.Nullable;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.fluid.Fluids;
@@ -26,6 +28,10 @@ public class LadderBlock extends Block implements IWaterLoggable
     protected static final VoxelShape LADDER_WEST_AABB = Block.makeCuboidShape(13.0D, 0.0D, 0.0D, 16.0D, 16.0D, 16.0D);
     protected static final VoxelShape LADDER_SOUTH_AABB = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 16.0D, 3.0D);
     protected static final VoxelShape LADDER_NORTH_AABB = Block.makeCuboidShape(0.0D, 0.0D, 13.0D, 16.0D, 16.0D, 16.0D);
+    private static final VoxelShape LEGACY_LADDER_EAST_AABB = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 2.0D, 16.0D, 16.0D);
+    private static final VoxelShape LEGACY_LADDER_WEST_AABB = Block.makeCuboidShape(14.0D, 0.0D, 0.0D, 16.0D, 16.0D, 16.0D);
+    private static final VoxelShape LEGACY_LADDER_SOUTH_AABB = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 16.0D, 2.0D);
+    private static final VoxelShape LEGACY_LADDER_NORTH_AABB = Block.makeCuboidShape(0.0D, 0.0D, 14.0D, 16.0D, 16.0D, 16.0D);
 
     protected LadderBlock(AbstractBlock.Properties builder)
     {
@@ -35,7 +41,28 @@ public class LadderBlock extends Block implements IWaterLoggable
 
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
-        switch ((Direction)state.get(FACING))
+        Direction direction = state.get(FACING);
+
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_8))
+        {
+            switch (direction)
+            {
+                case NORTH:
+                    return LEGACY_LADDER_NORTH_AABB;
+
+                case SOUTH:
+                    return LEGACY_LADDER_SOUTH_AABB;
+
+                case WEST:
+                    return LEGACY_LADDER_WEST_AABB;
+
+                case EAST:
+                default:
+                    return LEGACY_LADDER_EAST_AABB;
+            }
+        }
+
+        switch (direction)
         {
             case NORTH:
                 return LADDER_NORTH_AABB;

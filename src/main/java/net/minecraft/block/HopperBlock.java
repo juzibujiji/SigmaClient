@@ -1,5 +1,7 @@
 package net.minecraft.block;
 
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -48,6 +50,9 @@ public class HopperBlock extends ContainerBlock
     private static final VoxelShape NORTH_RAYTRACE_SHAPE = VoxelShapes.or(IHopper.INSIDE_BOWL_SHAPE, Block.makeCuboidShape(6.0D, 8.0D, 0.0D, 10.0D, 10.0D, 4.0D));
     private static final VoxelShape SOUTH_RAYTRACE_SHAPE = VoxelShapes.or(IHopper.INSIDE_BOWL_SHAPE, Block.makeCuboidShape(6.0D, 8.0D, 12.0D, 10.0D, 10.0D, 16.0D));
     private static final VoxelShape WEST_RAYTRACE_SHAPE = VoxelShapes.or(IHopper.INSIDE_BOWL_SHAPE, Block.makeCuboidShape(0.0D, 8.0D, 6.0D, 4.0D, 10.0D, 10.0D));
+    private static final VoxelShape LEGACY_INSIDE_SHAPE = Block.makeCuboidShape(2.0D, 10.0D, 2.0D, 14.0D, 16.0D, 14.0D);
+    private static final VoxelShape LEGACY_HOPPER_SHAPE = VoxelShapes.combineAndSimplify(
+            VoxelShapes.fullCube(), LEGACY_INSIDE_SHAPE, IBooleanFunction.ONLY_FIRST);
 
     public HopperBlock(AbstractBlock.Properties properties)
     {
@@ -57,6 +62,11 @@ public class HopperBlock extends ContainerBlock
 
     public VoxelShape getShape(BlockState state, IBlockReader worldIn, BlockPos pos, ISelectionContext context)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            return LEGACY_HOPPER_SHAPE;
+        }
+
         switch ((Direction)state.get(FACING))
         {
             case DOWN:
@@ -81,6 +91,11 @@ public class HopperBlock extends ContainerBlock
 
     public VoxelShape getRaytraceShape(BlockState state, IBlockReader worldIn, BlockPos pos)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            return LEGACY_INSIDE_SHAPE;
+        }
+
         switch ((Direction)state.get(FACING))
         {
             case DOWN:

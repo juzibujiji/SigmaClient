@@ -487,7 +487,7 @@ public class WorldSelectionList extends ExtendedList<WorldSelectionList.Entry>
                 }
                 catch (Throwable throwable)
                 {
-                    WorldSelectionList.LOGGER.error("Invalid icon for world {}", this.field_214451_d.getFileName(), throwable);
+                    WorldSelectionList.LOGGER.warn("Invalid icon for world {}; using default icon", this.field_214451_d.getFileName());
                     this.field_214453_f = null;
                     return null;
                 }

@@ -1,7 +1,9 @@
 package net.minecraft.fluid;
 
 import com.google.common.collect.Maps;
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
 import com.mojang.datafixers.util.Pair;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import it.unimi.dsi.fastutil.objects.Object2ByteLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.shorts.Short2BooleanMap;
 import it.unimi.dsi.fastutil.shorts.Short2BooleanOpenHashMap;
@@ -14,6 +16,11 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.ILiquidContainer;
+import net.minecraft.block.LeavesBlock;
+import net.minecraft.block.ShulkerBoxBlock;
+import net.minecraft.block.StainedGlassBlock;
+import net.minecraft.block.StairsBlock;
+import net.minecraft.block.TrapDoorBlock;
 import net.minecraft.block.material.Material;
 import net.minecraft.state.BooleanProperty;
 import net.minecraft.state.IntegerProperty;
@@ -138,6 +145,27 @@ public abstract class FlowingFluid extends Fluid
         }
         else
         {
+            ProtocolVersion targetVersion = JelloPortal.getVersion();
+
+            if (targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_11_1))
+            {
+                return blockstate.getMaterial().isSolid();
+            }
+
+            Block block = blockstate.getBlock();
+
+            if (targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_13_2)
+                    && (block instanceof ShulkerBoxBlock || block instanceof LeavesBlock
+                            || block instanceof TrapDoorBlock || block == Blocks.BEACON
+                            || block == Blocks.CAULDRON || block == Blocks.GLASS
+                            || block == Blocks.GLOWSTONE || block == Blocks.ICE
+                            || block == Blocks.SEA_LANTERN || block instanceof StainedGlassBlock
+                            || block == Blocks.PISTON || block == Blocks.STICKY_PISTON
+                            || block == Blocks.PISTON_HEAD || block instanceof StairsBlock))
+            {
+                return false;
+            }
+
             return blockstate.getMaterial() == Material.ICE ? false : blockstate.isSolidSide(worldIn, neighborPos, side);
         }
     }

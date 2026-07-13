@@ -9,6 +9,8 @@ import com.mentalfrostbyte.jello.module.impl.combat.killaura.sorters.*;
 import com.mentalfrostbyte.jello.module.impl.player.Blink;
 import com.mentalfrostbyte.jello.util.game.world.EntityUtil;
 import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
+import de.florianmichael.viamcp.fixes.compat.InteractionSemantics;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Entity;
@@ -17,8 +19,10 @@ import net.minecraft.entity.merchant.villager.VillagerEntity;
 import net.minecraft.entity.monster.MonsterEntity;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ShieldItem;
 import net.minecraft.item.SwordItem;
 import net.minecraft.network.play.client.CUseEntityPacket;
+import net.minecraft.network.play.client.CPlayerTryUseItemPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.EntityRayTraceResult;
 
@@ -29,6 +33,8 @@ public class InteractAutoBlock {
     private final Module parent;
     public Minecraft mc = Minecraft.getInstance();
     public boolean blocking;
+    private Hand predictionBlockHand;
+    private boolean predictionClientHandActive;
 
     public InteractAutoBlock(Module parent) {
         this.parent = parent;
@@ -41,6 +47,21 @@ public class InteractAutoBlock {
 
     public void setBlockingState(boolean blocking) {
         this.blocking = blocking;
+        if (!blocking) {
+            if (this.predictionClientHandActive && this.mc.player != null && this.mc.player.isHandActive()
+                    && this.mc.player.getActiveHand() == this.predictionBlockHand) {
+                this.mc.player.resetActiveHand();
+            }
+            this.predictionClientHandActive = false;
+            this.predictionBlockHand = null;
+        }
+    }
+
+    /** Clears state at a world boundary without sending a release packet to the new connection. */
+    public void clearPredictionBlockState() {
+        this.blocking = false;
+        this.predictionClientHandActive = false;
+        this.predictionBlockHand = null;
     }
 
     public void performAutoBlock(Entity var1, float var2, float var3) {
@@ -77,14 +98,82 @@ public class InteractAutoBlock {
             this.setBlockingState(false);
             return;
         }
-        CombatUtil.unblock();
+        if (this.mc.getConnection() != null) {
+            CombatUtil.unblock();
+        }
         this.setBlockingState(false);
+    }
+
+    /**
+     * Starts one defensive shield block without sending the interact packet pair used by
+     * attack autoblock modes. Legacy sword use is deliberately left to Minecraft's normal
+     * use-item event path instead of constructing a 1.8 block packet here.
+     *
+     * @return {@code true} when a supported shield block packet was sent.
+     */
+    public boolean startPredictionBlock() {
+        Hand hand = this.getPredictionBlockHand();
+        if (hand == null || this.isBlocking() || this.mc.getConnection() == null
+                || this.mc.player == null || this.mc.player.isHandActive()) {
+            return false;
+        }
+
+        InteractionSemantics.sendPreUseMovement(this.mc.getConnection(), this.mc.player);
+        this.mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(hand));
+        this.predictionBlockHand = hand;
+        if (this.mc.player.getHeldItem(hand).getItem() instanceof ShieldItem) {
+            this.mc.player.setActiveHand(hand);
+            this.predictionClientHandActive = true;
+        }
+        this.setBlockingState(true);
+        return true;
+    }
+
+    public boolean canPredictionBlock() {
+        return !this.isBlocking() && this.getPredictionBlockHand() != null;
+    }
+
+    public boolean hasPredictionBlockItem() {
+        return this.getPredictionBlockHand() != null;
+    }
+
+    public boolean isPredictionShield() {
+        Hand hand = this.predictionBlockHand != null ? this.predictionBlockHand : this.getPredictionBlockHand();
+        return hand != null && this.mc.player != null
+                && this.mc.player.getHeldItem(hand).getItem() instanceof ShieldItem;
+    }
+
+    public boolean isPredictionBlockItemStillHeld() {
+        return this.predictionBlockHand != null
+                && this.predictionBlockHand == this.getPredictionBlockHand();
+    }
+
+    public boolean usesLegacySwordUseItemPath() {
+        return this.mc.player != null
+                && InteractionProtocol.atOrOlderThan1_8()
+                && this.mc.player.getHeldItemMainhand().getItem() instanceof SwordItem;
+    }
+
+    private Hand getPredictionBlockHand() {
+        if (this.mc.player == null || InteractionProtocol.atOrOlderThan1_8()) {
+            return null;
+        }
+
+        if (this.mc.player.getHeldItem(Hand.OFF_HAND).getItem() instanceof ShieldItem) {
+            return Hand.OFF_HAND;
+        }
+        if (this.mc.player.getHeldItem(Hand.MAIN_HAND).getItem() instanceof ShieldItem) {
+            return Hand.MAIN_HAND;
+        }
+
+        return null;
     }
 
     public boolean canAutoBlock() {
         String settingValue = this.parent.getStringSettingValueByName("Autoblock Mode");
         return settingValue != null && !settingValue.equals("None")
                 && !settingValue.equals("Fake")
+                && !settingValue.equals("Prediction")
                 && Objects.requireNonNull(this.mc.player).getHeldItemMainhand().getItem() instanceof SwordItem
                 && !this.isBlocking();
     }

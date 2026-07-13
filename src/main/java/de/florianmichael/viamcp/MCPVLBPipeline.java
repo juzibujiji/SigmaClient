@@ -113,7 +113,7 @@ public class MCPVLBPipeline extends VLBPipeline {
                 : "prepender";
         if (ctx.pipeline().get(anchor) != null) {
             ctx.pipeline().addAfter(anchor, PacketFixFor1_21Plus.HANDLER_NAME,
-                    PacketFixFor1_21Plus.createServerboundMovementFlagHandler());
+                    PacketFixFor1_21Plus.createServerboundMovementFlagHandler(getUser()));
         }
     }
 

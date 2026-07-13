@@ -6,9 +6,11 @@ import com.google.common.collect.Lists;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.EventKeepSprint;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventSafeWalk;
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
 import com.mentalfrostbyte.jello.module.impl.player.AutoSprint;
 import com.mojang.authlib.GameProfile;
 import com.mojang.datafixers.util.Either;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import de.florianmichael.viamcp.fixes.PacketFixFor1_21Plus;
 import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.advancements.CriteriaTriggers;
@@ -1037,7 +1039,7 @@ public abstract class PlayerEntity extends LivingEntity {
         }
         // MODIFICATION END
         // MODIFICATION START (ENDS AFTER NEXT LINE): Add `event.getSituation() == Situation.PLAYER`
-        float f = this.stepHeight;
+        float f = JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_10) ? 1.0F : this.stepHeight;
         if (event.getSituation() == EventSafeWalk.Situation.SAFE
                 || (!PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics() || !(vec.y > 0.0D))
                 && !this.abilities.isFlying && (mover == MoverType.SELF || mover == MoverType.PLAYER)
