@@ -23,33 +23,7 @@ public class MusicTabButton extends Button {
 
     @Override
     public void draw(float partialTicks) {
-        int primaryColor = normalizeOpaqueColor(this.textColor.getPrimaryColor());
-        int secondaryColor = normalizeOpaqueColor(this.textColor.getSecondaryColor());
-        float var4 = !this.isHovered() ? 0.3F : (!this.method13216()
-                ? (!this.method13212() ? Math.max(partialTicks * this.field20584, 0.0F) : 1.5F)
-                : 0.0F);
-        int color = RenderUtil2.applyAlpha(
-                RenderUtil2.shiftTowardsOther(primaryColor, secondaryColor, 1.0F - var4),
-                (float) (primaryColor >> 24 & 0xFF) / 255.0F * partialTicks
-        );
-        if (this.field20586 <= 0) {
-            RenderUtil.drawRoundedRect(
-                    (float) this.getXA(),
-                    (float) this.getYA(),
-                    (float) (this.getXA() + this.getWidthA()),
-                    (float) (this.getYA() + this.getHeightA()),
-                    color
-            );
-        } else {
-            RenderUtil.drawRoundedButton(
-                    (float) this.getXA(),
-                    (float) this.getYA(),
-                    (float) this.getWidthA(),
-                    (float) this.getHeightA(),
-                    (float) this.field20586,
-                    color
-            );
-        }
+        // 不绘制背景矩形，仅渲染文字（与 Jello Music 标题风格一致，无背景层）。
 
         int var10 = this.getXA()
                 + (this.textColor.method19411() != FontSizeAdjust.NEGATE_AND_DIVIDE_BY_2
@@ -93,9 +67,5 @@ public class MusicTabButton extends Button {
         }
 
         this.drawChildren(partialTicks);
-    }
-
-    private static int normalizeOpaqueColor(int color) {
-        return (color & 0xFF000000) == 0 ? color | 0xFF000000 : color;
     }
 }

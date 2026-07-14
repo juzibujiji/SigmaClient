@@ -75,7 +75,16 @@ public class NBSFileReader {
             readUnsignedI(stream);
             readUnsignedI(stream);
             readUnsignedI(stream);
-            readString(stream);
+            readString(stream); // imported/MIDI/Schematic file name
+
+            // v4+ 额外头部字段：loop on/off, max loop count, loop start tick
+            // 不读取这些字段会导致后续音符数据全部错位，解析失败。
+            if (var9 >= 4) {
+                stream.readBoolean(); // loop on/off
+                stream.readByte();    // max loop count
+                readSigned16(stream); // loop start tick
+            }
+
             short var16 = -1;
 
             while (true) {
@@ -90,6 +99,10 @@ public class NBSFileReader {
                         String var30 = readString(stream);
                         byte var33 = stream.readByte();
                         if (var9 >= 2) {
+                            stream.readByte();
+                        }
+                        // v4+ 每层有 1 个额外字节（layer velocity/lock）
+                        if (var9 >= 4) {
                             stream.readByte();
                         }
 
@@ -137,6 +150,14 @@ public class NBSFileReader {
                     }
 
                     method29872(var18, var16, var20, stream.readByte(), var4);
+
+                    // v4+ 每个音符有额外字段：velocity(1) + panning(1) + pitch(2)
+                    // 不读取会导致后续所有数据错位
+                    if (var9 >= 4) {
+                        stream.readByte(); // velocity
+                        stream.readByte(); // panning
+                        readSigned16(stream); // pitch
+                    }
                 }
             }
         } catch (FileNotFoundException var21) {
@@ -146,8 +167,16 @@ public class NBSFileReader {
             if (file != null) {
                 var7 = file.getName();
             }
+            System.err.println("[NBSFileReader] Unexpected EOF while reading: " + var7
+                    + " — file may be corrupted or use an unsupported format version");
         } catch (IOException var23) {
+            System.err.println("[NBSFileReader] IO error reading NBS file"
+                    + (file != null ? ": " + file.getName() : "") + ": " + var23.getMessage());
             var23.printStackTrace();
+        } catch (Exception var24) {
+            System.err.println("[NBSFileReader] Unexpected error reading NBS file"
+                    + (file != null ? ": " + file.getName() : "") + ": " + var24.getMessage());
+            var24.printStackTrace();
         }
 
         return null;

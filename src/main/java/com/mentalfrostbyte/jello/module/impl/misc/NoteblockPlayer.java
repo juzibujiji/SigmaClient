@@ -107,7 +107,7 @@ public class NoteblockPlayer extends Module {
                     }
 
                     if (this.method16406(this.field23641)) {
-                        if (Math.floor((float) mc.player.ticksExisted % this.nbsFile.getTempo()) / 20.0 == 0.0) {
+                        if (mc.player.ticksExisted % Math.max(1, Math.round(this.nbsFile.getTempo())) == 0) {
                             if (this.field23638 > this.nbsFile.getShort2()) {
                                 this.field23638 = 0;
                             }
@@ -118,7 +118,7 @@ public class NoteblockPlayer extends Module {
                                 Class8255 var6 = var5.method37433(this.field23638);
                                 if (var6 != null) {
                                     for (Class6463 var8 : this.field23641) {
-                                        if ((var6.method28780() != 3 && this.method16414(var8) == 0
+                                        if ((var6.method28780() != 3 && this.countByNbsInstrument(var6.method28780()) == 0
                                                 || var8.method19640() == var6.method28780())
                                                 && Class2121.method8807(
                                                 var8.field28402) == (float) (var6.method28782() - 33)
@@ -313,7 +313,7 @@ public class NoteblockPlayer extends Module {
                 File var3 = new File(Client.getInstance().file + "/nbs/" + this.getStringSettingValueByName("Song"));
                 this.nbsFile = NBSFileReader.fromFile(var3);
                 if (this.nbsFile == null) {
-                    MinecraftUtil.addChatMessage("§cError loading song! Make sure song is saved as <= V3 format");
+                    MinecraftUtil.addChatMessage("§cError loading song! Supported formats: NBS v0-v5. Check console for details.");
                     this.setEnabled(false);
                     return;
                 }
@@ -323,7 +323,8 @@ public class NoteblockPlayer extends Module {
             MinecraftUtil.addChatMessage("Now Playing: " + this.nbsFile.getSongName());
             if (Math.floor(20.0F / this.nbsFile.getTempo()) != (double) (20.0F / this.nbsFile.getTempo())) {
                 MinecraftUtil.addChatMessage(
-                        "§cNBS Error! Invalid tempo! (" + this.nbsFile.getTempo() + ") Unpredictable results!");
+                        "§eNote: Non-integer tempo (" + this.nbsFile.getTempo()
+                                + " TPS). Playback works but timing may drift slightly.");
             }
 
             this.field23638 = 0;
@@ -352,10 +353,24 @@ public class NoteblockPlayer extends Module {
 
         for (Class6463 var6 : this.field23641) {
             int var7 = var4.getOrDefault(var6.instrument, 0);
-            var4.put(var6.instrument, var7);
+            var4.put(var6.instrument, var7 + 1);
         }
 
         return var4.getOrDefault(var1.instrument, 0);
+    }
+
+    /**
+     * 统计世界中与指定 NBS 乐器 ID 匹配的音符盒数量。
+     * 用于兜底逻辑：当没有对应乐器的音符盒时，允许用任意音符盒代替。
+     */
+    private int countByNbsInstrument(byte nbsInstrumentId) {
+        int count = 0;
+        for (Class6463 var6 : this.field23641) {
+            if (var6.method19640() == nbsInstrumentId) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public static class Class6463 {
@@ -369,7 +384,26 @@ public class NoteblockPlayer extends Module {
         }
 
         public int method19640() {
-            return this.instrument.ordinal() - 1;
+            // 返回此音符盒对应的 NBS 乐器 ID（与 Class9705 / NBS 格式一致）。
+            // 不能用 ordinal()-1，因为 NoteBlockInstrument 枚举顺序和 NBS 乐器 ID 顺序不同。
+            return switch (this.instrument) {
+                case HARP -> 0;
+                case BASS -> 1;
+                case BASEDRUM -> 2;
+                case SNARE -> 3;
+                case HAT -> 4;
+                case GUITAR -> 5;
+                case FLUTE -> 6;
+                case BELL -> 7;
+                case CHIME -> 8;
+                case XYLOPHONE -> 9;
+                case IRON_XYLOPHONE -> 10;
+                case COW_BELL -> 11;
+                case DIDGERIDOO -> 12;
+                case BIT -> 13;
+                case BANJO -> 14;
+                case PLING -> 15;
+            };
         }
     }
 }
