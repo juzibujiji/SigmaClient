@@ -431,9 +431,7 @@ public class FirstPersonRenderer {
                     }
                 }
                 if (eventHandAnimation.isBlocking()) {
-                    if (stack.getItem() instanceof ShieldItem
-                            && Client.getInstance().moduleManager.getModuleByClass(OldHitting.class).enabled)
-                        return;
+                    if (stack.getItem() instanceof ShieldItem && Client.getInstance().moduleManager.getModuleByClass(OldHitting.class).enabled) return;
                     this.renderItemSide(player, stack, flag3 ? ItemCameraTransforms.TransformType.FIRST_PERSON_RIGHT_HAND : ItemCameraTransforms.TransformType.FIRST_PERSON_LEFT_HAND, !flag3, matrixStackIn, bufferIn, combinedLightIn);
                 }
 

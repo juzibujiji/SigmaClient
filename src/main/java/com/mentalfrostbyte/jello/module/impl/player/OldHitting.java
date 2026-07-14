@@ -1,7 +1,7 @@
 package com.mentalfrostbyte.jello.module.impl.player;
 
+
 import com.mentalfrostbyte.Client;
-import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
 import com.mentalfrostbyte.jello.event.impl.player.EventHandAnimation;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
@@ -12,17 +12,15 @@ import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.combat.KillAura;
 import com.mentalfrostbyte.jello.module.settings.impl.ModeSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
+import com.mentalfrostbyte.jello.util.game.player.combat.CombatUtil;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
-import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.block.*;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.EquipmentSlotType;
 import net.minecraft.item.Items;
 import net.minecraft.item.ShieldItem;
 import net.minecraft.item.SwordItem;
 import net.minecraft.network.play.server.SEntityEquipmentPacket;
-import net.minecraft.util.Hand;
 import net.minecraft.util.HandSide;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockRayTraceResult;
@@ -39,12 +37,11 @@ import java.util.List;
 
 public class OldHitting extends Module {
     public static boolean field23408 = false;
-    private PlayerEntity visualPlayer;
+    private boolean field23409;
 
     public OldHitting() {
         super(ModuleCategory.PLAYER, "OldHitting", "Reverts to 1.7/1.8 hitting");
-        this.registerSetting(new ModeSetting("Animation", "Animation mode", 0, "Vanilla", "Tap", "Tap2", "Slide",
-                "Slide2", "Scale", "Leaked", "Ninja", "Down", "Tomy"));
+        this.registerSetting(new ModeSetting("Animation", "Animation mode", 0, "Vanilla", "Tap", "Tap2", "Slide", "Slide2", "Scale", "Leaked", "Ninja", "Down", "Tomy"));
         this.registerSetting(new NumberSetting<>("XPos", "Default X position of the main hand", 0, -1, 1, 0.01F));
         this.registerSetting(new NumberSetting<>("YPos", "Default Y position of the main hand", 0, -1, 1, 0.01F));
         this.registerSetting(new NumberSetting<>("ZPos", "Default Z position of the main hand", 0, -1, 1, 0.01F));
@@ -54,144 +51,95 @@ public class OldHitting extends Module {
     @EventTarget
     @HigherPriority
     public void onUpdate(EventMotion event) {
-        if (!event.isPre() || mc.player == null) {
-            return;
-        }
+        if (this.isEnabled() || mc.gameSettings.keyBindUseItem.isKeyDown() || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
+            if (event.isPre()) {
+                boolean var4 = mc.player.getHeldItemMainhand() != null && mc.player.getHeldItemMainhand().getItem() instanceof SwordItem;
+                boolean var5 = Client.getInstance().moduleManager.getModuleByClass(KillAura.class).isEnabled2();
+                boolean var6 = true;
+                if (!mc.player.isSneaking()
+                        && mc.objectMouseOver.getType() == RayTraceResult.Type.BLOCK
+                        && !Client.getInstance().moduleManager.getModuleByClass(KillAura.class).isEnabled2()) {
+                    BlockRayTraceResult blockRayTrace = (BlockRayTraceResult) mc.objectMouseOver;
+                    BlockPos blockPos = blockRayTrace.getPos();
+                    Block block = mc.world.getBlockState(blockPos).getBlock();
+                    List<Block> blocks = new ArrayList<>(
+                            Arrays.asList(
+                                    Blocks.CHEST,
+                                    Blocks.ENDER_CHEST,
+                                    Blocks.TRAPPED_CHEST,
+                                    Blocks.CRAFTING_TABLE,
+                                    Blocks.BEACON,
+                                    Blocks.FURNACE,
+                                    Blocks.BLAST_FURNACE,
+                                    Blocks.ENCHANTING_TABLE,
+                                    Blocks.ANVIL,
+                                    Blocks.CHIPPED_ANVIL,
+                                    Blocks.DAMAGED_ANVIL,
+                                    Blocks.DISPENSER,
+                                    Blocks.NOTE_BLOCK,
+                                    Blocks.LEVER,
+                                    Blocks.HOPPER,
+                                    Blocks.DROPPER,
+                                    Blocks.REPEATER,
+                                    Blocks.COMPARATOR
+                            )
+                    );
+                    if (blocks.contains(block)
+                            || block instanceof WoodButtonBlock
+                            || block instanceof StoneButtonBlock
+                            || block instanceof FenceGateBlock
+                            || block instanceof DoorBlock && block != Blocks.IRON_DOOR) {
+                        var6 = false;
+                    }
+                }
 
-        if (this.visualPlayer != mc.player) {
-            clearVisualState();
-            this.visualPlayer = mc.player;
-        }
+                field23408 = mc.gameSettings.keyBindUseItem.isKeyDown() && var4 && var6 && var6 || var5;
+                if (!field23408) {
+                    if (ViaManager.entities.contains(mc.player)) {
+                        ViaManager.entities.remove(mc.player);
+                    }
+                } else if (!ViaManager.entities.contains(mc.player)) {
+                    ViaManager.entities.add(mc.player);
+                }
 
-        if (this.isEnabled() || mc.gameSettings.keyBindUseItem.isKeyDown()
-                || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
-            boolean var4 = mc.player.getHeldItemMainhand() != null
-                    && mc.player.getHeldItemMainhand().getItem() instanceof SwordItem;
-            boolean var5 = Client.getInstance().moduleManager.getModuleByClass(KillAura.class).isEnabled2();
-            boolean var6 = true;
-            if (!mc.player.isSneaking()
-                    && mc.objectMouseOver != null
-                    && mc.objectMouseOver.getType() == RayTraceResult.Type.BLOCK
-                    && !Client.getInstance().moduleManager.getModuleByClass(KillAura.class).isEnabled2()) {
-                BlockRayTraceResult blockRayTrace = (BlockRayTraceResult) mc.objectMouseOver;
-                BlockPos blockPos = blockRayTrace.getPos();
-                Block block = mc.world.getBlockState(blockPos).getBlock();
-                List<Block> blocks = new ArrayList<>(
-                        Arrays.asList(
-                                Blocks.CHEST,
-                                Blocks.ENDER_CHEST,
-                                Blocks.TRAPPED_CHEST,
-                                Blocks.CRAFTING_TABLE,
-                                Blocks.BEACON,
-                                Blocks.FURNACE,
-                                Blocks.BLAST_FURNACE,
-                                Blocks.ENCHANTING_TABLE,
-                                Blocks.ANVIL,
-                                Blocks.CHIPPED_ANVIL,
-                                Blocks.DAMAGED_ANVIL,
-                                Blocks.DISPENSER,
-                                Blocks.NOTE_BLOCK,
-                                Blocks.LEVER,
-                                Blocks.HOPPER,
-                                Blocks.DROPPER,
-                                Blocks.REPEATER,
-                                Blocks.COMPARATOR));
-                if (blocks.contains(block)
-                        || block instanceof WoodButtonBlock
-                        || block instanceof StoneButtonBlock
-                        || block instanceof FenceGateBlock
-                        || block instanceof DoorBlock && block != Blocks.IRON_DOOR) {
-                    var6 = false;
+                if (field23408 && !this.field23409) {
+                    this.field23409 = !this.field23409;
+                    if (!var5) {
+                        CombatUtil.block();
+                    }
+                } else if (!field23408 && this.field23409) {
+                    this.field23409 = !this.field23409;
                 }
             }
-
-            boolean nativeLegacyBlock = InteractionProtocol.atOrOlderThan1_8()
-                    && mc.player.isHandActive()
-                    && mc.player.getActiveHand() == Hand.MAIN_HAND
-                    && SwordItem.isLegacyBlockingSword(mc.player.getActiveItemStack());
-            boolean manualVisual = InteractionProtocol.atOrOlderThan1_8()
-                    ? nativeLegacyBlock
-                    : mc.gameSettings.keyBindUseItem.isKeyDown() && var4;
-            setVisualBlocking((manualVisual && var6) || var5);
-        } else {
-            setVisualBlocking(false);
         }
     }
 
     @EventTarget
     @LowerPriority
     public void onPacketReceive(EventReceivePacket event) {
-        if (InteractionProtocol.atOrOlderThan1_8()) {
+        if (this.isEnabled() || mc.gameSettings.keyBindUseItem.isKeyDown() || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
             if (mc.player != null) {
                 if (event.packet instanceof SEntityEquipmentPacket pack) {
-                    pack.func_241790_c_()
-                            .removeIf(pair -> pack.getEntityID() == mc.player.getEntityId()
-                                    && pair.getFirst() == EquipmentSlotType.OFFHAND && pair.getSecond() != null
-                                    && pair.getSecond().getItem() == Items.SHIELD);
+                    pack.func_241790_c_().removeIf(pair -> pack.getEntityID() == mc.player.getEntityId() && pair.getFirst() == EquipmentSlotType.OFFHAND && pair.getSecond() != null && pair.getSecond().getItem() == Items.SHIELD);
                 }
             }
         }
     }
 
     @EventTarget
-    public void onLoadWorld(EventLoadWorld event) {
-        clearVisualState();
-    }
-
-    @Override
-    public void onDisable() {
-        clearVisualState();
-        super.onDisable();
-    }
-
-    private void setVisualBlocking(boolean blocking) {
-        field23408 = blocking;
-        if (this.visualPlayer == null) {
-            return;
-        }
-
-        if (blocking) {
-            if (!ViaManager.entities.contains(this.visualPlayer)) {
-                ViaManager.entities.add(this.visualPlayer);
-            }
-        } else {
-            ViaManager.entities.remove(this.visualPlayer);
-        }
-    }
-
-    private void clearVisualState() {
-        field23408 = false;
-        if (this.visualPlayer != null) {
-            ViaManager.entities.remove(this.visualPlayer);
-            this.visualPlayer = null;
-        }
-    }
-
-    @EventTarget
     @LowerPriority
     public void method16022(EventHandAnimation event) {
-        if (this.isEnabled() || mc.gameSettings.keyBindUseItem.isKeyDown()
-                || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
-            boolean leftShield = event.method13926() && event.getHand() == HandSide.LEFT
-                    && event.getItemStack().getItem() instanceof ShieldItem;
-
-            if (!leftShield) {
-                return;
-            }
-
+        if (this.isEnabled() || mc.gameSettings.keyBindUseItem.isKeyDown() || JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
             float swingProgress = event.getSwingProgress();
-            event.getMatrix().translate(getNumberValueBySettingName("XPos"), getNumberValueBySettingName("YPos"),
-                    getNumberValueBySettingName("ZPos"));
+            event.getMatrix().translate(getNumberValueBySettingName("XPos"), getNumberValueBySettingName("YPos"), getNumberValueBySettingName("ZPos"));
 
-            if (leftShield) {
+            if (event.method13926() && event.getHand() == HandSide.LEFT && event.getItemStack().getItem() instanceof ShieldItem) {
                 event.renderBlocking(false);
             } else if (event.getHand() != HandSide.LEFT || !field23408) {
                 if ((field23408 || Client.getInstance().moduleManager.getModuleByClass(KillAura.class).isEnabled()
                         && KillAura.targetEntity != null
-                        && Client.getInstance().moduleManager.getModuleByClass(KillAura.class)
-                                .getStringSettingValueByName("Autoblock Mode").equals("Fake"))
-                        && event.method13926() && this.isEnabled()
-                        && event.getItemStack().getItem() instanceof SwordItem) {
+                        && Client.getInstance().moduleManager.getModuleByClass(KillAura.class).getStringSettingValueByName("Autoblock Mode").equals("Fake")
+                ) && event.method13926() && this.isEnabled() && event.getItemStack().getItem() instanceof SwordItem) {
                     event.cancelled = true;
                     switch (this.getStringSettingValueByName("Animation")) {
                         case "Vanilla":
