@@ -9,7 +9,6 @@ import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.LivingDeathEvent;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventJump;
 import com.mentalfrostbyte.jello.module.impl.player.AutoSprint;
-import com.mentalfrostbyte.jello.module.impl.render.BlockAnimations;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.Dynamic;
@@ -1691,12 +1690,10 @@ public abstract class LivingEntity extends Entity {
      * progress indicator. Takes dig speed enchantments into account.
      */
     private int getArmSwingAnimationEnd() {
-        int baseSwingTicks = BlockAnimations.getSwingAnimationBase(6);
-
         if (EffectUtils.hasMiningSpeedup(this)) {
-            return baseSwingTicks - (1 + EffectUtils.getMiningSpeedup(this));
+            return 6 - (1 + EffectUtils.getMiningSpeedup(this));
         } else {
-            return this.isPotionActive(Effects.MINING_FATIGUE) ? baseSwingTicks + (1 + this.getActivePotionEffect(Effects.MINING_FATIGUE).getAmplifier()) * 2 : baseSwingTicks;
+            return this.isPotionActive(Effects.MINING_FATIGUE) ? 6 + (1 + this.getActivePotionEffect(Effects.MINING_FATIGUE).getAmplifier()) * 2 : 6;
         }
     }
 

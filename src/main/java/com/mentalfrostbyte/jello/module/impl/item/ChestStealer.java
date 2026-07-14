@@ -43,6 +43,7 @@ public class ChestStealer extends Module {
     public ChestStealer() {
         super(ModuleCategory.ITEM, "ChestStealer", "Steals items from chest");
         this.registerSetting(new BooleanSetting("Aura", "Automatically open chests near you.", false));
+        this.registerSetting(new BooleanSetting("Through Walls", "Allow the Aura to open chests behind walls.", false));
         this.registerSetting(new BooleanSetting("Ignore Junk", "Ignores useless items.", true));
         this.registerSetting(new BooleanSetting("Fix ViaVersion", "Fixes ViaVersion delay.", true));
         this.registerSetting(new BooleanSetting("Close", "Automatically closes the chest when done", true));
@@ -75,8 +76,13 @@ public class ChestStealer extends Module {
 
                 this.method16370();
                 if (this.targetChest != null && mc.currentScreen == null && this.field23624.getElapsedTime() > 1000L) {
-                    BlockRayTraceResult var4 = (BlockRayTraceResult) BlockUtil.method34570(this.targetChest.getPos());
-                    if (var4.getPos().getX() == this.targetChest.getPos().getX()
+                    boolean var3 = this.getBooleanValueFromSettingName("Through Walls");
+                    BlockPos var2 = this.targetChest.getPos();
+                    // 现算朝箱子的角度作为射线方向
+                    float[] var15 = RotationUtil.rotationToPos((double) var2.getX() + 0.5, (double) var2.getZ() + 0.5, (double) var2.getY() + 0.5);
+                    BlockRayTraceResult var4 = BlockUtil.rayTraceBlock(var15[0], var15[1], 0.0F, var2, var3);
+                    if (var4.getType() != net.minecraft.util.math.RayTraceResult.Type.MISS
+                            && var4.getPos().getX() == this.targetChest.getPos().getX()
                             && var4.getPos().getY() == this.targetChest.getPos().getY()
                             && var4.getPos().getZ() == this.targetChest.getPos().getZ()) {
                         this.field23621 = true;
@@ -104,8 +110,10 @@ public class ChestStealer extends Module {
                             && Math.sqrt(mc.player.getDistanceSq(var9, var10, var11)) < 5.0
                             && this.field23624.getElapsedTime() > 1000L
                             && mc.currentScreen == null) {
-                        BlockRayTraceResult var12 = (BlockRayTraceResult) BlockUtil.method34570(var7.getPos());
-                        if (var12.getPos().getX() == var7.getPos().getX()
+                        float[] var16 = RotationUtil.rotationToPos((double) var7.getPos().getX() + 0.5, (double) var7.getPos().getZ() + 0.5, (double) var7.getPos().getY() + 0.5);
+                        BlockRayTraceResult var12 = BlockUtil.rayTraceBlock(var16[0], var16[1], 0.0F, var7.getPos(), this.getBooleanValueFromSettingName("Through Walls"));
+                        if (var12.getType() != net.minecraft.util.math.RayTraceResult.Type.MISS
+                                && var12.getPos().getX() == var7.getPos().getX()
                                 && var12.getPos().getY() == var7.getPos().getY()
                                 && var12.getPos().getZ() == var7.getPos().getZ()) {
                             this.targetChest = var7;
