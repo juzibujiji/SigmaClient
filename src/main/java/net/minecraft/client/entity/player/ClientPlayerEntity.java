@@ -887,7 +887,10 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                     : this.collidedHorizontally;
             boolean flag6 = flag5 || hardHorizontalCollision || !canWaterSprint;
 
-            if (this.isSwimming()) {
+            if (targetVersion.olderThanOrEqualTo(ProtocolVersion.v1_14_1)
+                    && this.movementInput.sneaking) {
+                this.setSprinting(false);
+            } else if (this.isSwimming()) {
                 if (!this.onGround && !this.movementInput.sneaking && flag5 || !this.isInWater()) {
                     this.setSprinting(false);
                 }

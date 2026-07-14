@@ -1,6 +1,7 @@
 package net.minecraft.client.gui.screen;
 
 import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.managers.ProfileManager;
 import com.mentalfrostbyte.jello.module.Draggable;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.impl.gui.jello.TargetHUD;
@@ -14,6 +15,8 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.text.IFormattableTextComponent;
 import net.minecraft.util.text.Style;
 import net.minecraft.util.text.TranslationTextComponent;
+
+import java.io.IOException;
 
 public class ChatScreen extends Screen
 {
@@ -38,11 +41,18 @@ public class ChatScreen extends Screen
     private boolean hudDragging = false;
     private Draggable hudDragTarget = null;
     private double hudDragOffX, hudDragOffY;
+    private boolean hudPositionDirty = false;
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        hudDragging = false;
-        hudDragTarget = null;
+        if (button == 0) {
+            if (hudDragging) {
+                this.updateHudDragPosition(mouseX, mouseY);
+            }
+            hudDragging = false;
+            hudDragTarget = null;
+            this.saveHudPositionIfNeeded();
+        }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
@@ -85,6 +95,7 @@ public class ChatScreen extends Screen
 
     public void onClose()
     {
+        this.saveHudPositionIfNeeded();
         this.minecraft.keyboardListener.enableRepeatEvents(false);
         this.minecraft.ingameGUI.getChatGUI().resetScroll();
     }
@@ -345,8 +356,32 @@ public class ChatScreen extends Screen
         float rs = TargetHUD.getRenderScale();
         double mxR = mouseX / rs;
         double myR = mouseY / rs;
-        hudDragTarget.setX((float) (mxR - hudDragOffX));
-        hudDragTarget.setY((float) (myR - hudDragOffY));
+        float newX = (float) (mxR - hudDragOffX);
+        float newY = (float) (myR - hudDragOffY);
+
+        if (Float.compare(hudDragTarget.getX(), newX) != 0 || Float.compare(hudDragTarget.getY(), newY) != 0) {
+            hudDragTarget.setX(newX);
+            hudDragTarget.setY(newY);
+            hudPositionDirty = true;
+        }
+    }
+
+    private void saveHudPositionIfNeeded() {
+        if (!hudPositionDirty || Client.getInstance().moduleManager == null) {
+            return;
+        }
+
+        ProfileManager profileManager = Client.getInstance().moduleManager.getConfigurationManager();
+        if (profileManager == null || profileManager.getCurrentConfig() == null) {
+            return;
+        }
+
+        try {
+            profileManager.saveAndReplaceConfigs();
+            hudPositionDirty = false;
+        } catch (IOException exc) {
+            Client.logger.warn("Unable to save HUD positions...", exc);
+        }
     }
 
     private void setChatLine(String p_208604_1_)

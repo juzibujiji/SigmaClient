@@ -2,6 +2,8 @@ package net.minecraft.util.math.shapes;
 
 import com.google.common.collect.Lists;
 import com.google.common.math.DoubleMath;
+import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import it.unimi.dsi.fastutil.doubles.DoubleList;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -212,7 +214,90 @@ public abstract class VoxelShape
 
     public double getAllowedOffset(Direction.Axis movementAxis, AxisAlignedBB collisionBox, double desiredOffset)
     {
+        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_12_2))
+        {
+            for (AxisAlignedBB shapeBox : this.toBoundingBoxList())
+            {
+                desiredOffset = getLegacyAllowedOffset(movementAxis, collisionBox, shapeBox, desiredOffset);
+            }
+
+            return desiredOffset;
+        }
+
         return this.getAllowedOffset(AxisRotation.from(movementAxis, Direction.Axis.X), collisionBox, desiredOffset);
+    }
+
+    private static double getLegacyAllowedOffset(Direction.Axis movementAxis, AxisAlignedBB collisionBox,
+                                                 AxisAlignedBB shapeBox, double desiredOffset)
+    {
+        switch (movementAxis)
+        {
+            case X:
+                if (collisionBox.maxY <= shapeBox.minY || collisionBox.minY >= shapeBox.maxY
+                        || collisionBox.maxZ <= shapeBox.minZ || collisionBox.minZ >= shapeBox.maxZ)
+                {
+                    return desiredOffset;
+                }
+
+                if (desiredOffset > 0.0D && collisionBox.maxX <= shapeBox.minX)
+                {
+                    double offset = shapeBox.minX - collisionBox.maxX;
+                    return offset < desiredOffset ? offset : desiredOffset;
+                }
+
+                if (desiredOffset < 0.0D && collisionBox.minX >= shapeBox.maxX)
+                {
+                    double offset = shapeBox.maxX - collisionBox.minX;
+                    return offset > desiredOffset ? offset : desiredOffset;
+                }
+
+                return desiredOffset;
+
+            case Y:
+                if (collisionBox.maxX <= shapeBox.minX || collisionBox.minX >= shapeBox.maxX
+                        || collisionBox.maxZ <= shapeBox.minZ || collisionBox.minZ >= shapeBox.maxZ)
+                {
+                    return desiredOffset;
+                }
+
+                if (desiredOffset > 0.0D && collisionBox.maxY <= shapeBox.minY)
+                {
+                    double offset = shapeBox.minY - collisionBox.maxY;
+                    return offset < desiredOffset ? offset : desiredOffset;
+                }
+
+                if (desiredOffset < 0.0D && collisionBox.minY >= shapeBox.maxY)
+                {
+                    double offset = shapeBox.maxY - collisionBox.minY;
+                    return offset > desiredOffset ? offset : desiredOffset;
+                }
+
+                return desiredOffset;
+
+            case Z:
+                if (collisionBox.maxX <= shapeBox.minX || collisionBox.minX >= shapeBox.maxX
+                        || collisionBox.maxY <= shapeBox.minY || collisionBox.minY >= shapeBox.maxY)
+                {
+                    return desiredOffset;
+                }
+
+                if (desiredOffset > 0.0D && collisionBox.maxZ <= shapeBox.minZ)
+                {
+                    double offset = shapeBox.minZ - collisionBox.maxZ;
+                    return offset < desiredOffset ? offset : desiredOffset;
+                }
+
+                if (desiredOffset < 0.0D && collisionBox.minZ >= shapeBox.maxZ)
+                {
+                    double offset = shapeBox.maxZ - collisionBox.minZ;
+                    return offset > desiredOffset ? offset : desiredOffset;
+                }
+
+                return desiredOffset;
+
+            default:
+                return desiredOffset;
+        }
     }
 
     protected double getAllowedOffset(AxisRotation movementAxis, AxisAlignedBB collisionBox, double desiredOffset)

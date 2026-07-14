@@ -27,9 +27,11 @@ public final class ServerboundInteractionAdapter {
     }
 
     public static boolean trySend(NetworkManager networkManager, IPacket<?> packet) {
-        rememberLocalUse(packet);
-
         if (shouldDropUnsupported(packet)) {
+            return true;
+        }
+
+        if (!rememberLocalUse(networkManager, packet)) {
             return true;
         }
 
@@ -70,12 +72,18 @@ public final class ServerboundInteractionAdapter {
         return false;
     }
 
-    private static void rememberLocalUse(IPacket<?> packet) {
-        if (packet instanceof CPlayerTryUseItemPacket useItemPacket) {
-            LocalInteractionState.rememberCurrentHand(useItemPacket.getHand());
-        } else if (packet instanceof CPlayerTryUseItemOnBlockPacket useItemOnBlockPacket) {
-            LocalInteractionState.rememberCurrentHand(useItemOnBlockPacket.getHand());
+    private static boolean rememberLocalUse(NetworkManager networkManager, IPacket<?> packet) {
+        if (!InteractionProtocol.atOrOlderThan1_8()) {
+            return true;
         }
+
+        UserConnection connection = networkManager.getViaUserConnection();
+        if (packet instanceof CPlayerTryUseItemPacket useItemPacket) {
+            return LocalInteractionState.enqueueCurrentHand(connection, useItemPacket.getHand());
+        } else if (packet instanceof CPlayerTryUseItemOnBlockPacket useItemOnBlockPacket) {
+            return LocalInteractionState.enqueueCurrentHand(connection, useItemOnBlockPacket.getHand());
+        }
+        return true;
     }
 
     private static boolean shouldDropUnsupported(IPacket<?> packet) {

@@ -111,7 +111,6 @@ public class WarThunderRadar extends RenderModule {
     // ===== 字体（Consolas，懒加载 —— TrueTypeFont 需要 GL 上下文）=====
     private static TrueTypeFont font12, font14;
 
-    private boolean posInit = false;
     /** 线宽缩放：glLineWidth 不受矩阵缩放影响，需手动乘用户缩放 */
     private float lineScale = 1.0F;
 
@@ -218,14 +217,6 @@ public class WarThunderRadar extends RenderModule {
             RadarSoundPlayer.play("radar_scan", 1600);
         } else {
             RadarSoundPlayer.stop("radar_lock");
-        }
-
-        // ===== 初始位置 =====
-        if (!posInit) {
-            posInit = true;
-            int sh = mc.getMainWindow().getScaledHeight();
-            parent.setX(60.0F);
-            parent.setY(sh - Radar.PANEL_H - 70.0F);
         }
 
         float userScale = parent.scale.getCurrentValue();

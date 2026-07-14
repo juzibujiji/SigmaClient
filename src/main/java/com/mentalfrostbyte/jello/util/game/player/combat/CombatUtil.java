@@ -1,6 +1,7 @@
 package com.mentalfrostbyte.jello.util.game.player.combat;
 
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.play.client.CPlayerDiggingPacket;
@@ -35,13 +36,25 @@ public class CombatUtil implements MinecraftUtil {
         return players;
     }
 
-    public static void block() {
+    public static boolean block() {
+        if (mc.getConnection() == null || mc.player == null) {
+            return false;
+        }
+
         mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.MAIN_HAND));
-        mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.OFF_HAND));
+        if (!InteractionProtocol.atOrOlderThan1_8()) {
+            mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.OFF_HAND));
+        }
+        return true;
     }
 
-    public static void unblock() {
+    public static boolean unblock() {
+        if (mc.getConnection() == null) {
+            return false;
+        }
+
         mc.getConnection().sendPacket(new CPlayerDiggingPacket(CPlayerDiggingPacket.Action.RELEASE_USE_ITEM, new BlockPos(0, 0, 0), Direction.DOWN));
+        return true;
     }
 
     public static boolean arePlayersOnSameTeam(PlayerEntity player) {

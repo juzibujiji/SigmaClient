@@ -7,6 +7,7 @@ import com.mentalfrostbyte.jello.module.impl.gui.jello.radar.WarThunderRadar;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.ColorSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
+import net.minecraft.client.Minecraft;
 
 /**
  * Radar 父模块，架构与 {@link TargetHUD} 一致（ModuleWithModuleSettings + Draggable）。
@@ -36,8 +37,8 @@ public class Radar extends ModuleWithModuleSettings implements Draggable {
     public static final float PANEL_W = 300.0F;
     public static final float PANEL_H = 192.0F;
 
-    public NumberSetting<Float> x = new NumberSetting<>("X", "X", 0, 0, 10000, 10);
-    public NumberSetting<Float> y = new NumberSetting<>("Y", "Y", 0, 0, 10000, 10);
+    public NumberSetting<Float> x = new NumberSetting<>("X", "X", 60.0F, 0, 10000, 10);
+    public NumberSetting<Float> y = new NumberSetting<>("Y", "Y", getDefaultY(), 0, 10000, 10);
     public NumberSetting<Float> scale = new NumberSetting<>("Scale", "Radar scale", 1.0F, 0.5F, 2.0F, 0.1F);
     public NumberSetting<Float> range = new NumberSetting<>("Range", "Detection range in blocks", 32.0F, 8.0F, 64.0F, 4.0F);
     public NumberSetting<Float> warningDistance = new NumberSetting<>("Warning Distance", "Distance for close threat warning", 5.0F, 1.0F, 16.0F, 0.5F);
@@ -56,12 +57,18 @@ public class Radar extends ModuleWithModuleSettings implements Draggable {
         this.registerSetting(x, y, scale, range, warningDistance, scanRate, realistic, color, background, sound, enemyLock, enemyTrack);
     }
 
+    @Override
+    public void resetModuleState() {
+        this.y.defaultValue = getDefaultY();
+        super.resetModuleState();
+    }
+
     public void setX(float v) {
-        this.x.currentValue = v;
+        this.x.setCurrentValue(v);
     }
 
     public void setY(float v) {
-        this.y.currentValue = v;
+        this.y.setCurrentValue(v);
     }
 
     public float getX() {
@@ -70,6 +77,16 @@ public class Radar extends ModuleWithModuleSettings implements Draggable {
 
     public float getY() {
         return this.y.currentValue;
+    }
+
+    private static float getDefaultY() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.getMainWindow() == null) {
+            return 234.0F;
+        }
+
+        int scaledHeight = minecraft.getMainWindow().getScaledHeight();
+        return scaledHeight > 0 ? Math.max(0.0F, scaledHeight - PANEL_H - 70.0F) : 234.0F;
     }
 
     /**

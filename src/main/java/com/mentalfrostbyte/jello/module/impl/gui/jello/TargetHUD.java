@@ -50,11 +50,11 @@ public class TargetHUD extends ModuleWithModuleSettings implements Draggable {
     }
 
     public void setX(float v) {
-        this.x.currentValue = v;
+        this.x.setCurrentValue(v);
     }
 
     public void setY(float v) {
-        this.y.currentValue = v;
+        this.y.setCurrentValue(v);
     }
 
     public float getX() {

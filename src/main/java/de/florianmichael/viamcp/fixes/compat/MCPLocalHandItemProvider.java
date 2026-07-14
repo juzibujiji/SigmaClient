@@ -7,6 +7,6 @@ import com.viaversion.viaversion.protocols.v1_8to1_9.provider.HandItemProvider;
 public final class MCPLocalHandItemProvider extends HandItemProvider {
     @Override
     public Item getHandItem(UserConnection connection) {
-        return LocalInteractionState.lastLocallyUsedViaItem();
+        return LocalInteractionState.pollViaItem(connection);
     }
 }

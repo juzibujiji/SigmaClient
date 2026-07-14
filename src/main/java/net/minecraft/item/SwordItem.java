@@ -3,6 +3,7 @@ package net.minecraft.item;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.ImmutableMultimap.Builder;
+import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.material.Material;
@@ -14,6 +15,8 @@ import net.minecraft.entity.ai.attributes.Attributes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.EquipmentSlotType;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -35,6 +38,62 @@ public class SwordItem extends TieredItem implements IVanishable
     public float getAttackDamage()
     {
         return this.attackDamage;
+    }
+
+    /**
+     * Swords are continuous-use blocking items through 1.8.  Restoring that
+     * native lifecycle lets PlayerController send one main-hand use packet,
+     * LivingEntity own the active-hand state, and Minecraft send the matching
+     * release packet when the key is released.
+     */
+    public ActionResult<ItemStack> onItemRightClick(World worldIn, PlayerEntity playerIn, Hand handIn)
+    {
+        if (InteractionProtocol.atOrOlderThan1_8() && this.isLegacyBlockingSword())
+        {
+            ItemStack itemstack = playerIn.getHeldItem(handIn);
+            playerIn.setActiveHand(handIn);
+            return ActionResult.resultConsume(itemstack);
+        }
+
+        return super.onItemRightClick(worldIn, playerIn, handIn);
+    }
+
+    public UseAction getUseAction(ItemStack stack)
+    {
+        return InteractionProtocol.atOrOlderThan1_8() && this.isLegacyBlockingSword()
+                ? UseAction.BLOCK
+                : super.getUseAction(stack);
+    }
+
+    public int getUseDuration(ItemStack stack)
+    {
+        return InteractionProtocol.atOrOlderThan1_8() && this.isLegacyBlockingSword()
+                ? 72000
+                : super.getUseDuration(stack);
+    }
+
+    /**
+     * Only these five swords exist in the 1.8 registry.  A 1.16-only sword can
+     * appear locally through the creative inventory or a desynchronised stack,
+     * but must not be disguised as an unrelated legacy item on the wire.
+     */
+    public static boolean isLegacyBlockingSword(ItemStack stack)
+    {
+        return stack != null && !stack.isEmpty() && isLegacyBlockingSword(stack.getItem());
+    }
+
+    private boolean isLegacyBlockingSword()
+    {
+        return isLegacyBlockingSword(this);
+    }
+
+    private static boolean isLegacyBlockingSword(Item item)
+    {
+        return item == Items.WOODEN_SWORD
+                || item == Items.STONE_SWORD
+                || item == Items.IRON_SWORD
+                || item == Items.GOLDEN_SWORD
+                || item == Items.DIAMOND_SWORD;
     }
 
     public boolean canPlayerBreakBlockWhileHolding(BlockState state, World worldIn, BlockPos pos, PlayerEntity player)

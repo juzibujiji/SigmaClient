@@ -4,7 +4,6 @@ import com.mentalfrostbyte.jello.util.game.player.InvManagerUtil;
 import com.mojang.datafixers.util.Pair;
 import de.florianmichael.viamcp.fixes.compat.InteractionProtocol;
 import de.florianmichael.viamcp.fixes.compat.InteractionSemantics;
-import de.florianmichael.viamcp.fixes.compat.LocalInteractionState;
 import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -445,7 +444,6 @@ public class PlayerController
     private void sendUseItemOnBlockPacket(ClientPlayerEntity player, Hand hand, BlockRayTraceResult hit)
     {
         InteractionSemantics.sendPreUseMovement(this.connection, player);
-        LocalInteractionState.rememberUsedItem(player, hand);
         this.connection.sendPacket(new CPlayerTryUseItemOnBlockPacket(hand, hit));
     }
 
@@ -455,7 +453,6 @@ public class PlayerController
             InteractionSemantics.sendPreUseMovement(this.connection, clientPlayer);
         }
 
-        LocalInteractionState.rememberUsedItem(player, hand);
         this.connection.sendPacket(new CPlayerTryUseItemPacket(hand));
     }
 

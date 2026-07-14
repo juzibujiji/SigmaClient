@@ -64,7 +64,11 @@ public class ViaManager extends Manager implements MinecraftUtil {
     @EventTarget
     public void onStopUse(EventStopUseItem event) {
         if (JelloPortal.getVersion().equalTo(ProtocolVersion.v1_8)) {
-            if (mc.player.getItemInUseMaxCount() <= 1) {
+            // Legacy swords intentionally enter active-hand use now. Their
+            // release must not be delayed by the old one-tick item workaround.
+            boolean legacySword = mc.player != null
+                    && SwordItem.isLegacyBlockingSword(mc.player.getActiveItemStack());
+            if (!legacySword && mc.player != null && mc.player.getItemInUseMaxCount() <= 1) {
                 event.cancelled = true;
             }
         }

@@ -43,7 +43,13 @@ public class VLBViaConfig extends AbstractViaConfig {
 
     @Override
     protected void handleConfig(Map<String, Object> config) {
-        // Nothing Currently
+        // ViaFabricPlus uses the native main-hand USE_ITEM path for <= 1.8.  The
+        // server-side shield emulation expects a synthetic off-hand use instead,
+        // which a 1.8 wire protocol cannot represent and which Sigma deliberately
+        // filters before ViaVersion.  Migrate existing configs as well as new ones
+        // so a main-hand sword use reaches Protocol1_8To1_9 exactly once.
+        config.put("shield-blocking", false);
+        config.put("no-delay-shield-blocking", true);
     }
 
     @Override
