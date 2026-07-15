@@ -248,7 +248,9 @@ public class BlockUtil {
     }
 
     /**
-     * 沿玩家视线方向发射一条射线，返回射线路径上命中的所有生物（按距离由近到远排序）。
+     * 沿指定视线方向发射一条射线，返回射线路径上命中的所有生物（按距离由近到远排序）。
+     * 起点使用 lastReportedPos（服务端已知位置），方向使用原版 {@link Entity#getLookCustom} 计算，
+     * 保证 raytrace 结果与 Grim 服务端补偿的位置/旋转自洽。
      *
      * @param yaw          射线的偏航角（度）
      * @param pitch        射线的俯仰角（度）
@@ -263,25 +265,16 @@ public class BlockUtil {
         }
 
         if (distance == 0.0F) {
-            // 实体使用原版攻击距离（3.0），而非方块交互距离
             distance = 3.0F;
         }
 
-        // 射线起点：玩家眼睛位置
         Vector3d start = new Vector3d(
-                mc.player.getPosX(),
-                mc.player.getPosY() + (double) mc.player.getEyeHeight(),
-                mc.player.getPosZ()
+                mc.player.lastReportedPosX,
+                mc.player.lastReportedPosY + (double) mc.player.getEyeHeight(),
+                mc.player.lastReportedPosZ
         );
-
-        // 由 yaw/pitch 计算视线方向单位向量（与本类其它 rayTrace 保持一致）
-        float radYaw = (float) Math.toRadians(yaw);
-        float radPitch = (float) Math.toRadians(pitch);
-        double dirX = -MathHelper.sin(radYaw) * MathHelper.cos(radPitch);
-        double dirY = -MathHelper.sin(radPitch);
-        double dirZ = MathHelper.cos(radYaw) * MathHelper.cos(radPitch);
-
-        Vector3d end = start.add(dirX * distance, dirY * distance, dirZ * distance);
+        Vector3d look = mc.player.getLookCustom(1.0F, yaw, pitch);
+        Vector3d end = start.add(look.x * distance, look.y * distance, look.z * distance);
 
         // 不穿墙时：先算出射线被方块挡住的距离平方，命中点超过此距离的实体忽略
         double wallDistSq = Double.MAX_VALUE;
@@ -295,10 +288,9 @@ public class BlockUtil {
 
         // 只在射线可能经过的范围内取实体，减少遍历
         AxisAlignedBB searchBox = mc.player.getBoundingBox()
-                .expand(dirX * distance, dirY * distance, dirZ * distance)
+                .expand(look.x * distance, look.y * distance, look.z * distance)
                 .grow(1.0, 1.0, 1.0);
 
-        // 记录每个命中实体到起点的距离平方，用于排序
         List<double[]> distances = new ArrayList<>();
         List<LivingEntity> hits = new ArrayList<>();
 
@@ -308,7 +300,6 @@ public class BlockUtil {
             Optional<Vector3d> hit = box.rayTrace(start, end);
             if (hit.isPresent()) {
                 double hitDistSq = start.squareDistanceTo(hit.get());
-                // 不穿墙且实体在墙后面，跳过
                 if (hitDistSq > wallDistSq) {
                     continue;
                 }
@@ -317,7 +308,6 @@ public class BlockUtil {
             }
         }
 
-        // 按距离从近到远排序
         distances.sort(Comparator.comparingDouble(a -> a[1]));
         for (double[] entry : distances) {
             result.add(hits.get((int) entry[0]));
@@ -328,6 +318,8 @@ public class BlockUtil {
 
     /**
      * 对指定方块位置发射一条视线射线，返回精确的命中信息（命中点、命中面等）。
+     * 起点使用 lastReportedPos（服务端已知位置），方向使用原版 {@link Entity#getLookCustom} 计算，
+     * 保证 raytrace 结果与 Grim 服务端补偿的位置/旋转自洽。
      *
      * @param yaw          射线的偏航角（度）
      * @param pitch        射线的俯仰角（度）
@@ -342,30 +334,19 @@ public class BlockUtil {
             distance = mc.playerController.getBlockReachDistance();
         }
 
-        // 起点高度与 RotationUtil.rotationToPos 保持一致（+1.2），
-        // 否则角度与射线起点不自洽，会打偏导致 MISS
         Vector3d start = new Vector3d(
-                mc.player.getPosX(),
-                mc.player.getPosY() + mc.player.getEyeHeight(),
-                mc.player.getPosZ()
+                mc.player.lastReportedPosX,
+                mc.player.lastReportedPosY + (double) mc.player.getEyeHeight(),
+                mc.player.lastReportedPosZ
         );
+        Vector3d look = mc.player.getLookCustom(1.0F, yaw, pitch);
+        Vector3d end = start.add(look.x * distance, look.y * distance, look.z * distance);
+        Direction missFace = Direction.getFacingFromVector(look.x, look.y, look.z).getOpposite();
 
-        float radYaw = (float) Math.toRadians(yaw);
-        float radPitch = (float) Math.toRadians(pitch);
-        double dirX = -MathHelper.sin(radYaw) * MathHelper.cos(radPitch);
-        double dirY = -MathHelper.sin(radPitch);
-        double dirZ = MathHelper.cos(radYaw) * MathHelper.cos(radPitch);
-
-        Vector3d end = start.add(dirX * distance, dirY * distance, dirZ * distance);
-        Direction missFace = Direction.getFacingFromVector(dirX, dirY, dirZ).getOpposite();
-
-        // 穿墙：忽略沿途方块，只对目标方块的轮廓形状求交，保证命中目标本身。
-        // 非穿墙：走原版 OUTLINE 射线（与 method34570 一致），会被沿途方块阻挡。
         if (throughWalls) {
             VoxelShape shape = mc.world.getBlockState(target).getShape(mc.world, target);
             BlockRayTraceResult hit = shape.rayTrace(start, end, target);
             if (hit == null) {
-                // 碰撞形状可能为空（如箱子），回退为直接命中目标中心
                 Vector3d center = new Vector3d(target.getX() + 0.5, target.getY() + 0.5, target.getZ() + 0.5);
                 return new BlockRayTraceResult(center, missFace, target, false);
             }

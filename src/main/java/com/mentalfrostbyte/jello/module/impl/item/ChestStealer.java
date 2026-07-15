@@ -10,6 +10,7 @@ import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.game.player.InvManagerUtil;
+import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.util.system.math.counter.TimerUtil;
 import com.mentalfrostbyte.jello.util.game.player.combat.RotationUtil;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
@@ -77,10 +78,7 @@ public class ChestStealer extends Module {
                 this.method16370();
                 if (this.targetChest != null && mc.currentScreen == null && this.field23624.getElapsedTime() > 1000L) {
                     boolean var3 = this.getBooleanValueFromSettingName("Through Walls");
-                    BlockPos var2 = this.targetChest.getPos();
-                    // 现算朝箱子的角度作为射线方向
-                    float[] var15 = RotationUtil.rotationToPos((double) var2.getX() + 0.5, (double) var2.getZ() + 0.5, (double) var2.getY() + 0.5);
-                    BlockRayTraceResult var4 = BlockUtil.rayTraceBlock(var15[0], var15[1], 0.0F, var2, var3);
+                    BlockRayTraceResult var4 = BlockUtil.rayTraceBlock(RotationCore.lastYaw, RotationCore.lastPitch, 0.0F, this.targetChest.getPos(), var3);
                     if (var4.getType() != net.minecraft.util.math.RayTraceResult.Type.MISS
                             && var4.getPos().getX() == this.targetChest.getPos().getX()
                             && var4.getPos().getY() == this.targetChest.getPos().getY()
@@ -117,10 +115,9 @@ public class ChestStealer extends Module {
                                 && var12.getPos().getY() == var7.getPos().getY()
                                 && var12.getPos().getZ() == var7.getPos().getZ()) {
                             this.targetChest = var7;
-                            float[] var13 = RotationUtil.rotationToPos((double) var9 + 0.5, (double) var11 + 0.5, (double) var10 + 0.35);
                             //var1.setYaw(var13[0]);
                             //var1.setPitch(var13[1]);
-                            RotationManager.setRotations(var13[0], var13[1]);
+                            RotationManager.setRotations(var16[0], var16[1]);
                             var14 = true;
                         }
                     }
