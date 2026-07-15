@@ -21,7 +21,8 @@ public class AntiKnockback extends ModuleWithModuleSettings {
                 new VulcanAntiKB(),
                 new LegitAntiKB(),
                 new HypixelAttackReduceAntiKB(),
-                new GrimAntiKB()
+                new GrimAntiKB(),
+                new AttackReduceAntiKB()
         );
     }
 
