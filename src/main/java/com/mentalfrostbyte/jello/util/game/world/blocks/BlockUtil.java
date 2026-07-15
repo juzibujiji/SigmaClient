@@ -347,8 +347,8 @@ public class BlockUtil {
             VoxelShape shape = mc.world.getBlockState(target).getShape(mc.world, target);
             BlockRayTraceResult hit = shape.rayTrace(start, end, target);
             if (hit == null) {
-                Vector3d center = new Vector3d(target.getX() + 0.5, target.getY() + 0.5, target.getZ() + 0.5);
-                return new BlockRayTraceResult(center, missFace, target, false);
+                // 射线未命中方块形状（可能因为距离不够或角度偏差），返回 MISS
+                return BlockRayTraceResult.createMiss(end, missFace, target);
             }
             return hit;
         }
@@ -485,13 +485,12 @@ public class BlockUtil {
             return hit;
         }
 
-        // 射线未直接命中方块形状，退回构造一个指向箱子的命中结果（命中面朝向玩家）
-        Direction face = Direction.getFacingFromVector(
+        // 射线未命中方块形状，返回 MISS
+        Direction missFace = Direction.getFacingFromVector(
                 var3.x - ((double) var0.getX() + 0.5),
                 var3.y - ((double) var0.getY() + 0.5),
                 var3.z - ((double) var0.getZ() + 0.5));
-        Vector3d center = new Vector3d((double) var0.getX() + 0.5, (double) var0.getY() + 0.5, (double) var0.getZ() + 0.5);
-        return new BlockRayTraceResult(center, face, var0, false);
+        return BlockRayTraceResult.createMiss(var4, missFace, var0);
     }
 
     public static float[] method34542(BlockPos var0, Direction var1) {
