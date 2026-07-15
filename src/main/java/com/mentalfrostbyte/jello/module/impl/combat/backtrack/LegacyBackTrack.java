@@ -147,6 +147,8 @@ public class LegacyBackTrack extends Module {
                 // 被排空的 transaction 响应之后，顺序与服务端发送顺序一致。
                 if (packet instanceof SPlayerPositionLookPacket) {
                     if (!packets.isEmpty()) {
+                        event.cancelled = true;
+                        packets.add(packet);
                         // 先排空既有队列（主线程串行，release* 的 this 锁保证与入队互斥）
                         mc.enqueue(this::releaseAllSPacket);
                     }
