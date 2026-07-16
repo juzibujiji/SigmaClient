@@ -67,6 +67,10 @@ public class NewChatGui extends AbstractGui {
                 double textOffset = -8.0D * (this.mc.gameSettings.chatLineSpacing + 1.0D) + 4.0D * this.mc.gameSettings.chatLineSpacing;
                 int renderedLines = 0;
 
+                EventRenderChat eventRenderChat = new EventRenderChat();
+                EventBus.call(eventRenderChat);
+                int chatYOffset = eventRenderChat.getYOffset();
+
                 for (int lineIndex = 0; lineIndex + this.scrollPos < this.drawnChatLines.size() && lineIndex < maxVisibleLines; ++lineIndex) {
                     ChatLine<IReorderingProcessor> chatline = this.drawnChatLines.get(lineIndex + this.scrollPos);
 
@@ -82,10 +86,7 @@ public class NewChatGui extends AbstractGui {
                             if (textAlpha > 3) {
                                 double yOffset = (double) (-lineIndex) * lineHeight;
 
-                                EventRenderChat eventRenderChat = new EventRenderChat();
-                                EventBus.call(eventRenderChat);
-
-                                yOffset += eventRenderChat.getYOffset();
+                                yOffset += chatYOffset;
 
                                 matrix.push();
                                 matrix.translate(0.0D, 0.0D, 50.0D);

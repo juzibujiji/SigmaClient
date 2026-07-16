@@ -44,6 +44,7 @@ public final class EventBus {
             /* Ignore the warning here, the above line prevents this from breaking */
             ensureHashmap((Class<? extends Event>) arg);
 
+            method.setAccessible(true);
             REGISTERED_METHODS.get(arg).put(method, o);
         }
 
@@ -73,10 +74,10 @@ public final class EventBus {
         if (map == null) return; // No registered methods
 
         try {
-            for (Method m : map.keySet()) {
-                Object instance = map.get(m);
+            for (Map.Entry<Method, Object> entry : map.entrySet()) {
+                Method m = entry.getKey();
+                Object instance = entry.getValue();
                 try {
-                    m.setAccessible(true);
                     m.invoke(instance, e);
                 } catch (IllegalAccessException ex) {
                     Client.logger.error("!!! PRIVATE EVENT LISTENER: {}#{}", instance.getClass().getName(), m.getName());
