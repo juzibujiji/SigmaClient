@@ -41,7 +41,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 public class LegacyBackTrack extends Module {
     public final LinkedBlockingDeque<IPacket<?>> packets = new LinkedBlockingDeque<>();
     private final Map<Integer, Vector3d> realEntityPositions = new ConcurrentHashMap<>();
-    private int ticks = 0;
+
     private Vector3d targetpos = null;
 
     public LegacyBackTrack() {
@@ -121,66 +121,50 @@ public class LegacyBackTrack extends Module {
         if (!this.isEnabled()) return;
 
         IPacket<?> packet = event.packet;
-        // 入队“决策”(是否拦截/放行)与出队“排空”(release*)必须互斥，共用 this 锁串行化。
-        // onGlobalReceivePacket 跑在 netty 读线程，release* 跑在主线程。若不加锁：
-        // 当目标刚变 null 且主线程正在排空时，netty 线程会读到 packets.isEmpty()==true
-        // 从而“放行”本该被延迟的 transaction，使其在 netty 线程抢先 processPacket，
-        // 插到仍在主线程排空的旧 transaction 之前 → 客户端回包顺序错乱 → Grim TransactionOrder。
-        // 加锁后，“放行”的前提恒为“队列已空且无人正在排空”，顺序才有保证。
-        synchronized (this) {
-            if (KillAura.targetEntity != null || !packets.isEmpty()) {
-                //小于min距离不开始
-                if (KillAura.targetEntity != null && getbacktrackDistance(KillAura.targetEntity) < num("MinReachValue") && bool("UseMinReach") && packets.isEmpty()) {
-                    return;
-                }
-                //超过max距离不开始
-                if (KillAura.targetEntity != null && getbacktrackDistance(KillAura.targetEntity) > num("MaxReach") && bool("UseMaxReach") && packets.isEmpty()) {
-                    return;
-                }
-                // === SPlayerPositionLookPacket 作为“硬同步点”处理（对齐 GPT 的 mustFlushGptBefore）===
-                // 位置包会让客户端立刻回一个 CConfirmTeleport；Grim 的 PacketPingListener 在 netty 线程
-                // 用 addTransactionResponse 严格按“发送顺序”校验 transaction/pong 响应。
-                // 旧做法把 PosLook 也缓存到队尾再排空，会留下重排窗口：PosLook 到达与排空执行之间放行的
-                // 包会与之交错，teleport-confirm 相对 transaction 响应的顺序被打乱 → TransactionOrder。
-                // 正确做法（GPT 从不报的原因）：绝不缓存 PosLook —— 先把已缓存的包按序排空(主线程)，
-                // 再让 PosLook 走原版正常路径通过（不 cancel）。这样 teleport-confirm 必然排在
-                // 被排空的 transaction 响应之后，顺序与服务端发送顺序一致。
-                if (packet instanceof SPlayerPositionLookPacket) {
-                    if (!packets.isEmpty()) {
-                        event.cancelled = true;
-                        packets.add(packet);
-                        // 先排空既有队列（主线程串行，release* 的 this 锁保证与入队互斥）
-                        mc.enqueue(this::releaseAllSPacket);
-                    }
-                    // 不 cancel、不缓存：让原版在本次 channelRead0 后正常处理 PosLook，
-                    // 其处理会被 PacketThreadUtil 入队到主线程，排在上面的排空任务之后。
-                    return;
-                }
-                if (NeedCancelSPacket(packet)) {
-                    //延迟了玩家的元数据包 这里包括了生命值 搞个fake
-                    if (packet instanceof SEntityMetadataPacket && bool("Delay EntityMetadataPacket")) {
-                        RemoteClientPlayerEntity entity = new RemoteClientPlayerEntity(mc.world, mc.player.getGameProfile());
-                        entity.setHealth(mc.player.getHealth());
-                        entity.getDataManager().setEntryValues(((SEntityMetadataPacket) packet).getDataManagerEntries());
-                        mc.player.setHealth(entity.getHealth());
-                    }
-
+        if (KillAura.targetEntity != null || !packets.isEmpty()) {
+            //小于min距离不开始
+            if (KillAura.targetEntity != null && getbacktrackDistance(KillAura.targetEntity) < num("MinReachValue") && bool("UseMinReach") && packets.isEmpty()) {
+                return;
+            }
+            //超过max距离不开始
+            if (KillAura.targetEntity != null && getbacktrackDistance(KillAura.targetEntity) > num("MaxReach") && bool("UseMaxReach") && packets.isEmpty()) {
+                return;
+            }
+            if (packet instanceof SPlayerPositionLookPacket) {
+                if (!packets.isEmpty()) {
                     event.cancelled = true;
                     packets.add(packet);
+                    // 先排空既有队列（主线程串行，release* 的 this 锁保证与入队互斥）
+                    releaseAllSPacket();
+                }
+                // 不 cancel、不缓存：让原版在本次 channelRead0 后正常处理 PosLook，
+                // 其处理会被 PacketThreadUtil 入队到主线程，排在上面的排空任务之后。
+                return;
+            }
+            if (NeedCancelSPacket(packet)) {
+                //延迟了玩家的元数据包 这里包括了生命值 搞个fake
+                if (packet instanceof SEntityMetadataPacket && bool("Delay EntityMetadataPacket")) {
+                    RemoteClientPlayerEntity entity = new RemoteClientPlayerEntity(mc.world, mc.player.getGameProfile());
+                    entity.setHealth(mc.player.getHealth());
+                    entity.getDataManager().setEntryValues(((SEntityMetadataPacket) packet).getDataManagerEntries());
+                    mc.player.setHealth(entity.getHealth());
+                }
 
-                    if (bool("ESP")) {
-                        if (realEntityPositions.isEmpty()) {
-                            if (mc.world != null) {
-                                for (Entity entity : mc.world.getAllEntities()) {
-                                    if (entity == mc.player) {
-                                        continue;
-                                    }
-                                    realEntityPositions.put(entity.getEntityId(), entity.getPositionVec());
+                event.cancelled = true;
+                packets.add(packet);
+
+                if (bool("ESP")) {
+                    if (realEntityPositions.isEmpty()) {
+                        if (mc.world != null) {
+                            for (Entity entity : mc.world.getAllEntities()) {
+                                if (entity == mc.player) {
+                                    continue;
                                 }
+                                realEntityPositions.put(entity.getEntityId(), entity.getPositionVec());
                             }
                         }
-                        recordRealPosition(packet);
                     }
+                    recordRealPosition(packet);
                 }
             }
         }
@@ -189,8 +173,6 @@ public class LegacyBackTrack extends Module {
     @EventTarget
     public void onUpdate(EventMovePacketAfter event) {
         if (!this.isEnabled()) return;
-
-        ticks++;
 
         if (bool("Slow Release")) {
             packets.add(new CChatMessagePacket("BackTrack Slow Release Tick"));
@@ -241,7 +223,7 @@ public class LegacyBackTrack extends Module {
             releasefollowSPacket();
         }
 
-        if (ticks >= numInt("Max PingTick")) {
+        if (packets.stream().filter(p -> p instanceof CChatMessagePacket).count() >= numInt("Max PingTick")) {
             if (bool("Slow Release")) {
                 releaseTickSPacket();
             } else {
@@ -316,17 +298,15 @@ public class LegacyBackTrack extends Module {
         return mc.world != null && mc.player != null && mc.getConnection() != null;
     }
 
-    private synchronized void dropAllState() {
+    private void dropAllState() {
         packets.clear();
         this.realEntityPositions.clear();
         this.targetpos = null;
-        this.ticks = 0;
     }
 
-    private synchronized void releaseAllSPacket() {
+    private void releaseAllSPacket() {
         if (!this.canReplayPackets()) {
             packets.clear();
-            this.ticks = 0;
             this.realEntityPositions.clear();
             return;
         }
@@ -350,7 +330,6 @@ public class LegacyBackTrack extends Module {
                 }
             }
         }
-        ticks = 0;
         realEntityPositions.clear();
     }
 
@@ -418,7 +397,7 @@ public class LegacyBackTrack extends Module {
         }
     }
 
-    private synchronized void releaseTickSPacket() {
+    private void releaseTickSPacket() {
         while (!packets.isEmpty()) {
             IPacket<?> packet = packets.pollFirst();
             if (packet == null) {
