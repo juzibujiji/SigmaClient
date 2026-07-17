@@ -897,7 +897,26 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
             RenderSystem.disableDepthTest();
             RenderSystem.depthMask(false);
             GL11.glDisable(2896);
+
+            // ── OptiFine shader compatibility ──
+            // When a shader pack is active OptiFine still has a gbuffers GLSL
+            // program bound here. Our ESP (ShadowESP / KillAura / ChestESP /
+            // entity ESP) draws in immediate mode with raw glColor, so the
+            // bound program re-lights/tonemaps it and it comes out washed-out
+            // or garbled. Unbind the program (via OptiFine's own API so its
+            // internal activeProgram state stays in sync) for the duration of
+            // the ESP draw, then restore it for the composite/final pass.
+            net.optifine.shaders.Program prevProgram = null;
+            if (Config.isShaders()) {
+                prevProgram = Shaders.activeProgram;
+                Shaders.useProgram(Shaders.ProgramNone);
+            }
+
             EventBus.call(new EventRender3D());
+
+            if (Config.isShaders() && prevProgram != null) {
+                Shaders.useProgram(prevProgram);
+            }
 
             // ── Comprehensive GL state restore after Jello EventRender3D handlers ──
             // Handlers (ShadowESP, KillAura, Tracers, Projectiles, etc.) leave
