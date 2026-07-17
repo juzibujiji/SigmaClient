@@ -833,7 +833,12 @@ public class KillAura extends Module {
                     List<LivingEntity> raytracelist = new ArrayList<>();
                     if (this.getBooleanValueFromSettingName("Raytrace")) {
                         //EntityRayTraceResult result = this.rayTraceWithKillAuraRotation(entity);
-                        raytracelist = BlockUtil.rayTraceEntities(RotationCore.lastYaw,RotationCore.lastPitch,3.0f,this.getBooleanValueFromSettingName("Through walls"));
+                        if (this.hitEvent.currentValue) {
+                            raytracelist = BlockUtil.rayTraceEntities(RotationCore.lastYaw, RotationCore.lastPitch, 3.0f, this.getBooleanValueFromSettingName("Through walls"));
+                        } else {
+                            raytracelist = BlockUtil.rayTraceEntitiesnolastpos(RotationCore.currentYaw, RotationCore.currentPitch, 3.0f, this.getBooleanValueFromSettingName("Through walls"));
+                        }
+
                         if (this.getBooleanValueFromSettingName("RaytraceMultiAttack")) {
                             if (raytracelist.isEmpty()) {
                                 canAttack = false;

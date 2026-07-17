@@ -330,6 +330,78 @@ public class BlockUtil {
         return result;
     }
 
+    public static List<LivingEntity> rayTraceEntitiesnolastpos(float yaw, float pitch, float distance, boolean throughWalls) {
+        List<LivingEntity> result = new ArrayList<>();
+        if (mc.player == null || mc.world == null) {
+            return result;
+        }
+
+        if (distance == 0.0F) {
+            distance = 3.0F;
+        }
+
+        Vector3d start = new Vector3d(
+                mc.player.getPosX(),
+                mc.player.getPosY() + (double) mc.player.getEyeHeight(),
+                mc.player.getPosZ()
+        );
+        Vector3d look = mc.player.getLookCustom(1.0F, yaw, pitch);
+        Vector3d end = start.add(look.x * distance, look.y * distance, look.z * distance);
+
+        // 不穿墙时：先算出射线被方块挡住的距离平方，命中点超过此距离的实体忽略
+        double wallDistSq = Double.MAX_VALUE;
+        if (!throughWalls) {
+            BlockRayTraceResult blockHit = mc.world.rayTraceBlocks(new RayTraceContext(
+                    start, end, RayTraceContext.BlockMode.COLLIDER, RayTraceContext.FluidMode.NONE, mc.player));
+            if (blockHit != null && blockHit.getType() != RayTraceResult.Type.MISS) {
+                wallDistSq = start.squareDistanceTo(blockHit.getHitVec());
+            }
+        }
+
+        // 只在射线可能经过的范围内取实体，减少遍历
+        AxisAlignedBB searchBox = mc.player.getBoundingBox()
+                .expand(look.x * distance, look.y * distance, look.z * distance)
+                .grow(1.0, 1.0, 1.0);
+
+        List<double[]> distances = new ArrayList<>();
+        List<LivingEntity> hits = new ArrayList<>();
+
+        for (Entity entity : mc.world.getEntitiesInAABBexcluding(mc.player, searchBox,
+                e -> e instanceof LivingEntity && e.isAlive())) {
+            AxisAlignedBB box = entity.getBoundingBox().grow(entity.getCollisionBorderSize());
+            Optional<Vector3d> hit = box.rayTrace(start, end);
+
+            boolean isHit = hit.isPresent();
+            double hitDistSq = Double.MAX_VALUE;
+
+            if (isHit) {
+                hitDistSq = start.squareDistanceTo(hit.get());
+            } else {
+                if (box.contains(start)) {
+                    isHit = true;
+                    hitDistSq = 0.0;
+                }
+            }
+
+
+            if (isHit) {
+                // 穿墙检测（墙的距离过滤）
+                if (hitDistSq > wallDistSq) {
+                    continue;
+                }
+                hits.add((LivingEntity) entity);
+                distances.add(new double[]{hits.size() - 1, hitDistSq});
+            }
+        }
+
+        distances.sort(Comparator.comparingDouble(a -> a[1]));
+        for (double[] entry : distances) {
+            result.add(hits.get((int) entry[0]));
+        }
+
+        return result;
+    }
+
     /**
      * 对指定方块位置发射一条视线射线，返回精确的命中信息（命中点、命中面等）。
      * 起点使用 lastReportedPos（服务端已知位置），方向使用原版 {@link Entity#getLookCustom} 计算，

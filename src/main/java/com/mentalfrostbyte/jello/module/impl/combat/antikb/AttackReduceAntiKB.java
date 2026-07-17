@@ -10,6 +10,8 @@ import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.game.MinecraftUtil;
 import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import net.minecraft.entity.Entity;
 import net.minecraft.network.IPacket;
 import net.minecraft.network.play.client.CAnimateHandPacket;
@@ -69,8 +71,14 @@ public class AttackReduceAntiKB extends Module {
             }
             if (onlysprint.getCurrentValue() && state || !onlysprint.getCurrentValue() || usec0b.getCurrentValue()) {
                 for (int i = 0; i < oncecount.getCurrentValue(); i++) {
-                    mc.getConnection().sendPacket(new CUseEntityPacket(entity, mc.player.isSneaking()));
-                    mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
+                    if (ViaLoadingBase.getInstance().getTargetVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)) {
+                        mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
+                        mc.getConnection().sendPacket(new CUseEntityPacket(entity, mc.player.isSneaking()));
+                    } else {
+                        mc.getConnection().sendPacket(new CUseEntityPacket(entity, mc.player.isSneaking()));
+                        mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
+                    }
+
                     mc.player.getMotion().x *= 0.6;
                     mc.player.getMotion().z *= 0.6;
                 }
