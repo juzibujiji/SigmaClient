@@ -2,6 +2,7 @@ package net.minecraft.client.entity.player;
 
 import com.google.common.collect.Lists;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventPushBlock;
+import com.mentalfrostbyte.jello.event.impl.player.EventLivingUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.EventSprint;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventUpdatePlayerActionState;
@@ -235,14 +236,11 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             boolean sentPlayerInput = PacketFixFor1_21Plus.sendPlayerInputPacket(this);
 
             if (this.isPassenger()) {
-                this.connection.sendPacket(
-                        new CPlayerPacket.RotationPacket(this.rotationYaw, this.rotationPitch, this.onGround));
+                this.connection.sendPacket(new CPlayerPacket.RotationPacket(this.rotationYaw, this.rotationPitch, this.onGround));
                 if (!sentPlayerInput) {
-                    this.connection.sendPacket(new CInputPacket(this.moveStrafing, this.moveForward,
-                            this.movementInput.jump, this.movementInput.sneaking));
+                    this.connection.sendPacket(new CInputPacket(this.moveStrafing, this.moveForward, this.movementInput.jump, this.movementInput.sneaking));
                 }
                 Entity entity = this.getLowestRidingEntity();
-
                 if (entity != this && entity.canPassengerSteer()) {
                     this.connection.sendPacket(new CMoveVehiclePacket(entity));
                     if (PacketFixFor1_21Plus.shouldUseVanilla1_21MovementPhysics()) {
@@ -793,6 +791,9 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
      * use this to react to sunlight and start to burn.
      */
     public void livingTick() {
+        //Call EventLivingUpdate
+        EventBus.call(new EventLivingUpdate());
+
         ++this.sprintingTicksLeft;
 
         if (this.sprintToggleTimer > 0) {

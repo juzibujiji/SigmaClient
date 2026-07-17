@@ -1,6 +1,7 @@
 package com.mentalfrostbyte.jello.module.impl.combat.antikb;
 
 import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
+import com.mentalfrostbyte.jello.event.impl.player.EventLivingUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
@@ -50,7 +51,7 @@ public class AttackReduceAntiKB extends Module {
     }
 
     @EventTarget
-    public void onUpdate(EventUpdate event) {
+    public void onUpdate(EventLivingUpdate event) {
         if ((canattack || attackTick > 0) && mc.world != null && mc.player != null) {
             Entity entity = null;
             if (KillAura.targetEntity != null && !raytrace.getCurrentValue()) {

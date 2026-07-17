@@ -2,7 +2,8 @@ package com.mentalfrostbyte.jello.module.impl.world;
 
 import com.mentalfrostbyte.jello.event.impl.game.action.EventKeyPress;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender3D;
-import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.settings.impl.*;
@@ -47,8 +48,8 @@ public class Nuker extends Module {
     }
 
     @EventTarget
-    public void onUpdate(EventMotion event) {
-        if (this.isEnabled() && event.isPre()) {
+    public void onUpdate(EventUpdate event) {
+        if (this.isEnabled()) {
             this.blocksToDestroy = this.getBlocksToDestroy(this.getNumberValueBySettingName("Range") / 2.0F);
             if (this.blocksToDestroy.isEmpty()) {
                 this.targetPos = null;
@@ -70,8 +71,7 @@ public class Nuker extends Module {
                     float[] rotations = RotationUtil.rotationToPos(
 							this.targetPos.getX(), this.targetPos.getZ(), this.targetPos.getY()
                     );
-                    event.setYaw(rotations[0]);
-                    event.setPitch(rotations[1]);
+                    RotationManager.setRotations(rotations[0],rotations[1]);
                     EventKeyPress keyPress = new EventKeyPress(0, false, this.targetPos);
                     EventBus.call(keyPress);
                 } else {
@@ -79,8 +79,7 @@ public class Nuker extends Module {
                     float[] var6 = RotationUtil.rotationToPos(
                             (double) this.targetPos.getX() + 0.5, this.targetPos.getZ(), (double) this.targetPos.getY() + 0.5
                     );
-                    event.setYaw(var6[0]);
-                    event.setPitch(var6[1]);
+                    RotationManager.setRotations(var6[0],var6[1]);
                     EventKeyPress keyPress = new EventKeyPress(0, false, this.targetPos);
                     EventBus.call(keyPress);
                 }

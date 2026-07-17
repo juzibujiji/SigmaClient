@@ -56,7 +56,7 @@ public class GptBackTrack extends Module {
     public GptBackTrack() {
         super(ModuleCategory.COMBAT, "GPT", "Rolling delay queue BackTrack");
 
-        this.registerSetting(new NumberSetting<>("GPT Delay", "Rolling incoming packet delay in milliseconds", 150, 50, 500, 10));
+        this.registerSetting(new NumberSetting<>("GPT Delay", "Rolling incoming packet delay in milliseconds", 150, 50, 5000, 10));
         this.registerSetting(new NumberSetting<>("GPT Attack Window", "Keep tracking this long after the latest attack", 1000, 100, 3000, 50));
         this.registerSetting(new NumberSetting<>("GPT Min Range", "Lower edge of the target BackTrack window", 1.0f, 0.0f, 6.0f, 0.1f));
         this.registerSetting(new NumberSetting<>("GPT Start Range", "Upper edge of the target BackTrack window", 3.2f, 1.0f, 6.0f, 0.1f));

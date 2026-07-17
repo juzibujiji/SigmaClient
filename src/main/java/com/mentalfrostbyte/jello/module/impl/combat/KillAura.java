@@ -12,6 +12,7 @@ import com.mentalfrostbyte.jello.event.impl.player.action.EventStopUseItem;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventUseItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.gui.base.animations.Animation;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.managers.util.notifs.Notification;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
@@ -342,8 +343,7 @@ public class KillAura extends Module {
                     this.currentRotation.pitch = JelloAI.getCurrentPitch();
 
                     // Update RotationCore values
-                    RotationCore.currentYaw = this.currentRotation.yaw;
-                    RotationCore.currentPitch = this.currentRotation.pitch;
+                    RotationManager.setRotations(this.currentRotation.yaw,this.currentRotation.pitch);
                 } else if (eventUpdateYaw - mc.player.rotationYaw != 0.0F
                         && (rotationMode.currentValue.equals("Test1") || rotationMode.currentValue.equals("Test"))
                         && mc.player.ticksExisted % 50 == 0) {
