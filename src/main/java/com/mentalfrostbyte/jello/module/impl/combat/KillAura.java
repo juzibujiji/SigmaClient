@@ -29,7 +29,7 @@ import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.util.game.player.rotation.util.RotationUtils;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
-import com.mentalfrostbyte.jello.util.system.math.counter.TimerUtil;
+import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
 import com.mentalfrostbyte.jello.util.system.math.counter.TimerUtils;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
@@ -136,6 +136,12 @@ public class KillAura extends Module {
         this.registerSetting(new BooleanSetting("Monsters", "Hit monsters", false));
         this.registerSetting(new BooleanSetting("Invisible", "Hit invisible entites", true));
         this.registerSetting(new BooleanSetting("Raytrace", "Helps the aura become more legit", true));
+        this.registerSetting(new BooleanSetting("RaytraceMultiAttack", "Attack All in Raytrace", true){
+            @Override
+            public boolean isHidden() {
+                return !getBooleanValueFromSettingName("Raytrace");
+            }
+        });
         this.registerSetting(new BooleanSetting("Cooldown", "Use attack cooldown (1.9+)", false));
         this.registerSetting(new NumberSetting<>("Cooldown Delay", "Delay value", 1f, 0f, 1f, 0.05f));
         this.registerSetting(new BooleanSetting("No swing", "Hit without swinging", false));
@@ -824,11 +830,20 @@ public class KillAura extends Module {
                 LivingEntity entity = (LivingEntity) targetData.getEntity();
                 if (mc.player.getDistanceToEntityBox(entity) <= this.getNumberValueBySettingName("Range")) {
                     boolean canAttack = true;
+                    List<LivingEntity> raytracelist = new ArrayList<>();
                     if (this.getBooleanValueFromSettingName("Raytrace")) {
-                        EntityRayTraceResult result = this.rayTraceWithKillAuraRotation(entity);
-                        if (result == null || result.getEntity() != entity) {
+                        //EntityRayTraceResult result = this.rayTraceWithKillAuraRotation(entity);
+                        raytracelist = BlockUtil.rayTraceEntities(RotationCore.lastYaw,RotationCore.lastPitch,3.0f,this.getBooleanValueFromSettingName("Through walls"));
+                        if (this.getBooleanValueFromSettingName("RaytraceMultiAttack")) {
+                            if (raytracelist.isEmpty()) {
+                                canAttack = false;
+                            }
+                        } else if (!raytracelist.contains(entity)) {
                             canAttack = false;
                         }
+                        /*if (result == null || result.getEntity() != entity) {
+                            canAttack = false;
+                        }*/
                     }
 
                     if (this.getBooleanValueFromSettingName("Cooldown")) {
@@ -861,14 +876,32 @@ public class KillAura extends Module {
                         }
 
                         if (ViaLoadingBase.getInstance().getTargetVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)) {
-                            if (!this.getBooleanValueFromSettingName("No swing")) {
-                                mc.player.swingArm(Hand.MAIN_HAND);
+                            if (this.getBooleanValueFromSettingName("Raytrace") && this.getBooleanValueFromSettingName("RaytraceMultiAttack")) {
+                                for (LivingEntity entitys : raytracelist) {
+                                    if (!this.getBooleanValueFromSettingName("No swing")) {
+                                        mc.player.swingArm(Hand.MAIN_HAND);
+                                    }
+                                    mc.playerController.attackEntity(mc.player, entitys);
+                                }
+                            } else {
+                                if (!this.getBooleanValueFromSettingName("No swing")) {
+                                    mc.player.swingArm(Hand.MAIN_HAND);
+                                }
+                                mc.playerController.attackEntity(mc.player, entity);
                             }
-                            mc.playerController.attackEntity(mc.player, entity);
                         } else {
-                            mc.playerController.attackEntity(mc.player, entity);
-                            if (!this.getBooleanValueFromSettingName("No swing")) {
-                                mc.player.swingArm(Hand.MAIN_HAND);
+                            if (this.getBooleanValueFromSettingName("Raytrace") && this.getBooleanValueFromSettingName("RaytraceMultiAttack")) {
+                                for (LivingEntity entitys : raytracelist) {
+                                    mc.playerController.attackEntity(mc.player, entitys);
+                                    if (!this.getBooleanValueFromSettingName("No swing")) {
+                                        mc.player.swingArm(Hand.MAIN_HAND);
+                                    }
+                                }
+                            } else {
+                                mc.playerController.attackEntity(mc.player, entity);
+                                if (!this.getBooleanValueFromSettingName("No swing")) {
+                                    mc.player.swingArm(Hand.MAIN_HAND);
+                                }
                             }
                         }
 

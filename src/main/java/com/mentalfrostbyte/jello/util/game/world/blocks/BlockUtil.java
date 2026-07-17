@@ -298,8 +298,25 @@ public class BlockUtil {
                 e -> e instanceof LivingEntity && e.isAlive())) {
             AxisAlignedBB box = entity.getBoundingBox().grow(entity.getCollisionBorderSize());
             Optional<Vector3d> hit = box.rayTrace(start, end);
-            if (hit.isPresent()) {
-                double hitDistSq = start.squareDistanceTo(hit.get());
+
+            boolean isHit = hit.isPresent();
+            double hitDistSq = Double.MAX_VALUE;
+
+            if (isHit) {
+                hitDistSq = start.squareDistanceTo(hit.get());
+            } else {
+                if (box.contains(start)) {
+                    isHit = true;
+                    hitDistSq = 0.0;
+                } else if (mc.player.getBoundingBox().intersects(box)) {
+                    isHit = true;
+                    hitDistSq = 0.0;
+                }
+            }
+
+
+            if (isHit) {
+                // 穿墙检测（墙的距离过滤）
                 if (hitDistSq > wallDistSq) {
                     continue;
                 }
