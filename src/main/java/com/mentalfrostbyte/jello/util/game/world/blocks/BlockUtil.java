@@ -308,9 +308,6 @@ public class BlockUtil {
                 if (box.contains(start)) {
                     isHit = true;
                     hitDistSq = 0.0;
-                } else if (mc.player.getBoundingBox().intersects(box)) {
-                    isHit = true;
-                    hitDistSq = 0.0;
                 }
             }
 
