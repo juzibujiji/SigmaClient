@@ -395,6 +395,7 @@ public class Item implements IItemProvider
         return worldIn.rayTraceBlocks(new RayTraceContext(vector3d, vector3d1, RayTraceContext.BlockMode.OUTLINE, fluidMode, player));
     }
 
+    //这个是修复automgl的射线 原来的那个是根据player.rotation你这个视角来放水的 这个automlg有转头需要重新设置一个根据转头的转头参数
     protected static BlockRayTraceResult rayTrace2(World worldIn, PlayerEntity player, RayTraceContext.FluidMode fluidMode)
     {
         float f = RotationCore.currentPitch;

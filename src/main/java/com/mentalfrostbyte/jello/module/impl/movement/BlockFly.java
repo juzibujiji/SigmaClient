@@ -33,7 +33,6 @@ import net.minecraft.network.play.client.CHeldItemChangePacket;
 import net.minecraft.util.Hand;
 import org.lwjgl.opengl.GL11;
 import team.sdhq.eventBus.annotations.EventTarget;
-import team.sdhq.eventBus.annotations.priority.LowestPriority;
 
 public class BlockFly extends ModuleWithModuleSettings {
     public int lastSpoofedSlot;
@@ -48,11 +47,6 @@ public class BlockFly extends ModuleWithModuleSettings {
                 new BlockFlyHypixelMode(),
                 new BlockFlyCustomMode(),
                 new BlockFlyLCustomMode(),
-                // GrimSemi: semi-silent scaffold hardened against GrimAntiCheat's
-                // block-place pipeline (post.Post, blockplace.FabricatedPlace /
-                // PositionPlace / AirLiquidPlace, badpackets.BadPacketsX/Y/W,
-                // movement.Rotations GCD filter). See BlockFlyGrimSemiMode javadoc.
-                new BlockFlyGrimSemiMode(),
                 // SouthSide: OpenSSNGScaffoldAndClutch port — telly/snap scaffold with
                 // FallingPlayer clutch self-save.
                 new BlockFlySouthSideMode(),

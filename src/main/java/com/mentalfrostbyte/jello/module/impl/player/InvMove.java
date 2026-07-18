@@ -2,9 +2,9 @@ package com.mentalfrostbyte.jello.module.impl.player;
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.action.EventKeyPress;
+import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
-import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.holders.KeyboardHolder;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
@@ -49,7 +49,7 @@ public class InvMove extends Module {
     }
 
     @EventTarget
-    public void method16585(EventUpdate var1) {
+    public void method16585(EventRunTicks var1) {
         if (this.isEnabled()) {
             boolean isInventoryScreen = mc.currentScreen instanceof InventoryScreen || mc.currentScreen instanceof ChestScreen;
             if (this.getBooleanValueFromSettingName("AACP")) {

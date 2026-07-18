@@ -1,7 +1,7 @@
 package com.mentalfrostbyte.jello.module.impl.item;
 
 import com.mentalfrostbyte.Client;
-import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
+import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
 import com.mentalfrostbyte.jello.managers.RotationManager;
@@ -64,7 +64,7 @@ public class AutoMLG extends Module {
 
     @EventTarget
     @HighestPriority
-    public void onUpdate(EventUpdate var1) {
+    public void onUpdate(EventRunTicks var1) {
         if (this.isEnabled() && mc.player != null && mc.playerController.gameIsSurvivalOrAdventure()) {
             if (/*var1.isPre() && */preTicks >= 0) {
                 preTicks++;

@@ -1,8 +1,7 @@
 package com.mentalfrostbyte.jello.module.impl.movement.blockfly;
 
 import com.mentalfrostbyte.jello.event.impl.game.action.EventClick;
-import com.mentalfrostbyte.jello.event.impl.player.EventGetFovModifier;
-import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
+import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdateHeldItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventJump;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
@@ -13,7 +12,6 @@ import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.movement.BlockFly;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.ModeSetting;
-import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
 import com.mentalfrostbyte.jello.util.game.player.rotation.util.RotationUtils;
@@ -267,7 +265,7 @@ public class BlockFlyCustomMode extends Module {
 
     @EventTarget
     @LowestPriority
-    public void onMotion(EventUpdate event) {
+    public void onMotion(EventRunTicks event) {
         if (!this.isEnabled() || mc.player == null || mc.world == null) {
             return;
         }
