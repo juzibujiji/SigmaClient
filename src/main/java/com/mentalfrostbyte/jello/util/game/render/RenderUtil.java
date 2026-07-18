@@ -146,7 +146,14 @@ public class RenderUtil implements MinecraftUtil {
         GL11.glStencilFunc(512, 1, 1);
         GL11.glStencilOp(7681, 7680, 7680);
         GL11.glStencilMask(1);
-        if (!Config.isShaders()) GL11.glClear(1024);
+        // Clear the stencil mask every frame. Skip only when shaders are on AND we're not
+        // in the post-composite ESP phase — there the bound dfb has no stencil buffer and
+        // glClear would raise GL_INVALID_FRAMEBUFFER_OPERATION. In the ESP phase the main
+        // framebuffer has a real stencil buffer (via resetDepthBuffer) and the clear is
+        // required, otherwise last frame's mask leaks and the outline freezes.
+        if (!Config.isShaders() || shaderEspPhase) {
+            GL11.glClear(1024);
+        }
         field18461 = true;
     }
 
@@ -1377,10 +1384,24 @@ public class RenderUtil implements MinecraftUtil {
         EXTFramebufferObject.glFramebufferRenderbufferEXT(36160, 36096, 36161, newDepthBuffer);
     }
 
+    // ── Post-composite ESP phase (OptiFine shaders) ──
+    // Under shaders the world/ESP normally draw into OptiFine's deferred framebuffer
+    // (dfb), whose depth is a plain depth texture with no stencil bits — so the
+    // stencil-silhouette ESPs degrade into full wireframes. Instead we defer the ESP
+    // dispatch to after OptiFine's final composite, when the MAIN framebuffer is bound.
+    // That framebuffer is the same one used when shaders are off, so resetDepthBuffer()
+    // can swap its depth for a packed DEPTH24_STENCIL8 renderbuffer and the stencil
+    // silhouette works identically to the no-shaders path. This flag lets
+    // resetDepthBuffer() run during that post-composite window even though shaders are on.
+    public static boolean shaderEspPhase = false;
+
     public static void resetDepthBuffer() {
         // OptiFine shaders own the active render FBO. Replacing its depth/stencil
-        // attachment here can blank the whole frame, so leave shader FBOs alone.
-        if (Config.isShaders()) {
+        // attachment here can blank the whole frame, so leave shader FBOs alone —
+        // UNLESS we're in the post-composite ESP phase, where the bound framebuffer is
+        // the main one (not the dfb) and the swap is the same proven path used with
+        // shaders off.
+        if (Config.isShaders() && !shaderEspPhase) {
             return;
         }
 
@@ -1420,7 +1441,11 @@ public class RenderUtil implements MinecraftUtil {
         GL11.glStencilFunc(GL11.GL_ACCUM_BUFFER_BIT, 1, 1);
         GL11.glStencilOp(GL11.GL_REPLACE, GL11.GL_KEEP, GL11.GL_KEEP);
         GL11.glStencilMask(1);
-        if (!Config.isShaders()) GL11.glClear(GL11.GL_STENCIL_BUFFER_BIT);
+        // Clearing stencil bit 0 is safe even under shaders: on a complete FBO with no
+        // stencil attachment this is a no-op (no GL_INVALID_FRAMEBUFFER_OPERATION), and
+        // when a stencil buffer is present it stops last frame's mask leaking in, which is
+        // what froze the music spectrum on its peak.
+        GL11.glClear(GL11.GL_STENCIL_BUFFER_BIT);
         stencilOpInProgress = true;
     }
 

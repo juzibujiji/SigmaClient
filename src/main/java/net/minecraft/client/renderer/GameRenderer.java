@@ -119,6 +119,13 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
     private boolean useShader;
     private final ActiveRenderInfo activeRender = new ActiveRenderInfo();
     private boolean initialized = false;
+
+    // ── Deferred ESP dispatch state (OptiFine shaders) ──
+    // See usage in renderWorld: under shaders the ESP dispatch is postponed until after
+    // OptiFine's final composite so it lands on the stencil-capable main framebuffer.
+    private boolean espDispatchDeferred = false;
+    private final java.nio.FloatBuffer espDeferredProjection = org.lwjgl.BufferUtils.createFloatBuffer(16);
+    private final java.nio.FloatBuffer espDeferredModelView = org.lwjgl.BufferUtils.createFloatBuffer(16);
     private World updatedWorld = null;
     private float clipDistance = 128.0F;
     private long lastServerTime = 0L;
@@ -912,7 +919,25 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
                 Shaders.useProgram(Shaders.ProgramNone);
             }
 
-            EventBus.call(new EventRender3D());
+            // ── OptiFine shader ESP deferral ──
+            // With shaders on, the currently bound framebuffer is OptiFine's deferred
+            // framebuffer (dfb), whose depth attachment is a plain depth texture with no
+            // stencil bits. The stencil-silhouette ESPs (ShadowESP / OutlineChestESP /
+            // BoxOutlineESP) therefore have no stencil buffer to mask against and degrade
+            // into full wireframes ("every edge drawn"). Instead of dispatching here, we
+            // capture the 3D projection + modelview matrices and defer the whole ESP
+            // dispatch until after OptiFine's final composite (see below), when the MAIN
+            // framebuffer is bound — the same framebuffer used with shaders off, where the
+            // stencil path already works. With shaders off, dispatch immediately as before.
+            if (Config.isShaders()) {
+                GL11.glGetFloatv(GL11.GL_PROJECTION_MATRIX, this.espDeferredProjection);
+                GL11.glGetFloatv(GL11.GL_MODELVIEW_MATRIX, this.espDeferredModelView);
+                this.espDeferredProjection.rewind();
+                this.espDeferredModelView.rewind();
+                this.espDispatchDeferred = true;
+            } else {
+                EventBus.call(new EventRender3D());
+            }
 
             if (Config.isShaders() && prevProgram != null) {
                 Shaders.useProgram(prevProgram);
@@ -967,6 +992,58 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
 
         if (flag) {
             Shaders.endRender();
+        }
+
+        // ── Deferred ESP dispatch (OptiFine shaders) ──
+        // OptiFine's final composite has run and left the MAIN framebuffer bound with no
+        // shader program active. Restore the captured 3D projection/modelview matrices and
+        // dispatch the ESPs here, so RenderUtil.resetDepthBuffer() can give this framebuffer
+        // a real stencil buffer (DEPTH24_STENCIL8) and the stencil silhouette renders exactly
+        // as it does with shaders off. RenderUtil.shaderEspPhase opens the resetDepthBuffer
+        // path for this window only.
+        if (this.espDispatchDeferred) {
+            this.espDispatchDeferred = false;
+
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glPushMatrix();
+            GL11.glLoadMatrixf(this.espDeferredProjection);
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPushMatrix();
+            GL11.glLoadMatrixf(this.espDeferredModelView);
+
+            RenderSystem.disableDepthTest();
+            RenderSystem.depthMask(false);
+            GL11.glDisable(GL11.GL_LIGHTING);
+
+            com.mentalfrostbyte.jello.util.game.render.RenderUtil.shaderEspPhase = true;
+            try {
+                EventBus.call(new EventRender3D());
+            } finally {
+                com.mentalfrostbyte.jello.util.game.render.RenderUtil.shaderEspPhase = false;
+
+                GL11.glMatrixMode(GL11.GL_PROJECTION);
+                GL11.glPopMatrix();
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                GL11.glPopMatrix();
+
+                // Leave GL state clean for the GUI/2D pass that follows.
+                GL11.glDepthFunc(GL11.GL_LEQUAL);
+                GL11.glDisable(GL11.GL_STENCIL_TEST);
+                GL11.glStencilMask(0xFF);
+                GL11.glColorMask(true, true, true, true);
+                GL11.glShadeModel(GL11.GL_SMOOTH);
+                GL11.glDisable(GL11.GL_LINE_SMOOTH);
+                GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
+                GL11.glLineWidth(1.0F);
+                GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+                RenderSystem.enableDepthTest();
+                RenderSystem.depthMask(true);
+                RenderSystem.disableBlend();
+                RenderSystem.defaultBlendFunc();
+                RenderSystem.enableTexture();
+                RenderSystem.clearCurrentColor();
+                mc.getTextureManager().bindTexture(TextureManager.RESOURCE_LOCATION_EMPTY);
+            }
         }
 
         this.mc.getProfiler().endSection();

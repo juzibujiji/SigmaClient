@@ -26,7 +26,7 @@ import team.sdhq.eventBus.annotations.EventTarget;
 
 public class AttackReduceAntiKB extends Module {
     private final BooleanSetting usec0b = new BooleanSetting("UseC0B","UserC0BPacket Sprint", false);
-    private final NumberSetting<Integer> keepattacktick = new NumberSetting<>("KeepAttackTick", "KeepAttackReduceTick", 5, 1, 5, 1);
+    private final NumberSetting<Integer> keepattacktick = new NumberSetting<>("KeepAttackTick", "KeepAttackReduceTick", 5, 1, 10, 1);
     private final NumberSetting<Integer> oncecount = new NumberSetting<>("Once Count", "Attack once AttackCount", 1, 1, 5, 1);
     private final BooleanSetting alink = new BooleanSetting("Alink","Alink in Attack",false);
     private final BooleanSetting alinkinair = new BooleanSetting("Alink If Air","Alink If hurt in air,can use OnGround JumpReset together", false);
