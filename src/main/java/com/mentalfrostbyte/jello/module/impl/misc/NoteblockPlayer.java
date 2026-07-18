@@ -33,6 +33,9 @@ import java.util.*;
 public class NoteblockPlayer extends Module {
     public int field23638;
     private NBSFile nbsFile;
+    // 演奏节奏用真实时间调度，避免 Math.round(getTempo()) 把高 TPS 歌曲量化成每 tick 一播导致偏快。
+    // 仅用于演奏分支，不影响调音逻辑。
+    private long nextNoteTimeMs = -1L;
     private List<String> field23640 = new ArrayList<>();
     private final List<Class6463> field23641 = new ArrayList<>();
     private final List<BlockPos> positions = new ArrayList<>();
@@ -102,12 +105,28 @@ public class NoteblockPlayer extends Module {
                     MinecraftUtil.addChatMessage("§cNoteBlockPlayer isn't available in creative mode!");
                     this.setEnabled(false);
                 } else {
-                    if (!this.method16407(this.field23641, var1) && mc.player.ticksExisted % 4 == 0) {
+                    // 去掉每 4 tick 的节流，调音（错开重复音高）每 tick 都进行，加快调音速度。
+                    // 仍是一次调整一个音符盒并依赖回包更新音高，不会超调发散。
+                    if (!this.method16407(this.field23641, var1)) {
                         this.method16408(this.field23641, var1);
                     }
 
                     if (this.method16406(this.field23641)) {
-                        if (mc.player.ticksExisted % Math.max(1, Math.round(this.nbsFile.getTempo())) == 0) {
+                        // 每个 NBS tick 的真实间隔（毫秒）= 50 * getTempo()（getTempo() = 20 / TPS）。
+                        // 用真实时间判断而不是把间隔四舍五入成整数游戏 tick，否则高 TPS 歌曲会被量化到 20 TPS 偏快。
+                        long now = System.currentTimeMillis();
+                        double intervalMs = 50.0 * this.nbsFile.getTempo();
+                        if (this.nextNoteTimeMs < 0L) {
+                            this.nextNoteTimeMs = now;
+                        }
+
+                        if (now >= this.nextNoteTimeMs) {
+                            // 累加间隔以补偿误差；若落后超过一个间隔（卡顿），重新对齐到当前时间，避免快速连播补齐。
+                            this.nextNoteTimeMs += (long) intervalMs;
+                            if (now >= this.nextNoteTimeMs) {
+                                this.nextNoteTimeMs = now + (long) intervalMs;
+                            }
+
                             if (this.field23638 > this.nbsFile.getShort2()) {
                                 this.field23638 = 0;
                             }
@@ -121,7 +140,7 @@ public class NoteblockPlayer extends Module {
                                         if ((var6.method28780() != 3 && this.countByNbsInstrument(var6.method28780()) == 0
                                                 || var8.method19640() == var6.method28780())
                                                 && Class2121.method8807(
-                                                var8.field28402) == (float) (var6.method28782() - 33)
+                                                var8.field28402) == (float) foldKeyToPitch(var6.method28782())
                                                 && Math.sqrt(mc.player.getPosition()
                                                 .distanceSq(var8.field28401)) < (double) mc.playerController
                                                 .getBlockReachDistance()) {
@@ -328,6 +347,7 @@ public class NoteblockPlayer extends Module {
             }
 
             this.field23638 = 0;
+            this.nextNoteTimeMs = -1L;
             this.field23641.clear();
 
             for (BlockPos var4 : BlockUtil.getBlockPositionsInRange(mc.playerController.getBlockReachDistance())) {
@@ -357,6 +377,26 @@ public class NoteblockPlayer extends Module {
         }
 
         return var4.getOrDefault(var1.instrument, 0);
+    }
+
+    /**
+     * 把 NBS 音符的 key 折叠成音符盒可播放的 pitch（0-24）。
+     * 音符盒只有 25 个音高（NBS key 33-57）。超出这个范围的音符（很多曲子有）
+     * 若直接用 key-33 去匹配，会得到负数或 >24 的值，世界里没有对应音高的音符盒，
+     * 导致这些音丢失或匹配到错误音符盒 → 听起来乱/走音。
+     * 标准做法：按八度（12 个半音）把越界音高折叠进 0-24 范围。
+     */
+    private static int foldKeyToPitch(int key) {
+        int pitch = key - 33;
+        // 低于最低音就整八度升高，高于最高音就整八度降低，直到落进 0-24。
+        // 只改八度、不改音名，保证音高就近折叠而不走调。
+        while (pitch < 0) {
+            pitch += 12;
+        }
+        while (pitch > 24) {
+            pitch -= 12;
+        }
+        return pitch;
     }
 
     /**
