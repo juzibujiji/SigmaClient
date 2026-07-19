@@ -21,6 +21,7 @@ import net.minecraft.state.properties.NoteBlockInstrument;
 import net.minecraft.util.Direction;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.BlockRayTraceResult;
 import net.minecraft.util.math.vector.Vector3d;
 import org.lwjgl.opengl.GL11;
 import team.sdhq.eventBus.annotations.EventTarget;
@@ -172,14 +173,11 @@ public class NoteblockPlayer extends Module {
                 continue;
             }
 
-            float[] rot = BlockUtil.method34542(block.field28401, Direction.UP);
-            if ((double) block.field28401.getY() > mc.player.getPosY() + 1.0) {
-                rot = BlockUtil.method34542(block.field28401, Direction.DOWN);
-            }
-
+            Direction face = this.hitFace(block.field28401);
+            float[] rot = BlockUtil.method34542(block.field28401, face);
             RotationManager.setRotations(rot[0], rot[1]);
             mc.getConnection().sendPacket(new CPlayerDiggingPacket(
-                    CPlayerDiggingPacket.Action.START_DESTROY_BLOCK, block.field28401, Direction.UP));
+                    CPlayerDiggingPacket.Action.START_DESTROY_BLOCK, block.field28401, face));
             mc.player.swingArm(Hand.MAIN_HAND);
             this.positions.add(block.field28401);
             hitsThisTick++;
@@ -220,11 +218,16 @@ public class NoteblockPlayer extends Module {
 
         // 右键循环 0→1→…→24→0，从当前音拧到目标音需要的次数。
         int reqTunes = (target.targetNote - currentNote + 25) % 25;
-        float[] rot = BlockUtil.method34542(target.field28401, Direction.UP);
+        // 命中面：盒子在头顶（+上方有阻挡）时点它的下面，否则点上面。
+        Direction face = this.hitFace(target.field28401);
+        float[] rot = BlockUtil.method34542(target.field28401, face);
         RotationManager.setRotations(rot[0], rot[1]);
+        // 直接对准目标盒子构造命中结果，而不是发射世界射线。
+        // 密集摆放时世界射线会先撞到别的盒子/方块，导致拧错盒子（把已调好的拧乱），
+        // 或压根没命中目标 → 目标音高永远不变 → tuneStep 卡在同一个盒子上永远不开始播放。
+        BlockRayTraceResult ray = this.blockHit(target.field28401, face);
         for (int i = 0; i < reqTunes; i++) {
-            mc.getConnection().sendPacket(new CPlayerTryUseItemOnBlockPacket(Hand.MAIN_HAND,
-                    BlockUtil.rayTrace(rot[0], rot[1], mc.playerController.getBlockReachDistance() + 1.0F)));
+            mc.getConnection().sendPacket(new CPlayerTryUseItemOnBlockPacket(Hand.MAIN_HAND, ray));
         }
         mc.player.swingArm(Hand.MAIN_HAND);
 
@@ -254,6 +257,19 @@ public class NoteblockPlayer extends Module {
 
     private boolean withinReach(BlockPos pos) {
         return Math.sqrt(mc.player.getPosition().distanceSq(pos)) < (double) mc.playerController.getBlockReachDistance();
+    }
+
+    // 盒子在头顶上方时敲/拧它的下表面，否则用上表面。上下都能触发音符盒。
+    private Direction hitFace(BlockPos pos) {
+        return pos.getY() > mc.player.getPosY() + 1.0 ? Direction.DOWN : Direction.UP;
+    }
+
+    // 直接对准指定盒子的指定面构造命中结果，不发射世界射线。
+    // 保证右键/左键落在这个盒子上，不会被密集摆放里更近的方块抢走。
+    private BlockRayTraceResult blockHit(BlockPos pos, Direction face) {
+        double y = face == Direction.DOWN ? (double) pos.getY() : (double) pos.getY() + 1.0;
+        Vector3d hit = new Vector3d((double) pos.getX() + 0.5, y, (double) pos.getZ() + 0.5);
+        return new BlockRayTraceResult(hit, face, pos, false);
     }
 
     @EventTarget
