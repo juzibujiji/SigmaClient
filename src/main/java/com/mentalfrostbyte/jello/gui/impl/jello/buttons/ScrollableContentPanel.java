@@ -109,14 +109,8 @@ public class ScrollableContentPanel extends AnimatedIconPanel {
       GL11.glAlphaFunc(519, 0.0F);
       GL11.glTranslatef((float) this.getXA(), (float) this.getYA(), 0.0F);
 
-      // 绘制滚动条（始终渲染）
-      if (this.scrollBar.isSelfVisible()) {
-         GL11.glPushMatrix();
-         this.scrollBar.draw(partialTicks);
-         GL11.glPopMatrix();
-      }
-
-      // 绘制 buttonList 中的子元素（带可见性裁剪）
+      // 先绘制 buttonList 中的子元素（带可见性裁剪）。
+      // 必须在滚动条之前绘制，否则开启的模块按钮（更宽、蓝色）会覆盖滚动条。
       if (this.buttonList.isSelfVisible()) {
          GL11.glPushMatrix();
          GlStateManager.enableAlphaTest();
@@ -140,6 +134,13 @@ public class ScrollableContentPanel extends AnimatedIconPanel {
             }
          }
 
+         GL11.glPopMatrix();
+      }
+
+      // 最后绘制滚动条（始终渲染且置于最上层），保证不被模块按钮覆盖
+      if (this.scrollBar.isSelfVisible()) {
+         GL11.glPushMatrix();
+         this.scrollBar.draw(partialTicks);
          GL11.glPopMatrix();
       }
    }

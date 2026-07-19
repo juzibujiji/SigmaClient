@@ -2,7 +2,8 @@ package com.mentalfrostbyte.jello.module.impl.combat;
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender3D;
-import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
+import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
@@ -47,7 +48,7 @@ public class BowAimbot extends Module {
     }
 
     @EventTarget
-    public void method16569(EventRunTicks event) {
+    public void method16569(EventUpdate event) {
         if (this.isEnabled() /*&& event.isPre()*/) {
             if (!(mc.player.getActiveItemStack().getItem() instanceof BowItem)) {
                 this.field23754.clear();

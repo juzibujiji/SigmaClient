@@ -1,7 +1,7 @@
 package com.mentalfrostbyte.jello.module.impl.item;
 
 import com.mentalfrostbyte.Client;
-import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
+import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender2DOffset;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
 import com.mentalfrostbyte.jello.managers.RotationManager;
@@ -63,7 +63,7 @@ public class ChestStealer extends Module {
     }
 
     @EventTarget
-    public void onUpdate(EventRunTicks var1) {
+    public void onUpdate(EventUpdate var1) {
         if (this.isEnabled() /*&& var1.isPre()*/) {
             if (this.getBooleanValueFromSettingName("Aura")) {
                 if (this.field23624.getElapsedTime() > 2000L && this.field23621) {
