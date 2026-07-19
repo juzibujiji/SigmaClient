@@ -109,7 +109,7 @@ public final class MicrosoftLoginUtil {
                             .addParameter("client_id", CLIENT_ID)
                             .addParameter("response_type", "code")
                             .addParameter("redirect_uri", redirectUri)
-                            .addParameter("scope", "XboxLive.signin XboxLive.offline_access")
+                            .addParameter("scope", LOGIN_SCOPE)
                             .addParameter("state", state)
                             .addParameter("code_challenge", codeChallenge)
                             .addParameter("code_challenge_method", "S256")
@@ -149,7 +149,7 @@ public final class MicrosoftLoginUtil {
             try (Socket socket = server.accept()) {
                 socket.setSoTimeout(5_000);
                 final OAuthCallbackResult callback = parseOAuthCallback(readHttpRequestUri(socket), expectedState);
-                writeOAuthCallbackResponse(socket, callback.responseCode());
+                writeOAuthCallbackResponse(socket, callback);
 
                 if (callback.complete()) {
                     return callback;
@@ -218,11 +218,17 @@ public final class MicrosoftLoginUtil {
         return OAuthCallbackResult.error("There was no auth code or error description present.");
     }
 
-    private static void writeOAuthCallbackResponse(final Socket socket, final int responseCode) throws IOException {
-        final byte[] response;
-        try (InputStream stream = MicrosoftLoginUtil.class.getResourceAsStream("/callback.html")) {
-            response = stream != null ? IOUtils.toByteArray(stream) : new byte[0];
-        }
+    private static void writeOAuthCallbackResponse(final Socket socket, final OAuthCallbackResult callback)
+            throws IOException {
+        final int responseCode = callback.responseCode();
+        // Only a completed callback carrying an error message renders the failure
+        // page; the auth-code success case (and intermediate probes) use the happy
+        // page so the browser never lands on a blank tab.
+        final boolean isError = callback.complete() && !StringUtils.isBlank(callback.errorMessage());
+        final String pageHtml = isError
+                ? renderErrorPage(callback.errorMessage())
+                : loadCallbackPage("/callback.html", FALLBACK_SUCCESS_PAGE);
+        final byte[] response = pageHtml.getBytes(StandardCharsets.UTF_8);
 
         final String statusText = responseCode == 200 ? "OK" : responseCode == 404 ? "Not Found" : "Bad Request";
         final String headers = "HTTP/1.1 " + responseCode + " " + statusText + "\r\n"
@@ -236,6 +242,51 @@ public final class MicrosoftLoginUtil {
         output.write(response);
         output.flush();
     }
+
+    private static String renderErrorPage(final String errorMessage) {
+        final String safe = escapeHtml(errorMessage);
+        return loadCallbackPage("/callback_error.html", FALLBACK_ERROR_PAGE).replace("%ERROR%", safe);
+    }
+
+    /**
+     * Loads a bundled callback page, falling back to an inline copy if the resource
+     * is missing or unreadable so the browser is never served a blank response.
+     */
+    private static String loadCallbackPage(final String resource, final String fallback) {
+        try (InputStream stream = MicrosoftLoginUtil.class.getResourceAsStream(resource)) {
+            if (stream != null) {
+                final String html = new String(IOUtils.toByteArray(stream), StandardCharsets.UTF_8);
+                if (!StringUtils.isBlank(html)) {
+                    return html;
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        return fallback;
+    }
+
+    private static String escapeHtml(final String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
+    private static final String FALLBACK_SUCCESS_PAGE =
+            "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Sigma</title></head>"
+                    + "<body style=\"background:#0a1416;color:#e8f6f5;font-family:sans-serif;text-align:center;"
+                    + "padding-top:80px\"><h1>You're signed in</h1><p>You can close this tab and return to Sigma.</p>"
+                    + "<script>setTimeout(function(){try{window.close();}catch(e){}},1200);</script></body></html>";
+
+    private static final String FALLBACK_ERROR_PAGE =
+            "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Sigma</title></head>"
+                    + "<body style=\"background:#16100a;color:#f6ece8;font-family:sans-serif;text-align:center;"
+                    + "padding-top:80px\"><h1>Login didn't complete</h1><p>%ERROR%</p>"
+                    + "<p>You can close this tab and try again from the client.</p></body></html>";
 
     public static CompletableFuture<String> acquireMSAccessToken(
             final MSAuthCodeSession authCodeSession,
@@ -302,6 +353,144 @@ public final class MicrosoftLoginUtil {
                 throw new CompletionException("Unable to acquire Microsoft access token!", e);
             }
         }, executor);
+    }
+
+    /**
+     * The OAuth scope requested for both the initial web login and later refreshes.
+     * {@code XboxLive.offline_access} is what makes Microsoft hand back a long-lived
+     * refresh token, so it must stay identical across the two flows.
+     */
+    public static final String LOGIN_SCOPE = "XboxLive.signin XboxLive.offline_access";
+
+    /**
+     * The pair of tokens returned by the Microsoft token endpoint: a short-lived
+     * access token and (when {@code offline_access} was requested) a long-lived,
+     * possibly rotated, refresh token.
+     */
+    public record MSTokenResult(String accessToken, String refreshToken) {
+    }
+
+    /**
+     * A completed Microsoft login: the resulting Minecraft {@link Session} together
+     * with the refresh token that can later re-mint it without user interaction.
+     */
+    public record MicrosoftSession(Session session, String refreshToken) {
+    }
+
+    /**
+     * Exchanges a freshly acquired auth code for a Microsoft access token
+     * <b>and</b> refresh token. Unlike {@link #acquireMSAccessToken}, this keeps
+     * the refresh token so the account can be silently re-logged in later.
+     */
+    public static CompletableFuture<MSTokenResult> acquireMSTokens(
+            final MSAuthCodeSession authCodeSession,
+            final Executor executor
+    ) {
+        return CompletableFuture.supplyAsync(() -> {
+            final java.util.List<NameValuePair> params = new java.util.ArrayList<>(Arrays.asList(
+                    new BasicNameValuePair("client_id", CLIENT_ID),
+                    new BasicNameValuePair("grant_type", "authorization_code"),
+                    new BasicNameValuePair("code", authCodeSession.authCode()),
+                    new BasicNameValuePair("redirect_uri", authCodeSession.redirectUri())
+            ));
+            if (!StringUtils.isBlank(authCodeSession.codeVerifier())) {
+                params.add(new BasicNameValuePair("code_verifier", authCodeSession.codeVerifier()));
+            }
+            return requestMSTokens(params);
+        }, executor);
+    }
+
+    /**
+     * Redeems a stored refresh token for a new access token (and, since Microsoft
+     * rotates them, usually a new refresh token). The refresh token is bound to the
+     * issuing {@link #CLIENT_ID}, so this must run against the same client id and
+     * scope used for the original login.
+     */
+    public static CompletableFuture<MSTokenResult> refreshMSTokens(
+            final String refreshToken,
+            final Executor executor
+    ) {
+        return CompletableFuture.supplyAsync(() -> requestMSTokens(Arrays.asList(
+                new BasicNameValuePair("client_id", CLIENT_ID),
+                new BasicNameValuePair("grant_type", "refresh_token"),
+                new BasicNameValuePair("refresh_token", refreshToken),
+                new BasicNameValuePair("scope", LOGIN_SCOPE)
+        )), executor);
+    }
+
+    private static MSTokenResult requestMSTokens(final java.util.List<NameValuePair> params) {
+        try (CloseableHttpClient client = HttpClients.createMinimal()) {
+            final HttpPost request = new HttpPost(URI.create("https://login.live.com/oauth20_token.srf"));
+            request.setConfig(REQUEST_CONFIG);
+            request.setHeader("Content-Type", "application/x-www-form-urlencoded");
+            request.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
+
+            final org.apache.http.HttpResponse res = client.execute(request);
+
+            final JsonObject json = new JsonParser().parse(EntityUtils.toString(res.getEntity())).getAsJsonObject();
+            final String accessToken = Optional.ofNullable(json.get("access_token"))
+                    .map(JsonElement::getAsString)
+                    .filter(token -> !StringUtils.isBlank(token))
+                    .orElseThrow(() -> new Exception(
+                            json.has("error") ? String.format(
+                                    "%s: %s",
+                                    json.get("error").getAsString(),
+                                    json.has("error_description") ? json.get("error_description").getAsString() : ""
+                            ) : "There was no access token or error description present."
+                    ));
+            final String refreshToken = Optional.ofNullable(json.get("refresh_token"))
+                    .map(JsonElement::getAsString)
+                    .filter(token -> !StringUtils.isBlank(token))
+                    .orElse(null);
+            return new MSTokenResult(accessToken, refreshToken);
+        } catch (InterruptedException e) {
+            throw new CancellationException("Microsoft token acquisition was cancelled!");
+        } catch (Exception e) {
+            throw new CompletionException("Unable to acquire Microsoft tokens!", e);
+        }
+    }
+
+    /**
+     * Runs the full Xbox Live -&gt; XSTS -&gt; Minecraft chain from a Microsoft access
+     * token and resolves the resulting Minecraft {@link Session}.
+     */
+    public static CompletableFuture<Session> mcSessionFromMSAccessToken(
+            final String msAccessToken,
+            final Executor executor
+    ) {
+        return acquireXboxAccessToken(msAccessToken, executor)
+                .thenComposeAsync(xboxAccessToken -> acquireXboxXstsToken(xboxAccessToken, executor), executor)
+                .thenComposeAsync(xboxXstsData -> acquireMCAccessToken(
+                        xboxXstsData.get("Token"), xboxXstsData.get("uhs"), executor), executor)
+                .thenComposeAsync(mcToken -> login(mcToken, executor), executor);
+    }
+
+    /**
+     * Completes a browser login end-to-end: auth code session -&gt; MS tokens -&gt;
+     * Minecraft session, preserving the refresh token for future silent re-logins.
+     */
+    public static CompletableFuture<MicrosoftSession> loginWithAuthCodeSession(
+            final MSAuthCodeSession authCodeSession,
+            final Executor executor
+    ) {
+        return acquireMSTokens(authCodeSession, executor)
+                .thenComposeAsync(msTokens -> mcSessionFromMSAccessToken(msTokens.accessToken(), executor)
+                        .thenApply(session -> new MicrosoftSession(session, msTokens.refreshToken())), executor);
+    }
+
+    /**
+     * Silently re-mints a Minecraft session from a stored refresh token, returning
+     * the new session together with the (possibly rotated) refresh token to persist.
+     */
+    public static CompletableFuture<MicrosoftSession> loginWithRefreshToken(
+            final String refreshToken,
+            final Executor executor
+    ) {
+        return refreshMSTokens(refreshToken, executor)
+                .thenComposeAsync(msTokens -> mcSessionFromMSAccessToken(msTokens.accessToken(), executor)
+                        .thenApply(session -> new MicrosoftSession(
+                                session,
+                                msTokens.refreshToken() != null ? msTokens.refreshToken() : refreshToken)), executor);
     }
 
     private static String randomUrlSafe(final int byteLength) {

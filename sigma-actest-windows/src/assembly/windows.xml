@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 https://maven.apache.org/xsd/assembly-2.2.0.xsd">
+    <id>windows-server-2022</id>
+    <formats>
+        <format>zip</format>
+    </formats>
+    <includeBaseDirectory>true</includeBaseDirectory>
+    <baseDirectory>sigma-actest-windows-${project.version}</baseDirectory>
+
+    <files>
+        <file>
+            <source>../sigma-actest-core/target/SigmaACTestCore-1.0.0.jar</source>
+            <outputDirectory>/plugins</outputDirectory>
+            <destName>SigmaACTestCore.jar</destName>
+        </file>
+        <file>
+            <source>../sigma-actest-velocity/target/sigma-actest-velocity-1.0.0.jar</source>
+            <outputDirectory>/plugins</outputDirectory>
+            <destName>SigmaACTestVelocity.jar</destName>
+        </file>
+        <file>
+            <source>../irc-server/target/sigma-irc-server-1.0.0.jar</source>
+            <outputDirectory>/plugins</outputDirectory>
+            <destName>sigma-irc-server.jar</destName>
+        </file>
+        <file>
+            <source>README.zh-CN.md</source>
+            <outputDirectory>/</outputDirectory>
+        </file>
+        <file>
+            <source>${project.build.directory}/vendor/WinSW.NET461.exe</source>
+            <outputDirectory>/vendor</outputDirectory>
+            <destName>WinSW.NET461.exe</destName>
+        </file>
+        <file>
+            <source>${project.build.directory}/vendor/WinSW-LICENSE.txt</source>
+            <outputDirectory>/vendor</outputDirectory>
+            <destName>WinSW-LICENSE.txt</destName>
+        </file>
+    </files>
+
+    <fileSets>
+        <fileSet>
+            <directory>../sigma-actest-network/src/main/windows</directory>
+            <outputDirectory>/</outputDirectory>
+            <useDefaultExcludes>true</useDefaultExcludes>
+        </fileSet>
+        <fileSet>
+            <directory>../licensed-plugins</directory>
+            <outputDirectory>/licensed-plugins</outputDirectory>
+            <includes>
+                <include>README.zh-CN.md</include>
+                <include>Intave.jar</include>
+                <include>Vulcan.jar</include>
+                <include>PacketEvents.jar</include>
+            </includes>
+            <useDefaultExcludes>true</useDefaultExcludes>
+        </fileSet>
+    </fileSets>
+</assembly>

@@ -84,7 +84,6 @@ public class GeminiStyleJello extends RenderModule {
     private static final long D_HIDE = 180;
 
     // ===== 缓动 =====
-    private static float easeOutCubic(float t) { return 1 - (1 - t) * (1 - t) * (1 - t); }
     private static float easeInCubic(float t)  { return t * t * t; }
 
     /** 对应 cubic-bezier(0.34, 1.56, 0.64, 1) 的弹性过冲缓动 */
@@ -210,17 +209,13 @@ public class GeminiStyleJello extends RenderModule {
             potionStates.clear();
         }
 
-        // ===== 血条动画 =====
-        // 蓝条/黄条快速跟随（对应 HTML transition: 0.15s ease-out）
-        float follow = Math.min(1.0F, 20.0F * delta);
-        dispHp += (currentHp - dispHp) * follow;
-        dispAbs += (absHp - dispAbs) * follow;
-        // 红色拖影：掉血时缓慢衰减，回血时立即顶上
-        if (trailHp > totalHp) {
-            trailHp += (totalHp - trailHp) * Math.min(1.0F, 8.0F * delta);
-        } else {
-            trailHp = totalHp;
-        }
+        // ===== 血条（冻结平滑动画：直接跟随真实值）=====
+        // 之前 dispHp/dispAbs/trailHp 每帧 lerp → 每帧改变纹理内容与缓存 key
+        // → 每帧重新光栅化 + GPU 回读 + 上传纹理，导致掉帧。改为直接取真实值，
+        // 纹理只在血量真正变化时才重新烘焙。
+        dispHp = currentHp;
+        dispAbs = absHp;
+        trailHp = totalHp;
 
         // ===== 药水状态机 =====
         updatePotionStates(target, delta);
@@ -229,10 +224,9 @@ public class GeminiStyleJello extends RenderModule {
             if (ps.progress > 0.05F) { anyPotionVisible = true; break; }
         }
 
-        // ===== 面板高度展开/折叠 =====
+        // ===== 面板高度展开/折叠（冻结缓动：直接跟随目标）=====
         float targetHeight = anyPotionVisible ? (H_BASE + H_EXPAND) : H_BASE;
-        animatedHeight += (targetHeight - animatedHeight) * Math.min(1.0F, 12.0F * delta);
-        if (Math.abs(animatedHeight - targetHeight) < 0.3F) animatedHeight = targetHeight;
+        animatedHeight = targetHeight;
 
         // ===== 坐标 =====
         TargetHUD parent = (TargetHUD) Client.getInstance().moduleManager.getModuleByClass(TargetHUD.class);
@@ -256,27 +250,34 @@ public class GeminiStyleJello extends RenderModule {
         float drawW = W_PANEL * drawScale;
         float drawH = animatedHeight * drawScale;
 
-        // ===== 脏标记 =====
+        // ===== 脏标记：完全由内容 key 驱动 =====
+        // opacity/scaleAnim/userScale 由 GL 层处理（tint + 绘制位置/缩放），不影响纹理内容，不进 key
+        // animatedHeight 已冻结为离散目标值（H_BASE 或 H_BASE+H_EXPAND），只在展开/折叠时变
+        // 血量取整（每 0.5 血才重建）、距离用 1 米精度，减少重建频率
         StringBuilder keyBuilder = new StringBuilder(128);
         keyBuilder.append(name)
-                .append('|').append(String.format(Locale.US, "%.1f", dist))
+                .append('|').append((int) dist)
                 .append('|').append(armorPct)
-                .append('|').append(String.format(Locale.US, "%.2f|%.2f|%.2f|%.1f", dispHp, dispAbs, trailHp, maxHp))
-                .append('|').append(String.format(Locale.US, "%.1f|%.3f|%.3f|%.2f", animatedHeight, opacity, scaleAnim, userScale))
+                .append('|').append(String.format(Locale.US, "%.0f|%.0f|%.0f|%.1f",
+                        dispHp * 2, dispAbs * 2, trailHp * 2, maxHp))
+                .append('|').append((int) animatedHeight)
                 .append('|').append(avatar != null);
         for (PotionState ps : potionStates.values()) {
             keyBuilder.append('|').append(ps.name).append(':').append(ps.time)
-                    .append(':').append(String.format(Locale.US, "%.2f", ps.progress));
+                    .append(':').append(ps.progress > 0.05F);
         }
         String newKey = keyBuilder.toString();
 
         if (!newKey.equals(cacheKey) || cachedHudTexture == null) {
             cacheKey = newKey;
-            renderToTexture(name, dist, armorPct, currentHp, absHp, maxHp, opacity, avatar);
+            // opacity 不烘焙进纹理，统一由下方 GL tint 应用
+            renderToTexture(name, dist, armorPct, currentHp, absHp, maxHp, 1.0F, avatar);
             if (cachedHudTexture == null) return;
         }
 
-        RenderUtil.drawImage(drawX, drawY, drawW, drawH, cachedHudTexture, 0xFFFFFFFF);
+        // opacity 通过 GL tint 应用（面板出现/消失淡入淡出无需重烘焙纹理）
+        int glTint = (Math.max(0, Math.min(255, (int) (opacity * 255))) << 24) | 0xFFFFFF;
+        RenderUtil.drawImage(drawX, drawY, drawW, drawH, cachedHudTexture, glTint);
     }
 
     /**
@@ -301,15 +302,16 @@ public class GeminiStyleJello extends RenderModule {
             }
         }
 
+        // 冻结药水滑入/滑出：progress 瞬时切换（存在=1，失去=立即移除），
+        // 避免动画期间每帧改变 progress 导致纹理重烘焙
         Iterator<PotionState> it = potionStates.values().iterator();
         while (it.hasNext()) {
             PotionState ps = it.next();
-            if (!ps.matchedThisFrame) ps.removing = true;
-            if (ps.removing) {
-                ps.progress -= delta * 4.0F; // 滑出稍快
-                if (ps.progress <= 0.0F) it.remove();
+            if (!ps.matchedThisFrame) {
+                it.remove();
             } else {
-                ps.progress = Math.min(1.0F, ps.progress + delta * 5.0F);
+                ps.removing = false;
+                ps.progress = 1.0F;
             }
         }
     }

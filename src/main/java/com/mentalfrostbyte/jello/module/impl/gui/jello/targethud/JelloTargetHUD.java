@@ -75,7 +75,7 @@ public class JelloTargetHUD extends RenderModule {
     // ===== 动画时长（毫秒，匹配 HTML）=====
     private static final long D_SHOW    = 180;
     private static final long D_HIDE    = 140;
-    private static final long D_HEALTH  = 250;
+    // tag 状态切换时间戳仍记录，但透明度已改为瞬时切换（见 updateTagStates）
     private static final long D_TAG_IN  = 160;
     private static final long D_TAG_OUT = 140;
 
@@ -89,9 +89,6 @@ public class JelloTargetHUD extends RenderModule {
     private long panelAnimDur = D_SHOW;
 
     private float dispHealth = 20.0F;
-    private float fromHealth = 20.0F;
-    private float targetHealth = 20.0F;
-    private long healthAnimStart = 0;
     private float dispMaxHp = 20.0F;
 
     private final Map<String, TagState> tagStates = new HashMap<>();
@@ -194,32 +191,16 @@ public class JelloTargetHUD extends RenderModule {
 
         if (target != currentTarget) {
             currentTarget = target;
-            if (target instanceof LivingEntity) {
-                LivingEntity le = (LivingEntity) target;
-                dispHealth = le.getHealth() + le.getAbsorptionAmount();
-                fromHealth = dispHealth;
-                targetHealth = dispHealth;
-                dispMaxHp = le.getMaxHealth();
-            }
         }
 
-        // ===== 血条动画 =====
+        // ===== 血条（冻结平滑动画：直接跟随真实血量）=====
+        // 之前血量用 250ms 缓动，战斗中 dispHealth 每帧变化 → 每帧改变纹理内容与缓存 key
+        // → 每帧重新光栅化 + GPU 回读 + 上传纹理，导致掉帧。改为直接取真实血量，
+        // 纹理只在血量真正变化时才重新烘焙。
         if (target instanceof LivingEntity) {
             LivingEntity le = (LivingEntity) target;
-            float newHp = le.getHealth() + le.getAbsorptionAmount();
+            dispHealth = le.getHealth() + le.getAbsorptionAmount();
             dispMaxHp = le.getMaxHealth();
-            if (Math.abs(newHp - targetHealth) > 0.01F) {
-                fromHealth = dispHealth;
-                targetHealth = newHp;
-                healthAnimStart = System.currentTimeMillis();
-            }
-        }
-        long hElapsed = System.currentTimeMillis() - healthAnimStart;
-        if (hElapsed >= D_HEALTH) {
-            dispHealth = targetHealth;
-        } else {
-            float hT = (float) hElapsed / D_HEALTH;
-            dispHealth = fromHealth + (targetHealth - fromHealth) * easeOut(hT);
         }
 
         // ===== 坐标 =====
@@ -242,8 +223,8 @@ public class JelloTargetHUD extends RenderModule {
         }
         float tagsContentH = aliveCount > 0 ? PT_TAGS + H_TAG + PB_TAGS : 0;
         tagsWrapperTarget = tagsContentH;
-        tagsWrapperHeight += (tagsWrapperTarget - tagsWrapperHeight) * 0.15F;
-        if (Math.abs(tagsWrapperHeight - tagsWrapperTarget) < 0.3F) tagsWrapperHeight = tagsWrapperTarget;
+        // 冻结高度缓动：直接跟随目标，避免每帧微调高度导致纹理重烘焙
+        tagsWrapperHeight = tagsWrapperTarget;
 
         float panelH = PAD + rowH + MB_ROW + tagsWrapperHeight + PAD;
 
@@ -261,30 +242,21 @@ public class JelloTargetHUD extends RenderModule {
         float drawW = W_PANEL * drawScale;
         float drawH = panelH * drawScale;
 
-        // ===== 脏标记：检查内容是否变化 =====
-        boolean healthAnim = hElapsed < D_HEALTH;
-        boolean tagsAnim = false;
-        for (TagState ts : tagStates.values()) {
-            long tel = System.currentTimeMillis() - ts.animStart;
-            if (tel < ts.duration) { tagsAnim = true; break; }
-        }
-        boolean tagsHeightChanging = Math.abs(tagsWrapperHeight - tagsWrapperTarget) > 0.3F;
-
+        // ===== 脏标记：完全由内容 key 驱动 =====
+        // 之前血条/tag/高度动画会在动画窗口内强制每帧 dirty → 战斗中每帧重烘焙纹理
+        // （Skija 光栅化 + GPU 回读 + 纹理上传），这是掉帧根源。现已冻结这些动画：
+        // 血量直接跟随真实值、tag 透明度瞬时切换、tag 高度直接跟随目标，因此这些状态
+        // 只在真正变化时改变 key，纹理也只在此时重烘焙。
+        //
         // 缓存 key：只包含影响纹理内容的状态
         // opacity/scale/ty 由 GL 层处理（tint + 绘制位置），不影响纹理内容，不进 key
-        // 距离用 2 米精度（每 2 米才重建），tag opacity 用 0.05 步进，减少战斗中的重建频率
+        // 距离用 2 米精度（每 2 米才重建），血量取整（每 0.5 血才重建）减少重建频率
         String newKey = String.format(Locale.US, "%s|%d|%.0f|%.0f|%d|%d|%.2f",
                 name, (int)(dist / 2), dispHealth * 2, dispMaxHp * 2, aliveCount,
                 tagStates.size(), panelAlpha);
 
-        // tags opacity 进 key（0.05 步进，动画期间也不会每帧变 key）
-        for (TagState ts : tagStates.values()) {
-            newKey += String.format(Locale.US, "|%.2f", Math.round(ts.opacity * 20) / 20.0f);
-        }
-
-        // 动画期间强制 dirty，动画结束后只靠 key 变化判断
-        // panelAnim 不再需要：opacity 已移出纹理，show/hide 动画不改变纹理内容
-        boolean dirty = healthAnim || tagsAnim || tagsHeightChanging || !newKey.equals(cacheKey) || cachedHudTexture == null;
+        // 只靠 key 变化判断是否重烘焙，动画不再强制 dirty
+        boolean dirty = !newKey.equals(cacheKey) || cachedHudTexture == null;
 
         // ===== 只有脏时才重新渲染 Skija 纹理 =====
         if (dirty) {
@@ -434,16 +406,14 @@ public class JelloTargetHUD extends RenderModule {
                 ts.duration = D_TAG_OUT;
             }
         }
+        // 冻结 tag 淡入淡出：透明度瞬时切换（存活=1，消失=立即移除），
+        // 避免动画期间每帧改变 tag 透明度导致纹理重烘焙
         tagStates.values().removeIf(ts -> {
-            long el = now - ts.animStart;
-            float t = ts.duration > 0 ? Math.min(1.0F, (float) el / ts.duration) : 1.0F;
-            if (ts.entering) {
-                ts.opacity = easeOut(t);
-            } else {
-                ts.opacity = 1.0F - easeIn(t);
-                if (t >= 1.0F && !ts.alive) return true;
+            if (ts.alive) {
+                ts.opacity = 1.0F;
+                return false;
             }
-            return false;
+            return true;
         });
     }
 

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sigma - Login successful</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 50% 30%, #123d40 0%, #0a1416 70%);
+            color: #e8f6f5;
+        }
+        .card {
+            text-align: center;
+            padding: 48px 56px;
+            border-radius: 18px;
+            background: rgba(18, 61, 64, 0.35);
+            border: 1px solid rgba(0, 197, 189, 0.18);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+            max-width: 420px;
+            animation: rise 0.5s ease-out both;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .badge {
+            width: 76px;
+            height: 76px;
+            margin: 0 auto 26px;
+            border-radius: 50%;
+            background: rgba(0, 197, 189, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .badge svg { width: 40px; height: 40px; stroke: #00c5bd; }
+        .check {
+            stroke-dasharray: 48;
+            stroke-dashoffset: 48;
+            animation: draw 0.55s 0.15s ease-out forwards;
+        }
+        @keyframes draw { to { stroke-dashoffset: 0; } }
+        h1 { font-size: 22px; font-weight: 600; margin-bottom: 12px; letter-spacing: 0.2px; }
+        p { font-size: 14.5px; line-height: 1.55; color: #9fc4c2; }
+        .hint { margin-top: 22px; font-size: 12.5px; color: #6f9997; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path class="check" d="M4 12.5l5 5L20 6.5"></path>
+            </svg>
+        </div>
+        <h1>You're signed in</h1>
+        <p>Your Microsoft account has been linked to Sigma.<br>You can close this tab and head back to the client.</p>
+        <div class="hint">This window will try to close on its own.</div>
+    </div>
+    <script>
+        setTimeout(function () { try { window.close(); } catch (e) {} }, 1200);
+    </script>
+</body>
+</html>

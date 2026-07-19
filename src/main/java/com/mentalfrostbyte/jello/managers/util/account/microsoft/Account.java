@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mentalfrostbyte.Client;
+import com.mentalfrostbyte.jello.util.client.network.microsoft.MicrosoftLoginUtil;
 import com.mentalfrostbyte.jello.util.system.network.ImageUtil;
 import com.mentalfrostbyte.jello.util.client.render.Resources;
 import org.newdawn.slick.opengl.Texture;
@@ -26,6 +27,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 public class Account {
@@ -45,6 +48,9 @@ public class Account {
     private Thread skinUpdateThread;
 
     private String token = "";
+    // Long-lived Microsoft OAuth refresh token (web login only). Used to silently
+    // re-mint the short-lived Minecraft access token once it expires.
+    private String refreshToken = "";
 
     public Account(String email, String password, ArrayList<Ban> bans, String knownName) {
         this.email = email;
@@ -85,6 +91,10 @@ public class Account {
 
         if (json.has("token")) {
             this.token = decodeBase64(json.get("token").getAsString());
+        }
+
+        if (json.has("refreshToken")) {
+            this.refreshToken = decodeBase64(json.get("refreshToken").getAsString());
         }
 
         if (json.has("bans")) {
@@ -170,6 +180,26 @@ public class Account {
 
     public void setPassword(String var1) {
         this.password = var1;
+    }
+
+    public String getToken() {
+        return this.token;
+    }
+
+    public void setToken(String token) {
+        this.token = token != null ? token : "";
+    }
+
+    public String getRefreshToken() {
+        return this.refreshToken;
+    }
+
+    public void setRefreshToken(String refreshToken) {
+        this.refreshToken = refreshToken != null ? refreshToken : "";
+    }
+
+    public boolean hasRefreshToken() {
+        return this.refreshToken != null && !this.refreshToken.isEmpty();
     }
 
     public void setEmail(String var1) {
@@ -261,41 +291,108 @@ public class Account {
     }
 
     public Session login() throws MicrosoftAuthenticationException {
+        // Accounts added via Web / Cookie / Token login carry a Minecraft access
+        // token. These expire in ~24h, so we must confirm the token still works and,
+        // if not, refresh it. Handing back a dead token would look "successful" here
+        // but fail on the actual server join with "Invalid session".
         if (this.token != null && !this.token.isEmpty()) {
-            try {
-                JsonObject profile = fetchProfile(this.token);
-                if (profile != null) {
-                    this.knownName = profile.get("name").getAsString();
-                    this.uuid = fixUUID(profile.get("id").getAsString());
+            ProfileProbe probe = probeToken(this.token);
+            switch (probe.state) {
+                case VALID -> {
+                    this.knownName = probe.profile.get("name").getAsString();
+                    this.uuid = fixUUID(probe.profile.get("id").getAsString());
                     this.updateSkin();
                     this.lastUsed = System.currentTimeMillis();
                     return new Session(this.knownName, this.uuid.replace("-", ""), this.token, "mojang");
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
+                case EXPIRED -> {
+                    // Token is genuinely dead. Try the stored Microsoft refresh token.
+                    if (this.hasRefreshToken()) {
+                        Session refreshed = loginWithStoredRefreshToken();
+                        if (refreshed != null) {
+                            return refreshed;
+                        }
+                    }
+                    // No working refresh path. For a real Microsoft email+password
+                    // account we can still fall through to a credential login below;
+                    // otherwise this account cannot be logged in, so fail loudly
+                    // instead of returning a dead session.
+                    if (this.isEmailAValidEmailFormat()) {
+                        throw new MicrosoftAuthenticationException(
+                                "Stored session for " + this.getName()
+                                        + " expired and could not be refreshed. Re-add it via Web login.");
+                    }
+                }
+                case UNKNOWN -> {
+                    // Couldn't reach the profile API (network/region/5xx). That does
+                    // not mean the token is dead - the join uses a different host - so
+                    // optimistically reuse the stored token rather than failing.
+                    this.lastUsed = System.currentTimeMillis();
+                    return new Session(this.getName(), this.getFormattedUUID(), this.token, "mojang");
+                }
             }
         }
+
         if (!this.isEmailAValidEmailFormat()) {
             MicrosoftAuthenticator authenticator = new MicrosoftAuthenticator();
             MicrosoftAuthResult result = authenticator.loginWithCredentials(email, password);
             System.out.printf("Logged in with '%s'%n", result.getProfile().getName());
             this.setName(result.getProfile().getName());
             this.setUuid(fixUUID(result.getProfile().getId()));
+            // Persist the tokens so subsequent launches can silently refresh instead
+            // of prompting for credentials (and re-hitting Microsoft rate limits).
+            this.setToken(result.getAccessToken());
+            this.setRefreshToken(result.getRefreshToken());
             this.updateSkin();
             this.lastUsed = System.currentTimeMillis();
+            try {
+                Client.getInstance().accountManager.saveAlts();
+            } catch (Exception ignored) {
+            }
             return new Session(
                     result.getProfile().getName(), result.getProfile().getId(), result.getAccessToken(),
                     getAccountType().name());
-        } else if (isPossibleRefreshToken(this.token)) {
-            this.setName(this.getEmail());
-            this.setUuid(fixUUID(this.getPassword()));
-            this.updateSkin();
-            this.lastUsed = System.currentTimeMillis();
-            return new Session(this.getEmail(), this.getPassword(), this.token, "mojang");
         } else {
+            // Offline / cracked account: no token, name only.
             this.setName(this.getEmail());
             this.lastUsed = System.currentTimeMillis();
             return new Session(this.getEmail(), "", "", "mojang");
+        }
+    }
+
+    /**
+     * Redeems the stored Microsoft refresh token for a fresh Minecraft session and
+     * persists the rotated tokens. Returns {@code null} if the refresh fails (e.g.
+     * the refresh token was revoked or expired), so the caller can fall back.
+     */
+    private Session loginWithStoredRefreshToken() {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            MicrosoftLoginUtil.MicrosoftSession result =
+                    MicrosoftLoginUtil.loginWithRefreshToken(this.refreshToken, executor).join();
+
+            Session session = result.session();
+            this.token = session.getToken();
+            this.refreshToken = result.refreshToken();
+            this.setName(session.getUsername());
+            this.setUuid(fixUUID(session.getPlayerID()));
+            this.updateSkin();
+            this.lastUsed = System.currentTimeMillis();
+
+            // The account list is keyed on email; persist the rotated tokens so the
+            // next launch starts from the refreshed refresh token, not a stale one.
+            try {
+                Client.getInstance().accountManager.saveAlts();
+            } catch (Exception ignored) {
+            }
+
+            return new Session(session.getUsername(), fixUUID(session.getPlayerID()).replace("-", ""),
+                    session.getToken(), "mojang");
+        } catch (Exception e) {
+            Client.logger.error("Failed to refresh Microsoft session for " + this.getName(), e);
+            return null;
+        } finally {
+            executor.shutdown();
         }
     }
 
@@ -322,6 +419,7 @@ public class Account {
         obj.addProperty("email", this.email);
         obj.addProperty("password", encodeBase64(this.password));
         obj.addProperty("token", encodeBase64(this.token));
+        obj.addProperty("refreshToken", encodeBase64(this.refreshToken != null ? this.refreshToken : ""));
         obj.addProperty("knownName", this.knownName);
         obj.addProperty("knownUUID", this.uuid);
         obj.addProperty("useCount", this.useCount);
@@ -389,27 +487,68 @@ public class Account {
         return var3.matcher(this.getEmail()).matches();
     }
 
-    private JsonObject fetchProfile(String accessToken) {
+    private enum TokenState {
+        /** The Minecraft profile endpoint accepted the token (HTTP 200). */
+        VALID,
+        /** The endpoint rejected the token as unauthorized (HTTP 401/403). */
+        EXPIRED,
+        /** The endpoint could not be reached or returned an inconclusive status. */
+        UNKNOWN
+    }
+
+    private static final class ProfileProbe {
+        final TokenState state;
+        final JsonObject profile;
+
+        ProfileProbe(TokenState state, JsonObject profile) {
+            this.state = state;
+            this.profile = profile;
+        }
+    }
+
+    /**
+     * Probes a Minecraft access token against the profile endpoint. Distinguishes a
+     * genuinely rejected token (401/403) from a transient reachability problem, so
+     * the caller doesn't discard a still-valid token just because the profile API
+     * was momentarily unreachable.
+     */
+    private ProfileProbe probeToken(String accessToken) {
+        HttpURLConnection connection = null;
         try {
             URL url = new URL("https://api.minecraftservices.com/minecraft/profile");
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setRequestProperty("Authorization", "Bearer " + accessToken);
             connection.setRequestProperty("Content-Type", "application/json");
+            connection.setConnectTimeout(15_000);
+            connection.setReadTimeout(15_000);
 
-            if (connection.getResponseCode() == 200) {
-                BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String inputLine;
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
+            int code = connection.getResponseCode();
+            if (code == 200) {
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    StringBuilder response = new StringBuilder();
+                    String inputLine;
+                    while ((inputLine = in.readLine()) != null) {
+                        response.append(inputLine);
+                    }
+                    return new ProfileProbe(TokenState.VALID,
+                            JsonParser.parseString(response.toString()).getAsJsonObject());
                 }
-                in.close();
-                return JsonParser.parseString(response.toString()).getAsJsonObject();
             }
+
+            if (code == 401 || code == 403) {
+                return new ProfileProbe(TokenState.EXPIRED, null);
+            }
+
+            // Any other status (404 no-profile, 5xx, etc.) is inconclusive.
+            return new ProfileProbe(TokenState.UNKNOWN, null);
         } catch (Exception e) {
-            e.printStackTrace();
+            // Network failure / timeout / DNS: cannot conclude the token is dead.
+            return new ProfileProbe(TokenState.UNKNOWN, null);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
-        return null;
     }
 }

@@ -9,6 +9,7 @@ import com.mentalfrostbyte.jello.gui.base.elements.impl.button.Button;
 import com.mentalfrostbyte.jello.gui.combined.AnimatedIconPanel;
 import com.mentalfrostbyte.jello.gui.combined.CustomGuiScreen;
 import com.mentalfrostbyte.jello.gui.impl.jello.altmanager.AltManagerScreen;
+import com.mentalfrostbyte.jello.gui.impl.jello.buttons.LoadingIndicator;
 import com.mentalfrostbyte.jello.gui.impl.jello.buttons.TextField;
 import com.mentalfrostbyte.jello.managers.util.account.microsoft.Account;
 import com.mentalfrostbyte.jello.util.client.network.microsoft.CookieLoginUtil;
@@ -23,6 +24,7 @@ import com.mentalfrostbyte.jello.util.system.FileUtil;
 import com.mentalfrostbyte.jello.util.system.math.smoothing.QuadraticEasing;
 import com.mentalfrostbyte.jello.util.system.network.ImageUtil;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Session;
 import org.newdawn.slick.opengl.Texture;
 import org.newdawn.slick.util.BufferedImageUtil;
 
@@ -47,6 +49,22 @@ public class Alert extends Element {
     private final List<Class9448> field21287 = new ArrayList<>();
 
     public List<Button> buttons = new ArrayList<>();
+
+    // "Logging in" overlay: a spinner + status line that temporarily replaces the
+    // dialog's option controls while an interactive login (Web login) is in flight.
+    private LoadingIndicator loadingSpinner;
+    private Text statusText;
+    private Text statusHint;
+    private boolean loadingState;
+    // True once the in-flight login failed and the overlay is showing the retry prompt;
+    // a click inside the modal then returns to the option controls instead of closing.
+    private boolean loginErrored;
+    // Bumped every time we leave the loading state (cancel/close/finish). A background
+    // login captures the value at start and only touches the UI if it still matches,
+    // so a stale login can't hijack a dialog the user has since dismissed or reused.
+    private int loginGeneration;
+    // Executor for the in-flight interactive login, kept so a cancel can shut it down.
+    private ExecutorService activeLoginExecutor;
 
     public Alert(CustomGuiScreen screen, String iconName, boolean var3, String name, AlertComponent... var5) {
         super(screen, iconName, 0, 0, Minecraft.getInstance().getMainWindow().getWidth(),
@@ -132,47 +150,66 @@ public class Alert extends Element {
                                 }
                                 case "Web login" -> {
                                     ExecutorService executor = Executors.newSingleThreadExecutor();
+                                    this.activeLoginExecutor = executor;
+                                    // Flip the dialog to the "logging in" overlay and remember which
+                                    // login this is, so a cancel/reopen invalidates a stale result.
+                                    this.enterLoadingState("Opening your browser…",
+                                            "Sign in with Microsoft, then come back here.");
+                                    int generation = this.currentLoginGeneration();
                                     MicrosoftLoginUtil.acquireMSAuthCodeSession(executor)
-                                            .thenComposeAsync(msAuthCode -> MicrosoftLoginUtil
-                                                    .acquireMSAccessToken(msAuthCode, executor), executor)
-                                            .thenComposeAsync(msAccessToken -> MicrosoftLoginUtil
-                                                    .acquireXboxAccessToken(msAccessToken, executor), executor)
-                                            .thenComposeAsync(xboxAccessToken -> MicrosoftLoginUtil
-                                                    .acquireXboxXstsToken(xboxAccessToken, executor), executor)
-                                            .thenComposeAsync(xboxXstsData -> MicrosoftLoginUtil.acquireMCAccessToken(
-                                                    xboxXstsData.get("Token"), xboxXstsData.get("uhs"), executor),
-                                                    executor)
-                                            .thenComposeAsync(mcToken -> MicrosoftLoginUtil.login(mcToken, executor),
-                                                    executor)
-                                            .thenAccept(session -> Minecraft.getInstance().execute(() -> {
-                                                try {
-                                                    Account account = this.createAuthenticatedAccount(
-                                                            session.username, session.playerID, session.token);
-                                                    if (!Client.getInstance().accountManager.containsAccount(account)) {
-                                                        Client.getInstance().accountManager.updateAccount(account);
+                                            .thenComposeAsync(authCodeSession -> {
+                                                // The callback socket just received the auth code (the
+                                                // "hook"): switch the status to the token-exchange phase.
+                                                Minecraft.getInstance().execute(() -> {
+                                                    if (this.currentLoginGeneration() == generation) {
+                                                        this.setStatus("Authorization received…",
+                                                                "Signing you in, hang tight.");
                                                     }
+                                                });
+                                                return MicrosoftLoginUtil
+                                                        .loginWithAuthCodeSession(authCodeSession, executor);
+                                            }, executor)
+                                            .thenAccept(msSession -> Minecraft.getInstance().execute(() -> {
+                                                // Persist the account regardless of dialog state: the login
+                                                // succeeded, so the side effect must land. Only the UI
+                                                // transition is gated on the generation still being current.
+                                                Session session = msSession.session();
+                                                Account account = this.createAuthenticatedAccount(
+                                                        session.username, session.playerID, session.token,
+                                                        msSession.refreshToken());
+                                                if (!Client.getInstance().accountManager.containsAccount(account)) {
+                                                    Client.getInstance().accountManager.updateAccount(account);
+                                                }
+                                                // Persist immediately so the refresh token survives a restart.
+                                                Client.getInstance().accountManager.saveAlts();
 
+                                                if (this.currentLoginGeneration() == generation) {
                                                     this.inputMap = this.method13599();
                                                     this.method13603(false);
-                                                    AltManagerScreen.instance.updateAccountList(false);
-                                                } finally {
-                                                    executor.shutdown();
                                                 }
+                                                AltManagerScreen.instance.updateAccountList(false);
                                             }))
                                             .exceptionally(error -> {
                                                 Client.getInstance().logger.error("Microsoft web login failed", error);
                                                 Minecraft.getInstance().execute(() -> {
-                                                    try {
-                                                        Client.getInstance().soundManager.play("error");
-                                                        this.inputMap = this.method13599();
-                                                        this.method13603(false);
-                                                    } finally {
-                                                        executor.shutdown();
+                                                    // A user cancel already moved on; don't stomp the dialog.
+                                                    if (this.currentLoginGeneration() != generation) {
+                                                        return;
                                                     }
+                                                    Client.getInstance().soundManager.play("error");
+                                                    this.setStatus("Login didn't complete",
+                                                            "Click here to go back and try again.");
+                                                    this.loginErrored = true;
+                                                    this.loadingSpinner.setHovered(false);
                                                 });
                                                 return null;
                                             })
-                                            .whenComplete((ignored, error) -> executor.shutdown());
+                                            .whenComplete((ignored, error) -> {
+                                                executor.shutdown();
+                                                if (this.activeLoginExecutor == executor) {
+                                                    this.activeLoginExecutor = null;
+                                                }
+                                            });
                                 }
                                 case "Token login" -> {
                                     this.inputMap = this.method13599();
@@ -260,6 +297,100 @@ public class Alert extends Element {
                 }
             });
         }
+
+        this.buildLoadingView();
+    }
+
+    /**
+     * Adds the (initially hidden) spinner + status lines that overlay the modal while
+     * an interactive login is running. They live in the same modal content area as the
+     * option controls; {@link #enterLoadingState(String)} swaps which set is visible.
+     */
+    private void buildLoadingView() {
+        int spinnerSize = 34;
+        int centerX = this.field21284 / 2;
+        int centerY = this.field21285 / 2;
+
+        this.screen.addToList(this.loadingSpinner = new LoadingIndicator(
+                this.screen, "loginSpinner", centerX - spinnerSize / 2, centerY - spinnerSize - 6,
+                spinnerSize, spinnerSize));
+        this.loadingSpinner.setHovered(false);
+
+        this.screen.addToList(this.statusText = new Text(
+                this.screen, "loginStatus", 0, centerY + 6, this.field21284, 20,
+                new ColorHelper(
+                        ClientColors.DEEP_TEAL.getColor(), ClientColors.DEEP_TEAL.getColor(),
+                        ClientColors.DEEP_TEAL.getColor(), ClientColors.DEEP_TEAL.getColor()),
+                "", ResourceRegistry.JelloLightFont20));
+
+        this.screen.addToList(this.statusHint = new Text(
+                this.screen, "loginHint", 0, centerY + 30, this.field21284, 16,
+                new ColorHelper(
+                        ClientColors.MID_GREY.getColor(), ClientColors.MID_GREY.getColor(),
+                        ClientColors.MID_GREY.getColor(), ClientColors.MID_GREY.getColor()),
+                "", ResourceRegistry.JelloLightFont20));
+
+        this.loadingSpinner.setSelfVisible(false);
+        this.statusText.setSelfVisible(false);
+        this.statusHint.setSelfVisible(false);
+    }
+
+    /**
+     * Hides the option controls and shows the spinner + status line. Safe to call off
+     * the render thread only via {@code Minecraft.execute}; callers here already do.
+     */
+    public void enterLoadingState(String message, String hint) {
+        this.loadingState = true;
+        this.loginErrored = false;
+        for (CustomGuiScreen child : this.screen.getChildren()) {
+            boolean isStatusElement = child == this.loadingSpinner
+                    || child == this.statusText || child == this.statusHint;
+            child.setSelfVisible(isStatusElement);
+        }
+        if (this.loadingSpinner != null) {
+            this.loadingSpinner.setHovered(true);
+        }
+        this.setStatus(message, hint);
+    }
+
+    /** Restores the normal option controls, hiding the loading overlay. */
+    public void showOptionsState() {
+        this.loadingState = false;
+        this.loginErrored = false;
+        this.loginGeneration++;
+        for (CustomGuiScreen child : this.screen.getChildren()) {
+            boolean isStatusElement = child == this.loadingSpinner
+                    || child == this.statusText || child == this.statusHint;
+            child.setSelfVisible(!isStatusElement);
+        }
+        if (this.loadingSpinner != null) {
+            this.loadingSpinner.setHovered(false);
+        }
+    }
+
+    /** Updates the two status lines shown during a login (centered by the Text width). */
+    public void setStatus(String message, String hint) {
+        if (this.statusText != null) {
+            this.statusText.setText(message != null ? message : "");
+            this.centerStatusLine(this.statusText, this.statusText.getText());
+        }
+        if (this.statusHint != null) {
+            this.statusHint.setText(hint != null ? hint : "");
+            this.centerStatusLine(this.statusHint, this.statusHint.getText());
+        }
+    }
+
+    private void centerStatusLine(Text line, String text) {
+        int textWidth = line.getFont().getWidth(text != null ? text : "");
+        line.setXA((this.field21284 - textWidth) / 2);
+    }
+
+    public boolean isLoadingState() {
+        return this.loadingState;
+    }
+
+    public int currentLoginGeneration() {
+        return this.loginGeneration;
     }
 
     @Override
@@ -291,6 +422,10 @@ public class Alert extends Element {
     }
 
     private Account createAuthenticatedAccount(String username, String playerID, String token) {
+        return this.createAuthenticatedAccount(username, playerID, token, null);
+    }
+
+    private Account createAuthenticatedAccount(String username, String playerID, String token, String refreshToken) {
         String safeUsername = !this.isBlank(username) ? username : "Unknown name";
         String safePlayerID = playerID != null ? playerID : "";
         Account account = new Account(safeUsername, safePlayerID, token);
@@ -300,7 +435,28 @@ public class Alert extends Element {
             account.setUuid(Account.fixUUID(safePlayerID));
         }
 
+        if (!this.isBlank(refreshToken)) {
+            account.setRefreshToken(refreshToken);
+        }
+
         return account;
+    }
+
+    /**
+     * Cancels the in-flight interactive login (if any): invalidates the generation so a
+     * late completion won't touch the UI, and interrupts the worker. The OAuth callback
+     * socket is inside that executor, so shutdownNow unblocks the pending accept().
+     */
+    private void cancelActiveLogin() {
+        this.loadingState = false;
+        this.loginGeneration++;
+        if (this.loadingSpinner != null) {
+            this.loadingSpinner.setHovered(false);
+        }
+        if (this.activeLoginExecutor != null) {
+            this.activeLoginExecutor.shutdownNow();
+            this.activeLoginExecutor = null;
+        }
     }
 
     private void loginWithRandomOfflineAccount() {
@@ -396,6 +552,11 @@ public class Alert extends Element {
                     && mouseX < (this.widthA - var6) / 2 + var6
                     && mouseY > (this.heightA - var7) / 2
                     && mouseY < (this.heightA - var7) / 2 + var7) {
+                // Clicking the failed-login overlay returns to the option controls to retry.
+                if (this.loadingState && this.loginErrored) {
+                    this.showOptionsState();
+                }
+
                 return false;
             } else {
                 this.method13603(false);
@@ -408,6 +569,11 @@ public class Alert extends Element {
 
     public void method13603(boolean var1) {
         if (var1 && !this.isHovered()) {
+            // Opening: always start on the option controls, never a stale loading overlay.
+            if (this.loadingState) {
+                this.showOptionsState();
+            }
+
             try {
                 if (this.field21281 != null) {
                     this.field21281.release();
@@ -419,6 +585,10 @@ public class Alert extends Element {
             } catch (IOException var5) {
                 Client.getInstance().logger.error(var5.getMessage());
             }
+        } else if (!var1 && this.loadingState) {
+            // Closing while a login is in flight is a user cancel: stop caring about the
+            // result (generation bump) and release the background worker.
+            this.cancelActiveLogin();
         }
 
         if (this.isHovered() != var1 && !var1) {
