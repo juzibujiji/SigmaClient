@@ -399,7 +399,9 @@ public class NameTags extends Module {
         int var20 = RenderUtil
                 .applyAlpha(!(var7 instanceof PlayerEntity) ? ClientColors.LIGHT_GREYISH_BLUE.getColor()
                         : new Color(Class8781.method31663((PlayerEntity) var7)).getRGB(), 0.5F);
-        int var21 = var12.getWidth(var13) / 2;
+        //int var21 = var12.getWidth(var13) / 2;
+        int var25 = RenderUtil.getHybridStringWidth(var12, var13);
+        int var21 = var25 / 2;
         if (!field24003.containsKey(var13)) {
             RenderUtil.drawRoundedRect((float) (-var21 - 10), -25.0F, (float) (var21 * 2 + 20),
                     (float) (var12.getHeight() + 27), 20.0F, 0.5F);
@@ -432,10 +434,12 @@ public class NameTags extends Module {
                 (float) (var12.getHeight() + 2), var20);
 
         // Second matrix push - removed the extra push here
-        GL11.glTranslated(-var12.getWidth(var13) / 2, 0.0, 0.0);
+        //GL11.glTranslated(-var12.getWidth(var13) / 2, 0.0, 0.0);
+        GL11.glTranslated(-var25 / 2, 0.0, 0.0);
         int var26 = ResourceRegistry.JelloLightFont14.getWidth("Health: 20.0");
         String var23 = "Health: ";
-        int var24 = var12.getWidth(var13);
+        //int var24 = var12.getWidth(var13);
+        int var24 = var25;
         if (var26 > var24) {
             var23 = "H: ";
         }
