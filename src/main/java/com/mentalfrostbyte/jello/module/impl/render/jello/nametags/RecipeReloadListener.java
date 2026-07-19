@@ -4,6 +4,8 @@ import net.minecraft.resources.IFutureReloadListener;
 
 import java.util.concurrent.CompletableFuture;
 
+
+//修了熔炉nametag掉帧卡顿 已经不需要这个了
 public class RecipeReloadListener implements IFutureReloadListener.IStage {
     public final FurnaceTracker field30642;
 

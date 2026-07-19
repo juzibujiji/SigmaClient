@@ -6,18 +6,10 @@ import net.minecraft.inventory.Inventory;
 import net.minecraft.item.AirItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.item.crafting.FurnaceRecipe;
 import net.minecraft.item.crafting.IRecipeType;
-import net.minecraft.profiler.EmptyProfiler;
-import net.minecraft.resources.IResourcePack;
-import net.minecraft.resources.ResourcePackInfo;
-import net.minecraft.resources.ResourcePackType;
-import net.minecraft.resources.SimpleReloadableResourceManager;
-import net.minecraft.util.Util;
 
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class FurnaceTracker {
     public int windowId;
@@ -37,9 +29,10 @@ public class FurnaceTracker {
         this.refreshOutput();
         boolean hasFuel = this.fuelStack != null && this.fuelStack.count > 0;
         boolean hasInput = this.inputStack != null && this.inputStack.count > 0;
-        boolean canSmelt = this.getSmeltingResult() != null
-                && this.getSmeltingResult().equals(this.outputStack.getItem())
+        Item smeltingResult = this.getSmeltingResult();
+        boolean canSmelt = smeltingResult != null
                 && this.outputStack != null
+                && smeltingResult.equals(this.outputStack.getItem())
                 && this.outputStack.count < 64;
         if (this.smeltTime < this.smeltProgress && hasInput && canSmelt && this.smeltDelay > 0) {
             this.smeltTime = this.smeltTime + Client.getInstance().playerTracker.getPing();
@@ -78,29 +71,22 @@ public class FurnaceTracker {
     public ItemStack getSmeltingResultStack() {
         if (this.inputStack == null) {
             return null;
-        } else {
-            if (!Minecraft.getInstance().getConnection().getRecipeManager()
-                    .getRecipes(IRecipeType.SMELTING, new Inventory(new ItemStack(Items.COBBLESTONE)), Minecraft.getInstance().world)
-                    .isEmpty()) {
-                SimpleReloadableResourceManager resourceManager = new SimpleReloadableResourceManager(ResourcePackType.SERVER_DATA);
-
-                for (IResourcePack pack : Minecraft.getInstance().getResourcePackList().getEnabledPacks().stream().map(ResourcePackInfo::getResourcePack).collect(Collectors.toList())) {
-                    resourceManager.addResourcePack(pack);
-                }
-
-                Minecraft.getInstance().getConnection().getRecipeManager().reload(new RecipeReloadListener(this), resourceManager, EmptyProfiler.INSTANCE, EmptyProfiler.INSTANCE, Util.getServerExecutor(), Minecraft.getInstance());
-            }
-
-            Optional<FurnaceRecipe> recipe = Minecraft.getInstance().getConnection().getRecipeManager().getRecipe(IRecipeType.SMELTING, new Inventory(this.inputStack), Minecraft.getInstance().world);
-            if (recipe.isPresent()) {
-                ItemStack result = recipe.get().getRecipeOutput();
-                if (!result.isEmpty()) {
-                    return result.copy();
-                }
-            }
-
-            return null;
         }
+
+        // The client's RecipeManager is already synced from the server, so we can query it
+        // directly. Reloading the whole recipe manager here (as the old code did) forced a full
+        // synchronous recipe reload on every call - and this method runs several times per tick
+        // and per frame while a furnace is smelting, which caused the frame drops.
+        Optional<FurnaceRecipe> recipe = Minecraft.getInstance().getConnection().getRecipeManager()
+                .getRecipe(IRecipeType.SMELTING, new Inventory(this.inputStack), Minecraft.getInstance().world);
+        if (recipe.isPresent()) {
+            ItemStack result = recipe.get().getRecipeOutput();
+            if (!result.isEmpty()) {
+                return result.copy();
+            }
+        }
+
+        return null;
     }
 
     public Item getSmeltingResult() {

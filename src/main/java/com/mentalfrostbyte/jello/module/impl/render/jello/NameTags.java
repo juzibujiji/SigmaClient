@@ -309,7 +309,7 @@ public class NameTags extends Module {
         int nameplateWidth;
         ItemStack outputItem = furnace.refreshOutput();
         if (outputItem != null) {
-            nameplateWidth = Math.max(ResourceRegistry.JelloLightFont20.getWidth(outputItem.getDisplayName().getString()), 50);
+            nameplateWidth = Math.max(RenderUtil.getHybridStringWidth(ResourceRegistry.JelloLightFont20, outputItem.getDisplayName().getString()), 50);
         } else {
             nameplateWidth = 37;
         }
@@ -329,7 +329,7 @@ public class NameTags extends Module {
                     RenderUtil.applyAlpha(ClientColors.LIGHT_GREYISH_BLUE.getColor(), 0.6F));
         }
 
-        ItemStack itemStack = furnace.refreshOutput();
+        ItemStack itemStack = outputItem;
         if (itemStack != null) {
             RenderUtil.drawItem(itemStack, padding, padding + 27, 45, 45);
             RenderUtil.drawString(ResourceRegistry.JelloLightFont20, (float) (padding + 51), 40.0F,
