@@ -51,58 +51,58 @@ public class KeyboardScreen extends Screen {
 				   }
                }
 
-               if (this.field20957.field20696 == this.field20961 && var5) {
+               if (this.field20957.selectedKey == this.field20961 && var5) {
                   this.method13333();
                } else {
-                  int[] var8 = this.field20957.method13105(this.field20957.field20696);
-                  String var9 = RenderUtil.getKeyName(this.field20957.field20696);
+                  int[] var8 = this.field20957.getKeyOffset(this.field20957.selectedKey);
+                  String var9 = RenderUtil.getKeyName(this.field20957.selectedKey);
                   this.field20956 = new PopOver(
-                     this, "popover", this.field20957.getXA() + var8[0], this.field20957.getYA() + var8[1], this.field20957.field20696, var9
+                     this, "popover", this.field20957.getXA() + var8[0], this.field20957.getYA() + var8[1], this.field20957.selectedKey, var9
                   );
                   this.field20956.onPress(var1x -> this.method13329(this.field20957));
-                  this.field20956.method13713(var1x -> {
+                  this.field20956.addAddListener(var1x -> {
                      var1x.setReAddChildren(false);
                      this.method13331();
                   });
-                  this.field20961 = this.field20957.field20696;
+                  this.field20961 = this.field20957.selectedKey;
                }
             }
          );
       RenderUtil2.blur();
    }
 
-   public static ArrayList<Class6984> method13328() {
+   public static ArrayList<BindTarget> method13328() {
       ArrayList var2 = new ArrayList();
 
       for (Module var4 : Client.getInstance().moduleManager.getModuleMap().values()) {
-         var2.add(new Class6984(var4));
+         var2.add(new BindTarget(var4));
       }
 
       for (Entry var6 : GuiManager.screenToScreenName.entrySet()) {
-         var2.add(new Class6984((Class<? extends net.minecraft.client.gui.screen.Screen>)var6.getKey()));
+         var2.add(new BindTarget((Class<? extends net.minecraft.client.gui.screen.Screen>)var6.getKey()));
       }
 
       return var2;
    }
 
    private void method13329(Keyboard var1) {
-      this.runThisOnDimensionUpdate(new Class635(this, var1));
+      this.runThisOnDimensionUpdate(new RefreshKeyStatesTask(this, var1));
    }
 
    private void method13330() {
-      this.runThisOnDimensionUpdate(new Class544(this, this));
+      this.runThisOnDimensionUpdate(new RefreshPopOversTask(this, this));
    }
 
    private void method13331() {
-      this.runThisOnDimensionUpdate(new Class1533(this, this));
+      this.runThisOnDimensionUpdate(new ShowModsPanelTask(this, this));
    }
 
    private void method13332() {
-      this.runThisOnDimensionUpdate(new Class543(this, this));
+      this.runThisOnDimensionUpdate(new OpenBindPickerTask(this, this));
    }
 
    private void method13333() {
-      this.runThisOnDimensionUpdate(new Class1376(this, this));
+      this.runThisOnDimensionUpdate(new CloseKeyboardTask(this, this));
    }
 
    @Override

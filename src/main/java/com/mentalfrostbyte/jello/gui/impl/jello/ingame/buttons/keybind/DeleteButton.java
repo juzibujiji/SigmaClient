@@ -6,19 +6,18 @@ import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil2;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 
-public class Class4263 extends Element {
-   private static String[] field20677;
-   public float field20678;
+public class DeleteButton extends Element {
+   public float hoverAnim;
 
-   public Class4263(CustomGuiScreen var1, String var2, int var3, int var4, int var5, int var6) {
-      super(var1, var2, var3, var4, var5, var6, false);
+   public DeleteButton(CustomGuiScreen parent, String name, int x, int y, int width, int height) {
+      super(parent, name, x, y, width, height, false);
    }
 
    @Override
    public void updatePanelDimensions(int newHeight, int newWidth) {
       super.updatePanelDimensions(newHeight, newWidth);
-      this.field20678 = this.field20678 + (!this.method13298() ? -0.14F : 0.14F);
-      this.field20678 = Math.min(Math.max(0.0F, this.field20678), 1.0F);
+      this.hoverAnim = this.hoverAnim + (!this.method13298() ? -0.14F : 0.14F);
+      this.hoverAnim = Math.min(Math.max(0.0F, this.hoverAnim), 1.0F);
    }
 
    @Override
@@ -27,7 +26,7 @@ public class Class4263 extends Element {
          (float)(this.xA + this.widthA / 2),
          (float)(this.yA + this.heightA / 2),
          (float)this.widthA,
-         RenderUtil2.applyAlpha(ClientColors.PALE_YELLOW.getColor(), (0.5F + this.field20678 * 0.3F + (!this.field20909 ? 0.0F : 0.2F)) * partialTicks)
+         RenderUtil2.applyAlpha(ClientColors.PALE_YELLOW.getColor(), (0.5F + this.hoverAnim * 0.3F + (!this.field20909 ? 0.0F : 0.2F)) * partialTicks)
       );
       RenderUtil.drawRoundedRect2(
          (float)(this.xA + (this.widthA - 10) / 2),

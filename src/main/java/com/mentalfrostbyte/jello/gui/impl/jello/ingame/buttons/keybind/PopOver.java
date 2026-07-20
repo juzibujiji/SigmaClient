@@ -23,28 +23,28 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 public class PopOver extends Element {
-    private final int field21376;
-    private final Animation field21377;
-    private boolean field21378 = false;
-    private final List<Class6601> field21379 = new ArrayList<Class6601>();
+    private final int keyCode;
+    private final Animation animation;
+    private boolean flipped = false;
+    private final List<AddListener> addListeners = new ArrayList<AddListener>();
 
-    public PopOver(CustomGuiScreen var1, String var2, int var3, int var4, int var5, String var6) {
-        super(var1, var2, var3 - 125, var4, 250, 330, ColorHelper.field27961, var6, false);
+    public PopOver(CustomGuiScreen parent, String name, int x, int y, int keyCode, String text) {
+        super(parent, name, x - 125, y, 250, 330, ColorHelper.field27961, text, false);
         if (this.yA + this.heightA <= Minecraft.getInstance().getMainWindow().getHeight()) {
             this.yA += 10;
         } else {
             this.yA -= 400;
-            this.field21378 = true;
+            this.flipped = true;
         }
 
-        this.field21376 = var5;
-        this.field21377 = new Animation(250, 0);
+        this.keyCode = keyCode;
+        this.animation = new Animation(250, 0);
         this.setReAddChildren(true);
         this.setListening(false);
-        this.method13712();
-        TextButton var9;
+        this.rebuildEntries();
+        TextButton addButton;
         this.addToList(
-                var9 = new TextButton(
+                addButton = new TextButton(
                         this,
                         "addButton",
                         this.widthA - 70,
@@ -56,16 +56,16 @@ public class PopOver extends Element {
                         ResourceRegistry.JelloLightFont25
                 )
         );
-        var9.onClick((var1x, var2x) -> this.method13714());
+        addButton.onClick((mouseX, mouseY) -> this.notifyAdd());
     }
 
-    public void method13712() {
-        int var3 = 1;
-        ArrayList var4 = new ArrayList();
+    public void rebuildEntries() {
+        int index = 1;
+        ArrayList existingNames = new ArrayList();
 
-        for (CustomGuiScreen var6 : this.getChildren()) {
-            if (var6.getHeightA() != 0) {
-                var4.add(var6.getName());
+        for (CustomGuiScreen child : this.getChildren()) {
+            if (child.getHeightA() != 0) {
+                existingNames.add(child.getName());
             }
         }
 
@@ -73,17 +73,17 @@ public class PopOver extends Element {
         this.setFocused(true);
         this.clearChildren();
 
-        for (Class6984 var10 : KeyboardScreen.method13328()) {
-            int var7 = var10.method21599();
-            if (var7 == this.field21376) {
-                Class4253 var8;
-                this.addToList(var8 = new Class4253(this, var10.method21596(), 0, 20 + 55 * var3, this.widthA, 55, var10, var3++));
-                var8.onPress(var2 -> {
-                    var10.method21598(0);
+        for (BindTarget target : KeyboardScreen.method13328()) {
+            int keybind = target.getKeybind();
+            if (keybind == this.keyCode) {
+                BindEntry entry;
+                this.addToList(entry = new BindEntry(this, target.getDisplayName(), 0, 20 + 55 * index, this.widthA, 55, target, index++));
+                entry.onPress(unused -> {
+                    target.bind(0);
                     this.callUIHandlers();
                 });
-                if (var4.size() > 0 && !var4.contains(var10.method21596())) {
-                    var8.method13056();
+                if (existingNames.size() > 0 && !existingNames.contains(target.getDisplayName())) {
+                    entry.beginRemove();
                 }
             }
         }
@@ -91,19 +91,19 @@ public class PopOver extends Element {
 
     @Override
     public void updatePanelDimensions(int newHeight, int newWidth) {
-        Map<Integer, Class4253> var5 = new HashMap();
+        Map<Integer, BindEntry> entries = new HashMap();
 
-        for (CustomGuiScreen var7 : this.getChildren()) {
-            if (var7 instanceof Class4253) {
-                var5.put(((Class4253) var7).field20626, (Class4253) var7);
+        for (CustomGuiScreen child : this.getChildren()) {
+            if (child instanceof BindEntry) {
+                entries.put(((BindEntry) child).keyCode, (BindEntry) child);
             }
         }
 
-        int var9 = 75;
+        int y = 75;
 
-        for (Entry<Integer, Class4253> var11 : var5.entrySet()) {
-            var11.getValue().setYA(var9);
-            var9 += var11.getValue().getHeightA();
+        for (Entry<Integer, BindEntry> entry : entries.entrySet()) {
+            entry.getValue().setYA(y);
+            y += entry.getValue().getHeightA();
         }
 
         super.updatePanelDimensions(newHeight, newWidth);
@@ -111,12 +111,12 @@ public class PopOver extends Element {
 
     @Override
     public void draw(float partialTicks) {
-        partialTicks = this.field21377.calcPercent();
-        float var4 = EasingFunctions.easeOutBack(partialTicks, 0.0F, 1.0F, 1.0F);
-        this.method13279(0.8F + var4 * 0.2F, 0.8F + var4 * 0.2F);
-        this.method13284((int) ((float) this.widthA * 0.2F * (1.0F - var4)) * (!this.field21378 ? 1 : -1));
+        partialTicks = this.animation.calcPercent();
+        float progress = EasingFunctions.easeOutBack(partialTicks, 0.0F, 1.0F, 1.0F);
+        this.method13279(0.8F + progress * 0.2F, 0.8F + progress * 0.2F);
+        this.method13284((int) ((float) this.widthA * 0.2F * (1.0F - progress)) * (!this.flipped ? 1 : -1));
         super.method13224();
-        int var6 = RenderUtil2.applyAlpha(-723724, QuadraticEasing.easeOutQuad(partialTicks, 0.0F, 1.0F, 1.0F));
+        int color = RenderUtil2.applyAlpha(-723724, QuadraticEasing.easeOutQuad(partialTicks, 0.0F, 1.0F, 1.0F));
         RenderUtil.drawRoundedRect(
                 (float) (this.xA + 10 / 2),
                 (float) (this.yA + 10 / 2),
@@ -132,18 +132,18 @@ public class PopOver extends Element {
                 (float) (this.yA - 10 / 2 + this.heightA),
                 RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), partialTicks * 0.25F)
         );
-        RenderUtil.drawRoundedRect((float) this.xA, (float) this.yA, (float) this.widthA, (float) this.heightA, (float) 10, var6);
+        RenderUtil.drawRoundedRect((float) this.xA, (float) this.yA, (float) this.widthA, (float) this.heightA, (float) 10, color);
         GL11.glPushMatrix();
         GL11.glTranslatef((float) this.xA, (float) this.yA, 0.0F);
-        GL11.glRotatef(!this.field21378 ? -90.0F : 90.0F, 0.0F, 0.0F, 1.0F);
+        GL11.glRotatef(!this.flipped ? -90.0F : 90.0F, 0.0F, 0.0F, 1.0F);
         GL11.glTranslatef((float) (-this.xA), (float) (-this.yA), 0.0F);
         RenderUtil.drawImage(
-                (float) (this.xA + (!this.field21378 ? 0 : this.heightA)),
-                (float) this.yA + (float) ((this.widthA - 47) / 2) * (!this.field21378 ? 1.0F : -1.5F),
+                (float) (this.xA + (!this.flipped ? 0 : this.heightA)),
+                (float) this.yA + (float) ((this.widthA - 47) / 2) * (!this.flipped ? 1.0F : -1.5F),
                 18.0F,
                 47.0F,
                 Resources.selectPNG,
-                var6
+                color
         );
         GL11.glPopMatrix();
         RenderUtil.drawString(
@@ -163,17 +163,17 @@ public class PopOver extends Element {
         super.draw(partialTicks);
     }
 
-    public final void method13713(Class6601 var1) {
-        this.field21379.add(var1);
+    public final void addAddListener(AddListener listener) {
+        this.addListeners.add(listener);
     }
 
-    public final void method13714() {
-        for (Class6601 var4 : this.field21379) {
-            var4.method20001(this);
+    public final void notifyAdd() {
+        for (AddListener listener : this.addListeners) {
+            listener.onAdd(this);
         }
     }
 
-    public interface Class6601 {
-        void method20001(PopOver var1);
+    public interface AddListener {
+        void onAdd(PopOver popOver);
     }
 }

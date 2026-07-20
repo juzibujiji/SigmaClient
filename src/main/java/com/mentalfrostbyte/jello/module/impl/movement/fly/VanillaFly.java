@@ -137,11 +137,14 @@ public class VanillaFly extends Module {
             }
 
             double speed = this.getNumberValueBySettingName("Speed");
-            double verticalSpeed = !mc.gameSettings.keyBindJump.isPressed() ? 0.0 : speed / 2.0;
-            if (mc.gameSettings.keyBindJump.isPressed() && mc.gameSettings.keyBindSneak.isPressed()) {
+            // 使用 isKeyDown()（按住状态）而不是 isPressed()（消费型按下计数）。
+            // isPressed() 每次物理按下只返回有限几次 true，按住时会在按键重复延迟内返回 false，
+            // 导致刚起飞时“上升一点 -> 停顿 -> 再上升”。
+            double verticalSpeed = !mc.gameSettings.keyBindJump.isKeyDown() ? 0.0 : speed / 2.0;
+            if (mc.gameSettings.keyBindJump.isKeyDown() && mc.gameSettings.keyBindSneak.isKeyDown()) {
                 verticalSpeed = 0.0;
             } else if (!this.sneakCancelled) {
-                if (mc.gameSettings.keyBindJump.isPressed()) {
+                if (mc.gameSettings.keyBindJump.isKeyDown()) {
                     verticalSpeed = speed / 2.0;
                 }
             } else {

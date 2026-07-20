@@ -313,7 +313,7 @@ public class ModuleManager {
 
         try {
             this.profile.loadProfile(profileName);
-            this.keyManager.method13732(json);
+            this.keyManager.loadKeybinds(json);
         } catch (IOException exc) {
             Client.logger.warn("Could not load profiles!", exc);
         }

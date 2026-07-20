@@ -3,13 +3,10 @@ package com.mentalfrostbyte.jello.gui.impl.jello;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.buttons.keybind.Bound;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.buttons.keybind.KeybindTypes;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.holders.ClickGuiHolder;
 import com.mentalfrostbyte.jello.module.Module;
-import com.mentalfrostbyte.jello.module.impl.gui.jello.YsmActionsGUI;
-import com.mentalfrostbyte.jello.module.impl.gui.jello.YsmGUI;
 import com.mentalfrostbyte.jello.util.system.FileUtil;
 import net.minecraft.client.gui.screen.Screen;
 import team.sdhq.eventBus.EventBus;
@@ -26,36 +23,36 @@ public class KeyManager {
         }
     }
 
-    public void method13725(int var1, Module var2) {
-        this.method13727(var2);
-        Bound var5 = new Bound(var1, var2);
-        this.boundables.add(var5);
+    public void bindModule(int key, Module module) {
+        this.removeBind(module);
+        Bound bound = new Bound(key, module);
+        this.boundables.add(bound);
     }
 
-    public void method13726(int var1, Class<? extends Screen> var2) {
-        this.method13727(var2);
-        Bound var5 = new Bound(var1, var2);
-        this.boundables.add(var5);
+    public void bindScreen(int key, Class<? extends Screen> screen) {
+        this.removeBind(screen);
+        Bound bound = new Bound(key, screen);
+        this.boundables.add(bound);
     }
 
-    public void method13727(Object var1) {
-        this.boundables.removeIf(o -> o.getTarget().equals(var1));
+    public void removeBind(Object target) {
+        this.boundables.removeIf(o -> o.getTarget().equals(target));
     }
 
     public int getKeybindFor(Class<? extends Screen> screen) {
-        for (Bound var5 : this.boundables) {
-            if (var5.getKeybindTypes() == KeybindTypes.SCREEN && var5.getScreenTarget() == screen) {
-                return var5.getKeybind();
+        for (Bound bound : this.boundables) {
+            if (bound.getKeybindTypes() == KeybindTypes.SCREEN && bound.getScreenTarget() == screen) {
+                return bound.getKeybind();
             }
         }
 
         return -1;
     }
 
-    public int method13729(Module var1) {
-        for (Bound var5 : this.boundables) {
-            if (var5.getKeybindTypes() == KeybindTypes.MODULE && var5.getModuleTarget() == var1) {
-                return var5.getKeybind();
+    public int getKeybindFor(Module module) {
+        for (Bound bound : this.boundables) {
+            if (bound.getKeybindTypes() == KeybindTypes.MODULE && bound.getModuleTarget() == module) {
+                return bound.getKeybind();
             }
         }
 
@@ -65,29 +62,27 @@ public class KeyManager {
     public void getKeybindsJSONObject(JsonObject obj) throws JsonParseException {
         JsonArray keybinds = new JsonArray();
 
-        for (Bound var6 : this.boundables) {
-            if (var6.getKeybind() != -1 && var6.getKeybind() != 0) {
-                keybinds.add(var6.getKeybindData());
+        for (Bound bound : this.boundables) {
+            if (bound.getKeybind() != -1 && bound.getKeybind() != 0) {
+                keybinds.add(bound.getKeybindData());
             }
         }
 
         obj.add("keybinds", keybinds);
     }
 
-    public void method13732(JsonObject pKeybinds) throws JsonParseException {
+    public void loadKeybinds(JsonObject pKeybinds) throws JsonParseException {
         if (pKeybinds.has("keybinds")) {
             JsonArray keybindsArr = pKeybinds.getAsJsonArray("keybinds");
 
             for (int i = 0; i < keybindsArr.size(); i++) {
                 JsonObject boundJson = keybindsArr.get(i).getAsJsonObject();
-                Bound var7 = new Bound(boundJson);
-                if (var7.hasTarget()) {
-                    this.boundables.add(var7);
+                Bound bound = new Bound(boundJson);
+                if (bound.hasTarget()) {
+                    this.boundables.add(bound);
                 }
             }
         }
-
-        this.ensureDefaultYsmBind();
     }
 
     public List<Bound> getBindedObjects(int key) {
@@ -102,17 +97,6 @@ public class KeyManager {
             return boundObjects;
         } else {
             return null;
-        }
-    }
-
-    private void ensureDefaultYsmBind() {
-        Module ysmGui = Client.getInstance().moduleManager.getModuleByClass(YsmGUI.class);
-        if (ysmGui != null && this.method13729(ysmGui) == -1) {
-            this.boundables.add(new Bound(89, ysmGui));
-        }
-        Module ysmActionsGui = Client.getInstance().moduleManager.getModuleByClass(YsmActionsGUI.class);
-        if (ysmActionsGui != null && this.method13729(ysmActionsGui) == -1) {
-            this.boundables.add(new Bound(85, ysmActionsGui));
         }
     }
 }

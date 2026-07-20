@@ -12,23 +12,22 @@ import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 
 import java.util.Date;
 
-public class Class4253 extends Element {
-   public float field20623;
-   public Class6984 field20624;
-   public Date field20625;
-   public int field20626;
-   public Date field20627;
-   public Class4263 field20628;
+public class BindEntry extends Element {
+   public BindTarget target;
+   public Date removeStart;
+   public int keyCode;
+   public Date showStart;
+   public DeleteButton deleteButton;
 
-   public Class4253(CustomGuiScreen var1, String var2, int var3, int var4, int var5, int var6, Class6984 var7, int var8) {
-      super(var1, var2, var3, var4, var5, var6, false);
-      this.addToList(this.field20628 = new Class4263(this, "delete", 200, 20, 20, 20));
-      this.field20628.onClick((var1x, var2x) -> {
-         this.field20625 = new Date();
+   public BindEntry(CustomGuiScreen parent, String name, int x, int y, int width, int height, BindTarget target, int keyCode) {
+      super(parent, name, x, y, width, height, false);
+      this.addToList(this.deleteButton = new DeleteButton(this, "delete", 200, 20, 20, 20));
+      this.deleteButton.onClick((mouseX, mouseY) -> {
+         this.removeStart = new Date();
          this.callUIHandlers();
       });
-      this.field20624 = var7;
-      this.field20626 = var8;
+      this.target = target;
+      this.keyCode = keyCode;
    }
 
    @Override
@@ -36,28 +35,28 @@ public class Class4253 extends Element {
       super.updatePanelDimensions(newHeight, newWidth);
    }
 
-   public void method13056() {
+   public void beginRemove() {
       this.setHeightA(0);
-      this.field20627 = new Date();
+      this.showStart = new Date();
    }
 
    @Override
    public void draw(float partialTicks) {
-      if (this.field20627 != null) {
-         float var4 = Animation.calculateProgress(this.field20627, 150.0F);
-         var4 = QuadraticEasing.easeOutQuad(var4, 0.0F, 1.0F, 1.0F);
-         this.setHeightA((int)(55.0F * var4));
-         if (var4 == 1.0F) {
-            this.field20627 = null;
+      if (this.showStart != null) {
+         float progress = Animation.calculateProgress(this.showStart, 150.0F);
+         progress = QuadraticEasing.easeOutQuad(progress, 0.0F, 1.0F, 1.0F);
+         this.setHeightA((int)(55.0F * progress));
+         if (progress == 1.0F) {
+            this.showStart = null;
          }
       }
 
-      if (this.field20625 != null) {
-         float var6 = Animation.calculateProgress(this.field20625, 180.0F);
-         var6 = QuadraticEasing.easeOutQuad(var6, 0.0F, 1.0F, 1.0F);
-         this.setHeightA((int)(55.0F * (1.0F - var6)));
-         if (var6 == 1.0F) {
-            this.field20625 = null;
+      if (this.removeStart != null) {
+         float progress = Animation.calculateProgress(this.removeStart, 180.0F);
+         progress = QuadraticEasing.easeOutQuad(progress, 0.0F, 1.0F, 1.0F);
+         this.setHeightA((int)(55.0F * (1.0F - progress)));
+         if (progress == 1.0F) {
+            this.removeStart = null;
          }
       }
 
@@ -66,17 +65,17 @@ public class Class4253 extends Element {
          ResourceRegistry.RegularFont20,
          (float)(this.xA + 25),
          (float)this.yA + (float)this.heightA / 2.0F - 17.5F,
-         this.field20624.method21596(),
+         this.target.getDisplayName(),
          RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.6F * partialTicks)
       );
       RenderUtil.drawString(
          ResourceRegistry.JelloLightFont12,
          (float)(this.xA + 25),
          (float)this.yA + (float)this.heightA / 2.0F + 7.5F,
-         this.field20624.method21597(),
+         this.target.getCategoryName(),
               RenderUtil2.applyAlpha(ClientColors.DEEP_TEAL.getColor(), 0.6F * partialTicks)
       );
-      this.field20628.setYA((int)((float)this.heightA / 2.0F - 7.5F));
+      this.deleteButton.setYA((int)((float)this.heightA / 2.0F - 7.5F));
       super.draw(partialTicks);
       RenderUtil.restoreScissor();
    }

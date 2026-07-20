@@ -33,7 +33,7 @@ public class Bind extends Command {
             if (module == null)
                 throw new CommandException("Module " + args[0].getArguments() + " not found");
 
-            int key = Client.getInstance().moduleManager.getKeyManager().method13729(module);
+            int key = Client.getInstance().moduleManager.getKeyManager().getKeybindFor(module);
             String keyPrefix = "key.keyboard.";
             String foundKey = null;
 
@@ -62,10 +62,10 @@ public class Bind extends Command {
                 throw new CommandException("Key " + args[1].getArguments() + " not found");
 
             if (keyCode == -1) {
-                Client.getInstance().moduleManager.getKeyManager().method13727(module);
+                Client.getInstance().moduleManager.getKeyManager().removeBind(module);
                 executor.send("Keybind was reset for module " + module.getFormattedName());
             } else {
-                Client.getInstance().moduleManager.getKeyManager().method13725(keyCode, module);
+                Client.getInstance().moduleManager.getKeyManager().bindModule(keyCode, module);
                 executor.send("Key " + args[1].getArguments() + " was set for module " + module.getFormattedName());
             }
             return;

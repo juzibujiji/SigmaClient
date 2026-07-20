@@ -7,15 +7,15 @@ import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 import com.mentalfrostbyte.jello.util.game.render.RenderUtil;
 
 public class Keyboard extends Element {
-   public int field20696;
+   public int selectedKey;
 
-   public Keyboard(CustomGuiScreen var1, String var2, int var3, int var4) {
-      super(var1, var2, var3, var4, 1060, 357, false);
+   public Keyboard(CustomGuiScreen parent, String name, int x, int y) {
+      super(parent, name, x, y, 1060, 357, false);
 
       for (Keys key : Keys.values()) {
-         Child var11;
+         KeyButton keyButton;
          this.addToList(
-            var11 = new Child(
+            keyButton = new KeyButton(
                this,
                "KEY_" + key.row + this.getChildren().size(),
                key.getX(),
@@ -26,8 +26,8 @@ public class Keyboard extends Element {
                key.row
             )
          );
-         var11.onClick((var2x, var3x) -> {
-            this.field20696 = var11.field20690;
+         keyButton.onClick((mouseX, mouseY) -> {
+            this.selectedKey = keyButton.keyCode;
             this.callUIHandlers();
          });
       }
@@ -40,7 +40,7 @@ public class Keyboard extends Element {
       if (mouseButton <= 1) {
          return super.onClick(mouseX, mouseY, mouseButton);
       } else {
-         this.field20696 = mouseButton;
+         this.selectedKey = mouseButton;
          this.callUIHandlers();
          return false;
       }
@@ -48,30 +48,30 @@ public class Keyboard extends Element {
 
    @Override
    public void keyPressed(int keyCode) {
-      for (Keys var7 : Keys.values()) {
-         if (var7.row == keyCode) {
+      for (Keys key : Keys.values()) {
+         if (key.row == keyCode) {
             super.keyPressed(keyCode);
             return;
          }
       }
 
-      this.field20696 = keyCode;
+      this.selectedKey = keyCode;
       this.callUIHandlers();
       super.keyPressed(keyCode);
    }
 
-   public void method13104() {
-      for (CustomGuiScreen var4 : this.getChildren()) {
-         if (var4 instanceof Child var5) {
-			 var5.method13102();
+   public void refreshKeyStates() {
+      for (CustomGuiScreen child : this.getChildren()) {
+         if (child instanceof KeyButton keyButton) {
+			 keyButton.refreshBoundState();
          }
       }
    }
 
-   public int[] method13105(int keycode) {
-      for (Keys var7 : Keys.values()) {
-         if (var7.row == keycode) {
-            return new int[]{var7.getX() + var7.getY() / 2, var7.method9026() + var7.method9029()};
+   public int[] getKeyOffset(int keycode) {
+      for (Keys key : Keys.values()) {
+         if (key.row == keycode) {
+            return new int[]{key.getX() + key.getY() / 2, key.method9026() + key.method9029()};
          }
       }
 
@@ -85,12 +85,12 @@ public class Keyboard extends Element {
 
    @Override
    public void draw(float partialTicks) {
-      int var6 = this.xA - 20;
-      int var7 = this.yA - 20;
-      int var8 = this.widthA + 20 * 2;
-      int var9 = this.heightA + 5 + 20 * 2;
-      RenderUtil.drawRoundedRect((float)(var6 + 14 / 2), (float)(var7 + 14 / 2), (float)(var8 - 14), (float)(var9 - 14), 20.0F, partialTicks * 0.5F);
-      RenderUtil.drawRoundedButton((float)var6, (float)var7, (float)var8, (float)var9, 14.0F, ClientColors.LIGHT_GREYISH_BLUE.getColor());
+      int x = this.xA - 20;
+      int y = this.yA - 20;
+      int width = this.widthA + 20 * 2;
+      int height = this.heightA + 5 + 20 * 2;
+      RenderUtil.drawRoundedRect((float)(x + 14 / 2), (float)(y + 14 / 2), (float)(width - 14), (float)(height - 14), 20.0F, partialTicks * 0.5F);
+      RenderUtil.drawRoundedButton((float)x, (float)y, (float)width, (float)height, 14.0F, ClientColors.LIGHT_GREYISH_BLUE.getColor());
       super.draw(partialTicks);
    }
 }
