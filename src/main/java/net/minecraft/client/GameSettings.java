@@ -2035,14 +2035,9 @@ public class GameSettings
         }
         else if (p_getKeyBindingOF_1_ == AbstractOption.AA_LEVEL)
         {
-            String s2 = "";
-
-            if (this.ofAaLevel != Config.getAntialiasingLevel())
-            {
-                s2 = " (" + Lang.get("of.general.restart") + ")";
-            }
-
-            return this.ofAaLevel == 0 ? s + Lang.getOff() + s2 : s + this.ofAaLevel + s2;
+            // AA is applied live via the FXAA post-process pass (GameRenderer#updateFxaaState),
+            // so no restart hint is needed. Any non-zero level enables FXAA.
+            return this.ofAaLevel == 0 ? s + Lang.getOff() : s + "FXAA " + this.ofAaLevel + "x";
         }
         else if (p_getKeyBindingOF_1_ == AbstractOption.AF_LEVEL)
         {

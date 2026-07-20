@@ -162,8 +162,8 @@ public class RotationUtil {
 
     public static float[] rotationToPos(double x, double y, double z) {
         double dX = x - mc.player.getPosX();
-        double dY = y - mc.player.getPosZ();
-        double adjustedDZ = z - mc.player.getPosY() - (double) mc.player.getEyeHeight();
+        double dY = z - mc.player.getPosZ();
+        double adjustedDZ = y - mc.player.getPosY() - (double) mc.player.getEyeHeight();
         double var14 = MathHelper.sqrt(dX * dX + dY * dY);
         float yaw = (float) (Math.atan2(dY, dX) * 180.0 / Math.PI) - 90.0F;
         float pitch = (float) (-(Math.atan2(adjustedDZ, var14) * 180.0 / Math.PI));

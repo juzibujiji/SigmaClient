@@ -8,6 +8,7 @@ import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.settings.impl.*;
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
+import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.util.game.world.BoundingBox;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
 import com.mentalfrostbyte.jello.util.game.player.combat.RotationUtil;
@@ -20,6 +21,7 @@ import net.minecraft.util.Direction;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.BlockRayTraceResult;
 import net.minecraft.world.GameType;
 import org.lwjgl.opengl.GL11;
 import team.sdhq.eventBus.EventBus;
@@ -69,7 +71,7 @@ public class Nuker extends Module {
                     }
 
                     float[] rotations = RotationUtil.rotationToPos(
-							this.targetPos.getX(), this.targetPos.getZ(), this.targetPos.getY()
+							this.targetPos.getX()+ 0.5, this.targetPos.getY()+ 0.5,this.targetPos.getZ()+ 0.5
                     );
                     RotationManager.setRotations(rotations[0],rotations[1]);
                     EventKeyPress keyPress = new EventKeyPress(0, false, this.targetPos);
@@ -77,17 +79,20 @@ public class Nuker extends Module {
                 } else {
                     this.targetPos = this.blocksToDestroy.get(0);
                     float[] var6 = RotationUtil.rotationToPos(
-                            (double) this.targetPos.getX() + 0.5, this.targetPos.getZ(), (double) this.targetPos.getY() + 0.5
+                            (double) this.targetPos.getX() + 0.5, (double) this.targetPos.getY() + 0.5, this.targetPos.getZ() + 0.5
                     );
                     RotationManager.setRotations(var6[0],var6[1]);
                     EventKeyPress keyPress = new EventKeyPress(0, false, this.targetPos);
                     EventBus.call(keyPress);
                 }
-                mc.playerController.onPlayerDamageBlock(this.targetPos, BlockUtil.method34580(this.targetPos));
-                if (!this.getBooleanValueFromSettingName("NoSwing")) {
-                    mc.player.swingArm(Hand.MAIN_HAND);
-                } else {
-                    mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
+                BlockRayTraceResult raytrace = BlockUtil.rayTraceBlock(RotationCore.lastYaw,RotationCore.lastPitch,0.0F,targetPos,true);
+                if (raytrace.getType() != net.minecraft.util.math.RayTraceResult.Type.MISS && raytrace.getPos() == targetPos) {
+                    mc.playerController.onPlayerDamageBlock(this.targetPos, BlockUtil.method34580(this.targetPos));
+                    if (!this.getBooleanValueFromSettingName("NoSwing")) {
+                        mc.player.swingArm(Hand.MAIN_HAND);
+                    } else {
+                        mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
+                    }
                 }
             } else {
                 for (BlockPos var9 : this.blocksToDestroy) {

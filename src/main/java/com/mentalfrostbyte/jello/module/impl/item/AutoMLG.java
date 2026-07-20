@@ -69,7 +69,7 @@ public class AutoMLG extends Module {
             if (/*var1.isPre() && */preTicks >= 0) {
                 preTicks++;
                 float[] var4 = RotationUtil.rotationToPos(
-                        (double) this.field23650.getX() + 0.5, (double) this.field23650.getZ() + 0.5, (double) this.field23650.getY() + 0.5
+                        (double) this.field23650.getX() + 0.5,  (double) this.field23650.getY() + 0.5 , (double) this.field23650.getZ() + 0.5
                 );
                 RotationManager.setRotations(var4[0],var4[1]);
                 //var1.setYaw(var4[0]);
@@ -104,7 +104,7 @@ public class AutoMLG extends Module {
                 BlockPos var5 = this.method16425();
                 if (var5 != null) {
                     if (/*var1.isPre() && */preTicks == -1) {
-                        float[] var6 = RotationUtil.rotationToPos((double) var5.getX() + 0.5, (double) var5.getZ() + 0.5, (double) var5.getY() + 0.5);
+                        float[] var6 = RotationUtil.rotationToPos((double) var5.getX() + 0.5, (double) var5.getY() + 0.5, (double) var5.getZ() + 0.5);
                         RotationManager.setRotations(var6[0],var6[1]);
                         //var1.setYaw(var6[0]);
                         //var1.setPitch(var6[1]);

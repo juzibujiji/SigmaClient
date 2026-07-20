@@ -136,6 +136,13 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
     private float avgServerTickDiff = 0.0F;
     private ShaderGroup[] fxaaShaders = new ShaderGroup[10];
     private boolean guiLoadingVisible = false;
+    // ── FXAA anti-aliasing driven by GameSettings.ofAaLevel ──
+    // Hardware MSAA is not usable here (the world renders into an FBO whose depth is
+    // sampled as a texture by ESP/shaders), so the AA quality slider instead drives this
+    // post-process FXAA pass. fxaaShaderGroup tracks the group we own so we never fight
+    // the entity/manual shader system for the shared shaderGroup field.
+    private static final ResourceLocation FXAA_SHADER = new ResourceLocation("shaders/post/fxaa.json");
+    private ShaderGroup fxaaShaderGroup = null;
 
     public GameRenderer(Minecraft mcIn, IResourceManager resourceManagerIn, RenderTypeBuffers renderTypeBuffersIn) {
         this.mc = mcIn;
@@ -152,6 +159,11 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
         this.mapItemRenderer.close();
         this.overlayTexture.close();
         this.stopUseShader();
+
+        if (this.fxaaShaderGroup != null) {
+            this.fxaaShaderGroup.close();
+            this.fxaaShaderGroup = null;
+        }
     }
 
     public void stopUseShader() {
@@ -217,6 +229,12 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
 
         this.shaderGroup = null;
 
+        // Drop the FXAA group too; updateFxaaState() rebuilds it against the fresh framebuffer.
+        if (this.fxaaShaderGroup != null) {
+            this.fxaaShaderGroup.close();
+            this.fxaaShaderGroup = null;
+        }
+
         if (this.shaderIndex == SHADER_COUNT) {
             this.loadEntityShader(this.mc.getRenderViewEntity());
         } else {
@@ -270,7 +288,62 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
             this.shaderGroup.createBindFramebuffers(width, height);
         }
 
+        if (this.fxaaShaderGroup != null) {
+            this.fxaaShaderGroup.createBindFramebuffers(width, height);
+        }
+
         this.mc.worldRenderer.createBindEntityOutlineFbs(width, height);
+    }
+
+    /**
+     * Keeps the FXAA post-process pass in sync with the anti-aliasing quality slider
+     * (GameSettings.ofAaLevel). Loads the shader when AA is enabled and the world is present,
+     * and releases it otherwise. FXAA is disabled while OptiFine shaders are active, since the
+     * shader pack does its own final composite.
+     */
+    private void updateFxaaState() {
+        boolean wanted = GLX.isUsingFBOs()
+                && this.mc.gameSettings.ofAaLevel > 0
+                && this.mc.world != null
+                && !Config.isShaders();
+
+        if (wanted) {
+            if (this.fxaaShaderGroup == null) {
+                try {
+                    this.fxaaShaderGroup = new ShaderGroup(this.mc.getTextureManager(), this.resourceManager, this.mc.getFramebuffer(), FXAA_SHADER);
+                    this.fxaaShaderGroup.createBindFramebuffers(this.mc.getMainWindow().getFramebufferWidth(), this.mc.getMainWindow().getFramebufferHeight());
+                } catch (IOException | JsonSyntaxException exception) {
+                    LOGGER.warn("Failed to load FXAA shader: {}", FXAA_SHADER, exception);
+                    this.fxaaShaderGroup = null;
+                }
+            }
+        } else if (this.fxaaShaderGroup != null) {
+            this.fxaaShaderGroup.close();
+            this.fxaaShaderGroup = null;
+        }
+    }
+
+    /**
+     * Runs the FXAA pass in place on the main framebuffer. Called after the world (and any active
+     * entity/manual post shader) has been composited, so distant world geometry gets smoothed
+     * without touching the depth buffer that ESP and shaders sample.
+     */
+    private void renderFxaa(float partialTicks) {
+        if (this.fxaaShaderGroup == null) {
+            return;
+        }
+
+        RenderSystem.disableBlend();
+        RenderSystem.disableDepthTest();
+        RenderSystem.disableAlphaTest();
+        RenderSystem.enableTexture();
+        RenderSystem.matrixMode(5890);
+        RenderSystem.pushMatrix();
+        RenderSystem.loadIdentity();
+        this.fxaaShaderGroup.render(partialTicks);
+        RenderSystem.popMatrix();
+        RenderSystem.enableTexture();
+        this.mc.getFramebuffer().bindFramebuffer(true);
     }
 
     /**
@@ -603,6 +676,8 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
                     RenderSystem.popMatrix();
                     RenderSystem.enableTexture();
                 }
+
+                this.renderFxaa(partialTicks);
 
                 this.mc.getFramebuffer().bindFramebuffer(true);
             } else {
@@ -1132,6 +1207,7 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
     private void frameInit() {
         Config.frameStart();
         GlErrors.frameStart();
+        this.updateFxaaState();
 
         if (!this.initialized) {
             ReflectorResolver.resolve();

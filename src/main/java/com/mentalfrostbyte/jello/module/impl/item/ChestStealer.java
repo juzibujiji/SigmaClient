@@ -108,7 +108,7 @@ public class ChestStealer extends Module {
                             && Math.sqrt(mc.player.getDistanceSq(var9, var10, var11)) < 5.0
                             && this.field23624.getElapsedTime() > 1000L
                             && mc.currentScreen == null) {
-                        float[] var16 = RotationUtil.rotationToPos((double) var7.getPos().getX() + 0.5, (double) var7.getPos().getZ() + 0.5, (double) var7.getPos().getY() + 0.5);
+                        float[] var16 = RotationUtil.rotationToPos((double) var7.getPos().getX() + 0.5,  (double) var7.getPos().getY() + 0.5, (double) var7.getPos().getZ() + 0.5);
                         BlockRayTraceResult var12 = BlockUtil.rayTraceBlock(var16[0], var16[1], 0.0F, var7.getPos(), this.getBooleanValueFromSettingName("Through Walls"));
                         if (var12.getType() != net.minecraft.util.math.RayTraceResult.Type.MISS
                                 && var12.getPos().getX() == var7.getPos().getX()
