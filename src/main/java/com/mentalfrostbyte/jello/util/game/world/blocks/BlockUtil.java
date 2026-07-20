@@ -67,39 +67,39 @@ public class BlockUtil {
             Blocks.PUMPKIN,
             Blocks.ACACIA_SAPLING);
 
-    public static BlockPos method34564(float var0, float var1, float var2) {
-        BlockRayTraceResult var5 = rayTrace(var0, var1, var2);
-        return var5 != null ? var5.getPos() : null;
+    public static BlockPos getBlockPosLookingAt(float yaw, float pitch, float reach) {
+        BlockRayTraceResult result = rayTrace(yaw, pitch, reach);
+        return result != null ? result.getPos() : null;
     }
 
-    public static int method34573(BlockState var0) {
-        Block var3 = var0.getBlock();
-        StateContainer<Block, BlockState> var4 = var3.getStateContainer();
-        ImmutableList<BlockState> var5 = var4.getValidStates();
-        return var5.indexOf(var0);
+    public static int getBlockStateId(BlockState state) {
+        Block block = state.getBlock();
+        StateContainer<Block, BlockState> stateContainer = block.getStateContainer();
+        ImmutableList<BlockState> validStates = stateContainer.getValidStates();
+        return validStates.indexOf(state);
     }
 
     public static boolean isValidBlockPosition(BlockPos blockPos) {
         if (blockPos != null) {
-            Block var3 = mc.world.getBlockState(blockPos).getBlock();
-            return (var3.getDefaultState().isSolid() || !var3.getDefaultState().getMaterial().isReplaceable()) && (!(var3 instanceof SnowBlock) || method34573(mc.world.getBlockState(blockPos)) != 0);
+            Block block = mc.world.getBlockState(blockPos).getBlock();
+            return (block.getDefaultState().isSolid() || !block.getDefaultState().getMaterial().isReplaceable()) && (!(block instanceof SnowBlock) || getBlockStateId(mc.world.getBlockState(blockPos)) != 0);
         } else {
             return false;
         }
     }
 
-    public static float[] method34581(BlockPos var0, Direction var1) {
-        double var4 = (double) var0.getX() + 0.5 - mc.player.getPosX() + (double) var1.getXOffset() / 2.0;
-        double var6 = (double) var0.getZ() + 0.5 - mc.player.getPosZ() + (double) var1.getZOffset() / 2.0;
-        double var8 = mc.player.getPosY() + (double) mc.player.getEyeHeight() - ((double) var0.getY() + 0.5);
-        double var10 = MathHelper.sqrt(var4 * var4 + var6 * var6);
-        float var12 = (float) (Math.atan2(var6, var4) * 180.0 / Math.PI) - 90.0F;
-        float var13 = (float) (Math.atan2(var8, var10) * 180.0 / Math.PI);
-        if (var12 < 0.0F) {
-            var12 += 360.0F;
+    public static float[] getRotationsToBlockDirection(BlockPos pos, Direction direction) {
+        double diffX = (double) pos.getX() + 0.5 - mc.player.getPosX() + (double) direction.getXOffset() / 2.0;
+        double diffZ = (double) pos.getZ() + 0.5 - mc.player.getPosZ() + (double) direction.getZOffset() / 2.0;
+        double diffY = mc.player.getPosY() + (double) mc.player.getEyeHeight() - ((double) pos.getY() + 0.5);
+        double horizontalDist = MathHelper.sqrt(diffX * diffX + diffZ * diffZ);
+        float yaw = (float) (Math.atan2(diffZ, diffX) * 180.0 / Math.PI) - 90.0F;
+        float pitch = (float) (Math.atan2(diffY, horizontalDist) * 180.0 / Math.PI);
+        if (yaw < 0.0F) {
+            yaw += 360.0F;
         }
 
-        return new float[]{var12, var13};
+        return new float[]{yaw, pitch};
     }
 
     /**
@@ -138,10 +138,10 @@ public class BlockUtil {
 
     public static List<BlockPos> sortPositionsByDistance(List<BlockPos> positions) {
         positions.sort((a, b) -> {
-            float var4 = getDistance(mc.player, a);
-            float var5 = getDistance(mc.player, b);
-            if (!(var4 > var5)) {
-                return var4 != var5 ? -1 : 0;
+            float distA = getDistance(mc.player, a);
+            float distB = getDistance(mc.player, b);
+            if (!(distA > distB)) {
+                return distA != distB ? -1 : 0;
             } else {
                 return 1;
             }
@@ -164,34 +164,34 @@ public class BlockUtil {
         return MathHelper.sqrt((xD - 0.5F) * (xD - 0.5F) + (yD - 0.5F) * (yD - 0.5F) + (zD - 0.5F) * (zD - 0.5F));
     }
 
-    public static Direction method34580(BlockPos var0) {
-        Direction var3 = Direction.UP;
-        float var4 = MathHelper.wrapDegrees(method34581(var0, Direction.UP)[0]);
-        if (var4 >= 45.0F && var4 <= 135.0F) {
-            var3 = Direction.EAST;
-        } else if ((!(var4 >= 135.0F) || !(var4 <= 180.0F)) && (!(var4 <= -135.0F) || !(var4 >= -180.0F))) {
-            if (var4 <= -45.0F && var4 >= -135.0F) {
-                var3 = Direction.WEST;
-            } else if (var4 >= -45.0F && var4 <= 0.0F || var4 <= 45.0F && var4 >= 0.0F) {
-                var3 = Direction.NORTH;
+    public static Direction getBestFacingDirection(BlockPos pos) {
+        Direction facing = Direction.UP;
+        float yaw = MathHelper.wrapDegrees(getRotationsToBlockDirection(pos, Direction.UP)[0]);
+        if (yaw >= 45.0F && yaw <= 135.0F) {
+            facing = Direction.EAST;
+        } else if ((!(yaw >= 135.0F) || !(yaw <= 180.0F)) && (!(yaw <= -135.0F) || !(yaw >= -180.0F))) {
+            if (yaw <= -45.0F && yaw >= -135.0F) {
+                facing = Direction.WEST;
+            } else if (yaw >= -45.0F && yaw <= 0.0F || yaw <= 45.0F && yaw >= 0.0F) {
+                facing = Direction.NORTH;
             }
         } else {
-            var3 = Direction.SOUTH;
+            facing = Direction.SOUTH;
         }
 
-        if (MathHelper.wrapDegrees(method34581(var0, Direction.UP)[1]) > 75.0F || MathHelper.wrapDegrees(method34581(var0, Direction.UP)[1]) < -75.0F) {
-            var3 = Direction.UP;
+        if (MathHelper.wrapDegrees(getRotationsToBlockDirection(pos, Direction.UP)[1]) > 75.0F || MathHelper.wrapDegrees(getRotationsToBlockDirection(pos, Direction.UP)[1]) < -75.0F) {
+            facing = Direction.UP;
         }
 
-        return var3;
+        return facing;
     }
 
-    public static List<PlayerEntity> method34549(List<PlayerEntity> var0) {
-        Collections.sort(var0, new Class3583());
-        return var0;
+    public static List<PlayerEntity> sortPlayersByDistance(List<PlayerEntity> players) {
+        Collections.sort(players, new Class3583());
+        return players;
     }
 
-    public static BlockCache findValidBlockCache(BlockPos basePos, boolean var1) {
+    public static BlockCache findValidBlockCache(BlockPos basePos, boolean excludeDown) {
         Vector3i[] relativePositions = new Vector3i[]{
                 new Vector3i(0, 0, 0),
                 new Vector3i(-1, 0, 0),
@@ -214,7 +214,7 @@ public class BlockUtil {
                         : new Vector3i(offset.getX() + pattern.offsetX, offset.getY() + pattern.offsetY, offset.getZ() + pattern.offsetZ);
 
                 for (Direction direction : Direction.values()) {
-                    if ((direction != Direction.DOWN || !var1) && isValidBlockPosition(basePos.add(positionToCheck).offset(direction, -1))) {
+                    if ((direction != Direction.DOWN || !excludeDown) && isValidBlockPosition(basePos.add(positionToCheck).offset(direction, -1))) {
                         return new BlockCache(basePos.add(positionToCheck).offset(direction, -1), direction);
                     }
                 }
@@ -225,26 +225,26 @@ public class BlockUtil {
     }
 
 
-    public static BlockRayTraceResult rayTrace(float var0, float var1, float var2) {
-        Vector3d var5 = new Vector3d(
+    public static BlockRayTraceResult rayTrace(float yaw, float pitch, float reach) {
+        Vector3d start = new Vector3d(
                 mc.player.lastReportedPosX, mc.player.lastReportedPosY + (double) mc.player.getEyeHeight(), mc.player.lastReportedPosZ
         );
-        var0 = (float) Math.toRadians(var0);
-        var1 = (float) Math.toRadians(var1);
-        float var6 = -MathHelper.sin(var0) * MathHelper.cos(var1);
-        float var7 = -MathHelper.sin(var1);
-        float var8 = MathHelper.cos(var0) * MathHelper.cos(var1);
-        if (var2 == 0.0F) {
-            var2 = mc.playerController.getBlockReachDistance();
+        yaw = (float) Math.toRadians(yaw);
+        pitch = (float) Math.toRadians(pitch);
+        float dirX = -MathHelper.sin(yaw) * MathHelper.cos(pitch);
+        float dirY = -MathHelper.sin(pitch);
+        float dirZ = MathHelper.cos(yaw) * MathHelper.cos(pitch);
+        if (reach == 0.0F) {
+            reach = mc.playerController.getBlockReachDistance();
         }
 
-        Vector3d var9 = new Vector3d(
-                mc.player.lastReportedPosX + (double) (var6 * var2),
-                mc.player.lastReportedPosY + (double) (var7 * var2) + (double) mc.player.getEyeHeight(),
-                mc.player.lastReportedPosZ + (double) (var8 * var2)
+        Vector3d end = new Vector3d(
+                mc.player.lastReportedPosX + (double) (dirX * reach),
+                mc.player.lastReportedPosY + (double) (dirY * reach) + (double) mc.player.getEyeHeight(),
+                mc.player.lastReportedPosZ + (double) (dirZ * reach)
         );
-        Entity var10 = mc.getRenderViewEntity();
-        return mc.world.rayTraceBlocks(new RayTraceContext(var5, var9, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, var10));
+        Entity viewEntity = mc.getRenderViewEntity();
+        return mc.world.rayTraceBlocks(new RayTraceContext(start, end, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, viewEntity));
     }
 
     /**
@@ -447,66 +447,66 @@ public class BlockUtil {
         return BlockRayTraceResult.createMiss(end, missFace, target);
     }
 
-    public static BlockRayTraceResult rayTrace(float yaw, float pitch, float var2, EventMotion var3) {
-        Vector3d var6 = new Vector3d(var3.getX(), (double) mc.player.getEyeHeight() + var3.getY(), var3.getZ());
+    public static BlockRayTraceResult rayTrace(float yaw, float pitch, float reach, EventMotion motion) {
+        Vector3d start = new Vector3d(motion.getX(), (double) mc.player.getEyeHeight() + motion.getY(), motion.getZ());
         yaw = (float) Math.toRadians(yaw);
         pitch = (float) Math.toRadians(pitch);
-        float var7 = -MathHelper.sin(yaw) * MathHelper.cos(pitch);
-        float var8 = -MathHelper.sin(pitch);
-        float var9 = MathHelper.cos(yaw) * MathHelper.cos(pitch);
-        if (var2 == 0.0F) {
-            var2 = mc.playerController.getBlockReachDistance();
+        float dirX = -MathHelper.sin(yaw) * MathHelper.cos(pitch);
+        float dirY = -MathHelper.sin(pitch);
+        float dirZ = MathHelper.cos(yaw) * MathHelper.cos(pitch);
+        if (reach == 0.0F) {
+            reach = mc.playerController.getBlockReachDistance();
         }
 
-        Vector3d var10 = new Vector3d(
-                mc.player.lastReportedPosX + (double) (var7 * var2),
-                mc.player.lastReportedPosY + (double) (var8 * var2) + (double) mc.player.getEyeHeight(),
-                mc.player.lastReportedPosZ + (double) (var9 * var2)
+        Vector3d end = new Vector3d(
+                mc.player.lastReportedPosX + (double) (dirX * reach),
+                mc.player.lastReportedPosY + (double) (dirY * reach) + (double) mc.player.getEyeHeight(),
+                mc.player.lastReportedPosZ + (double) (dirZ * reach)
         );
-        Entity var11 = mc.getRenderViewEntity();
-        return mc.world.rayTraceBlocks(new RayTraceContext(var6, var10, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, var11));
+        Entity viewEntity = mc.getRenderViewEntity();
+        return mc.world.rayTraceBlocks(new RayTraceContext(start, end, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, viewEntity));
     }
 
     public static float[] rotationsToBlock(BlockPos bp, Direction dir) {
-        float var4 = 0.0F;
-        float var5 = 0.0F;
-        float var6 = (float) (0.4F + Math.random() * 0.1F);
+        float offsetX = 0.0F;
+        float offsetZ = 0.0F;
+        float offsetY = (float) (0.4F + Math.random() * 0.1F);
         switch (dir) {
             case EAST:
-                var4 += 0.49F;
+                offsetX += 0.49F;
                 break;
             case NORTH:
-                var5 -= 0.49F;
+                offsetZ -= 0.49F;
                 break;
             case SOUTH:
-                var5 += 0.49F;
+                offsetZ += 0.49F;
                 break;
             case WEST:
-                var4 -= 0.49F;
+                offsetX -= 0.49F;
                 break;
         }
 
-        if (var4 == 0.0F) {
-            var4 = (float) (0.1F - Math.sin((double) (System.currentTimeMillis() - 500L) / 1200.0) * 0.2);
+        if (offsetX == 0.0F) {
+            offsetX = (float) (0.1F - Math.sin((double) (System.currentTimeMillis() - 500L) / 1200.0) * 0.2);
         }
 
-        if (var5 == 0.0F) {
-            var5 = (float) (0.1F - Math.sin((double) (System.currentTimeMillis() - 500L) / 1000.0) * 0.2);
+        if (offsetZ == 0.0F) {
+            offsetZ = (float) (0.1F - Math.sin((double) (System.currentTimeMillis() - 500L) / 1000.0) * 0.2);
         }
 
-        if (var6 == 0.0F) {
-            var6 = (float) (0.6F - Math.sin((double) (System.currentTimeMillis() - 500L) / 1600.0) * 0.2);
+        if (offsetY == 0.0F) {
+            offsetY = (float) (0.6F - Math.sin((double) (System.currentTimeMillis() - 500L) / 1600.0) * 0.2);
         }
 
-        double var7 = (double) bp.getX() + 0.5 - Minecraft.getInstance().player.getPosX() + (double) var4;
-        double var9 = (double) bp.getY()
+        double diffX = (double) bp.getX() + 0.5 - Minecraft.getInstance().player.getPosX() + (double) offsetX;
+        double diffY = (double) bp.getY()
                 - 0.02
                 - (Minecraft.getInstance().player.getPosY() + (double) Minecraft.getInstance().player.getEyeHeight())
-                + (double) var6;
-        double var11 = (double) bp.getZ() + 0.5 - Minecraft.getInstance().player.getPosZ() + (double) var5;
-        double var13 = MathHelper.sqrt(var7 * var7 + var11 * var11);
-        float yaw = (float) (Math.atan2(var11, var7) * 180.0 / Math.PI) - 90.0F;
-        float pitch = (float) (-(Math.atan2(var9, var13) * 180.0 / Math.PI));
+                + (double) offsetY;
+        double diffZ = (double) bp.getZ() + 0.5 - Minecraft.getInstance().player.getPosZ() + (double) offsetZ;
+        double horizontalDist = MathHelper.sqrt(diffX * diffX + diffZ * diffZ);
+        float yaw = (float) (Math.atan2(diffZ, diffX) * 180.0 / Math.PI) - 90.0F;
+        float pitch = (float) (-(Math.atan2(diffY, horizontalDist) * 180.0 / Math.PI));
         return new float[]{
                 Minecraft.getInstance().player.rotationYaw + MathHelper.wrapDegrees(yaw - Minecraft.getInstance().player.rotationYaw),
                 Minecraft.getInstance().player.rotationPitch + MathHelper.wrapDegrees(pitch - Minecraft.getInstance().player.rotationPitch)
@@ -514,115 +514,115 @@ public class BlockUtil {
     }
 
 
-    public static RayTraceResult method34569(float var0, float var1, float var2, float var3) {
-        double var6 = Math.cos((double) MovementUtil.getYaw() * Math.PI / 180.0) * (double) var3;
-        double var8 = Math.sin((double) MovementUtil.getYaw() * Math.PI / 180.0) * (double) var3;
-        Vector3d var10 = new Vector3d(
-                mc.player.getPosX() + var6,
+    public static RayTraceResult rayTraceWithOffset(float yaw, float pitch, float reach, float sideOffset) {
+        double offsetX = Math.cos((double) MovementUtil.getYaw() * Math.PI / 180.0) * (double) sideOffset;
+        double offsetZ = Math.sin((double) MovementUtil.getYaw() * Math.PI / 180.0) * (double) sideOffset;
+        Vector3d start = new Vector3d(
+                mc.player.getPosX() + offsetX,
                 mc.player.getPosY() + (double) mc.player.getEyeHeight(),
-                mc.player.getPosZ() + var8
+                mc.player.getPosZ() + offsetZ
         );
-        var0 = (float) Math.toRadians(var0);
-        var1 = (float) Math.toRadians(var1);
-        float var11 = -MathHelper.sin(var0) * MathHelper.cos(var1);
-        float var12 = -MathHelper.sin(var1);
-        float var13 = MathHelper.cos(var0) * MathHelper.cos(var1);
-        if (var2 == 0.0F) {
-            var2 = mc.playerController.getBlockReachDistance();
+        yaw = (float) Math.toRadians(yaw);
+        pitch = (float) Math.toRadians(pitch);
+        float dirX = -MathHelper.sin(yaw) * MathHelper.cos(pitch);
+        float dirY = -MathHelper.sin(pitch);
+        float dirZ = MathHelper.cos(yaw) * MathHelper.cos(pitch);
+        if (reach == 0.0F) {
+            reach = mc.playerController.getBlockReachDistance();
         }
 
-        Vector3d var14 = new Vector3d(
-                mc.player.lastReportedPosX + (double) (var11 * var2),
-                mc.player.lastReportedPosY + (double) (var12 * var2) + (double) mc.player.getEyeHeight(),
-                mc.player.lastReportedPosZ + (double) (var13 * var2)
+        Vector3d end = new Vector3d(
+                mc.player.lastReportedPosX + (double) (dirX * reach),
+                mc.player.lastReportedPosY + (double) (dirY * reach) + (double) mc.player.getEyeHeight(),
+                mc.player.lastReportedPosZ + (double) (dirZ * reach)
         );
-        Entity var15 = mc.getRenderViewEntity();
-        return mc.world.rayTraceBlocks(new RayTraceContext(var10, var14, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, var15));
+        Entity viewEntity = mc.getRenderViewEntity();
+        return mc.world.rayTraceBlocks(new RayTraceContext(start, end, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, viewEntity));
     }
 
-    public static RayTraceResult method34570(BlockPos var0) {
-        return rayTraceBlock(var0, false);
+    public static RayTraceResult rayTraceBlock(BlockPos pos) {
+        return rayTraceBlock(pos, false);
     }
 
     /**
      * 从玩家眼睛向目标方块发射射线。
      *
-     * @param var0         目标方块位置
+     * @param pos          目标方块位置
      * @param throughWalls 是否穿墙：false 走原版逻辑（被沿途方块阻挡）；
      *                     true 时忽略沿途其它方块，只对目标方块求交，保证返回命中目标本身
      */
-    public static RayTraceResult rayTraceBlock(BlockPos var0, boolean throughWalls) {
-        Vector3d var3 = new Vector3d(
+    public static RayTraceResult rayTraceBlock(BlockPos pos, boolean throughWalls) {
+        Vector3d start = new Vector3d(
                 mc.player.getPosX(), mc.player.getPosY() + (double) mc.player.getEyeHeight(), mc.player.getPosZ()
         );
-        Vector3d var4 = new Vector3d(
-                (double) var0.getX() + 0.5 + RandomUtils.nextDouble(0.01, 0.04),
-				var0.getY(),
-                (double) var0.getZ() + 0.5 + RandomUtils.nextDouble(0.01, 0.04)
+        Vector3d end = new Vector3d(
+                (double) pos.getX() + 0.5 + RandomUtils.nextDouble(0.01, 0.04),
+				pos.getY(),
+                (double) pos.getZ() + 0.5 + RandomUtils.nextDouble(0.01, 0.04)
         );
         if (!throughWalls) {
-            return mc.world.rayTraceBlocks(new RayTraceContext(var3, var4, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, mc.getRenderViewEntity()));
+            return mc.world.rayTraceBlocks(new RayTraceContext(start, end, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, mc.getRenderViewEntity()));
         }
 
         // 穿墙：只对目标方块的形状求交，忽略沿途其它方块
-        VoxelShape shape = mc.world.getBlockState(var0).getShape(mc.world, var0);
-        BlockRayTraceResult hit = shape.rayTrace(var3, var4, var0);
+        VoxelShape shape = mc.world.getBlockState(pos).getShape(mc.world, pos);
+        BlockRayTraceResult hit = shape.rayTrace(start, end, pos);
         if (hit != null) {
             return hit;
         }
 
         // 射线未命中方块形状，返回 MISS
         Direction missFace = Direction.getFacingFromVector(
-                var3.x - ((double) var0.getX() + 0.5),
-                var3.y - ((double) var0.getY() + 0.5),
-                var3.z - ((double) var0.getZ() + 0.5));
-        return BlockRayTraceResult.createMiss(var4, missFace, var0);
+                start.x - ((double) pos.getX() + 0.5),
+                start.y - ((double) pos.getY() + 0.5),
+                start.z - ((double) pos.getZ() + 0.5));
+        return BlockRayTraceResult.createMiss(end, missFace, pos);
     }
 
-    public static float[] method34542(BlockPos var0, Direction var1) {
-        float var4 = 0.0F;
-        float var5 = 0.0F;
-        float var6 = 0.0F;
-        switch (var1) {
+    public static float[] getRotationsToBlockFace(BlockPos pos, Direction direction) {
+        float offsetX = 0.0F;
+        float offsetZ = 0.0F;
+        float offsetY = 0.0F;
+        switch (direction) {
             case EAST:
-                var4 += 0.49F;
+                offsetX += 0.49F;
                 break;
             case NORTH:
-                var5 -= 0.49F;
+                offsetZ -= 0.49F;
                 break;
             case SOUTH:
-                var5 += 0.49F;
+                offsetZ += 0.49F;
                 break;
             case WEST:
-                var4 -= 0.49F;
+                offsetX -= 0.49F;
                 break;
             case UP:
-                var6 += 0.0F;
+                offsetY += 0.0F;
             case DOWN:
-                var6++;
+                offsetY++;
         }
 
-        double var7 = (double) var0.getX() + 0.5 - Minecraft.getInstance().player.getPosX() + (double) var4;
-        double var9 = (double) var0.getY()
+        double diffX = (double) pos.getX() + 0.5 - Minecraft.getInstance().player.getPosX() + (double) offsetX;
+        double diffY = (double) pos.getY()
                 - 0.02
                 - (Minecraft.getInstance().player.getPosY() + (double) Minecraft.getInstance().player.getEyeHeight())
-                + (double) var6;
-        double var11 = (double) var0.getZ() + 0.5 - Minecraft.getInstance().player.getPosZ() + (double) var5;
-        double var13 = MathHelper.sqrt(var7 * var7 + var11 * var11);
-        float var15 = (float) (Math.atan2(var11, var7) * 180.0 / Math.PI) - 90.0F;
-        float var16 = (float) (-(Math.atan2(var9, var13) * 180.0 / Math.PI));
+                + (double) offsetY;
+        double diffZ = (double) pos.getZ() + 0.5 - Minecraft.getInstance().player.getPosZ() + (double) offsetZ;
+        double horizontalDist = MathHelper.sqrt(diffX * diffX + diffZ * diffZ);
+        float yaw = (float) (Math.atan2(diffZ, diffX) * 180.0 / Math.PI) - 90.0F;
+        float pitch = (float) (-(Math.atan2(diffY, horizontalDist) * 180.0 / Math.PI));
         return new float[]{
-                Minecraft.getInstance().player.rotationYaw + MathHelper.wrapDegrees(var15 - Minecraft.getInstance().player.rotationYaw),
-                Minecraft.getInstance().player.rotationPitch + MathHelper.wrapDegrees(var16 - Minecraft.getInstance().player.rotationPitch)
+                Minecraft.getInstance().player.rotationYaw + MathHelper.wrapDegrees(yaw - Minecraft.getInstance().player.rotationYaw),
+                Minecraft.getInstance().player.rotationPitch + MathHelper.wrapDegrees(pitch - Minecraft.getInstance().player.rotationPitch)
         };
     }
 
 
-    public static boolean method34538(Block var0, BlockPos var1) {
-        VoxelShape var4 = var0.getDefaultState().getCollisionShape(mc.world, var1);
-        return !isValidBlockPosition(var1)
-                && mc.world.checkNoEntityCollision(mc.player, var4)
-                && var1.getY() <= mc.player.getPosition().getY();
+    public static boolean canPlaceBlockAt(Block block, BlockPos pos) {
+        VoxelShape collisionShape = block.getDefaultState().getCollisionShape(mc.world, pos);
+        return !isValidBlockPosition(pos)
+                && mc.world.checkNoEntityCollision(mc.player, collisionShape)
+                && pos.getY() <= mc.player.getPosition().getY();
     }
 
     public static final Block getBlockFromPosition(BlockPos blockPos) {
@@ -633,39 +633,39 @@ public class BlockUtil {
         return mc.playerController.getBlockReachDistance();
     }
 
-    public static BlockRayTraceResult method34566(float var0) {
-        Vector3d var3 = new Vector3d(mc.player.lastReportedPosX, mc.player.lastReportedPosY - 0.8F, mc.player.lastReportedPosZ);
-        var0 = (float) Math.toRadians(var0);
-        float var4 = 0.0F;
-        float var5 = -MathHelper.sin(var0) * MathHelper.cos(var4);
-        float var6 = MathHelper.cos(var0) * MathHelper.cos(var4);
-        float var7 = 2.3F;
-        Vector3d var8 = new Vector3d(
-                mc.player.lastReportedPosX + (double) (var5 * var7),
+    public static BlockRayTraceResult rayTraceGroundBlock(float yaw) {
+        Vector3d start = new Vector3d(mc.player.lastReportedPosX, mc.player.lastReportedPosY - 0.8F, mc.player.lastReportedPosZ);
+        yaw = (float) Math.toRadians(yaw);
+        float pitch = 0.0F;
+        float dirX = -MathHelper.sin(yaw) * MathHelper.cos(pitch);
+        float dirZ = MathHelper.cos(yaw) * MathHelper.cos(pitch);
+        float reach = 2.3F;
+        Vector3d end = new Vector3d(
+                mc.player.lastReportedPosX + (double) (dirX * reach),
                 mc.player.lastReportedPosY - 0.8F - (double) (!mc.player.isJumping ? 0.0F : 0.6F),
-                mc.player.lastReportedPosZ + (double) (var6 * var7)
+                mc.player.lastReportedPosZ + (double) (dirZ * reach)
         );
-        Entity var9 = mc.getRenderViewEntity();
-        return mc.world.rayTraceBlocks(new RayTraceContext(var3, var8, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, var9));
+        Entity viewEntity = mc.getRenderViewEntity();
+        return mc.world.rayTraceBlocks(new RayTraceContext(start, end, RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, viewEntity));
     }
 
     public static float[] getRotationsToBlock() {
-        BlockRayTraceResult var2 = method34566(MovementUtil.getYaw() - 270.0F);
-        if (var2.getType() != RayTraceResult.Type.MISS) {
-            double var3 = var2.getHitVec().x - (double) var2.getPos().getX();
-            double var5 = var2.getHitVec().z - (double) var2.getPos().getZ();
-            double var7 = var2.getHitVec().y - (double) var2.getPos().getY();
-            double var9 = (double) var2.getPos().getX() - Minecraft.getInstance().player.getPosX() + var3;
-            double var11 = (double) var2.getPos().getY()
+        BlockRayTraceResult result = rayTraceGroundBlock(MovementUtil.getYaw() - 270.0F);
+        if (result.getType() != RayTraceResult.Type.MISS) {
+            double hitOffsetX = result.getHitVec().x - (double) result.getPos().getX();
+            double hitOffsetZ = result.getHitVec().z - (double) result.getPos().getZ();
+            double hitOffsetY = result.getHitVec().y - (double) result.getPos().getY();
+            double diffX = (double) result.getPos().getX() - Minecraft.getInstance().player.getPosX() + hitOffsetX;
+            double diffY = (double) result.getPos().getY()
                     - (Minecraft.getInstance().player.getPosY() + (double) Minecraft.getInstance().player.getEyeHeight())
-                    + var7;
-            double var13 = (double) var2.getPos().getZ() - Minecraft.getInstance().player.getPosZ() + var5;
-            double var15 = MathHelper.sqrt(var9 * var9 + var13 * var13);
-            float var17 = (float) (Math.atan2(var13, var9) * 180.0 / Math.PI) - 90.0F;
-            float var18 = (float) (-(Math.atan2(var11, var15) * 180.0 / Math.PI));
+                    + hitOffsetY;
+            double diffZ = (double) result.getPos().getZ() - Minecraft.getInstance().player.getPosZ() + hitOffsetZ;
+            double horizontalDist = MathHelper.sqrt(diffX * diffX + diffZ * diffZ);
+            float yaw = (float) (Math.atan2(diffZ, diffX) * 180.0 / Math.PI) - 90.0F;
+            float pitch = (float) (-(Math.atan2(diffY, horizontalDist) * 180.0 / Math.PI));
             return new float[]{
-                    Minecraft.getInstance().player.rotationYaw + MathHelper.wrapDegrees(var17 - Minecraft.getInstance().player.rotationYaw),
-                    Minecraft.getInstance().player.rotationPitch + MathHelper.wrapDegrees(var18 - Minecraft.getInstance().player.rotationPitch)
+                    Minecraft.getInstance().player.rotationYaw + MathHelper.wrapDegrees(yaw - Minecraft.getInstance().player.rotationYaw),
+                    Minecraft.getInstance().player.rotationPitch + MathHelper.wrapDegrees(pitch - Minecraft.getInstance().player.rotationPitch)
             };
         } else {
             return null;
@@ -700,8 +700,8 @@ public class BlockUtil {
                 entity.getBoundingBox().maxY,
                 entity.getBoundingBox().maxZ
         );
-        Stream<VoxelShape> var5 = mc.world.getCollisionShapes(mc.player, bounds);
-        return var5.findAny().isPresent();
+        Stream<VoxelShape> collisionShapes = mc.world.getCollisionShapes(mc.player, bounds);
+        return collisionShapes.findAny().isPresent();
     }
 
     public static class PlacementPattern {
@@ -721,11 +721,11 @@ public class BlockUtil {
     public static final class Class3583 implements Comparator<PlayerEntity> {
         private static String[] field19525;
 
-        public int compare(PlayerEntity var1, PlayerEntity var2) {
-            float var5 = mc.player.getDistance(var1);
-            float var6 = mc.player.getDistance(var2);
-            if (!(var5 - var6 < 0.0F)) {
-                return var5 - var6 != 0.0F ? -1 : 0;
+        public int compare(PlayerEntity playerA, PlayerEntity playerB) {
+            float distA = mc.player.getDistance(playerA);
+            float distB = mc.player.getDistance(playerB);
+            if (!(distA - distB < 0.0F)) {
+                return distA - distB != 0.0F ? -1 : 0;
             } else {
                 return 1;
             }

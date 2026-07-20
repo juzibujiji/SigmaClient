@@ -174,7 +174,7 @@ public class NoteblockPlayer extends Module {
             }
 
             Direction face = this.hitFace(block.field28401);
-            float[] rot = BlockUtil.method34542(block.field28401, face);
+            float[] rot = BlockUtil.getRotationsToBlockFace(block.field28401, face);
             RotationManager.setRotations(rot[0], rot[1]);
             mc.getConnection().sendPacket(new CPlayerDiggingPacket(
                     CPlayerDiggingPacket.Action.START_DESTROY_BLOCK, block.field28401, face));
@@ -220,7 +220,7 @@ public class NoteblockPlayer extends Module {
         int reqTunes = (target.targetNote - currentNote + 25) % 25;
         // 命中面：盒子在头顶（+上方有阻挡）时点它的下面，否则点上面。
         Direction face = this.hitFace(target.field28401);
-        float[] rot = BlockUtil.method34542(target.field28401, face);
+        float[] rot = BlockUtil.getRotationsToBlockFace(target.field28401, face);
         RotationManager.setRotations(rot[0], rot[1]);
         // 直接对准目标盒子构造命中结果，而不是发射世界射线。
         // 密集摆放时世界射线会先撞到别的盒子/方块，导致拧错盒子（把已调好的拧乱），

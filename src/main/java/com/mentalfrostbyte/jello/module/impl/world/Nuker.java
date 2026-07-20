@@ -87,7 +87,7 @@ public class Nuker extends Module {
                 }
                 BlockRayTraceResult raytrace = BlockUtil.rayTraceBlock(RotationCore.lastYaw,RotationCore.lastPitch,0.0F,targetPos,true);
                 if (raytrace.getType() != net.minecraft.util.math.RayTraceResult.Type.MISS && raytrace.getPos() == targetPos) {
-                    mc.playerController.onPlayerDamageBlock(this.targetPos, BlockUtil.method34580(this.targetPos));
+                    mc.playerController.onPlayerDamageBlock(this.targetPos, BlockUtil.getBestFacingDirection(this.targetPos));
                     if (!this.getBooleanValueFromSettingName("NoSwing")) {
                         mc.player.swingArm(Hand.MAIN_HAND);
                     } else {
@@ -96,7 +96,7 @@ public class Nuker extends Module {
                 }
             } else {
                 for (BlockPos var9 : this.blocksToDestroy) {
-                    mc.getConnection().sendPacket(new CPlayerDiggingPacket(CPlayerDiggingPacket.Action.START_DESTROY_BLOCK, var9, BlockUtil.method34580(var9)));
+                    mc.getConnection().sendPacket(new CPlayerDiggingPacket(CPlayerDiggingPacket.Action.START_DESTROY_BLOCK, var9, BlockUtil.getBestFacingDirection(var9)));
                     if (!this.getBooleanValueFromSettingName("NoSwing")) {
                         mc.player.swingArm(Hand.MAIN_HAND);
                     } else {

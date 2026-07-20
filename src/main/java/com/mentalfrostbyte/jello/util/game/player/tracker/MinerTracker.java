@@ -294,16 +294,16 @@ public class MinerTracker {
                         this.field39616 = (BlockPos) var4.get(0);
                     }
 
-                    Direction var13 = BlockUtil.method34580(this.field39616);
-                    float[] var11 = BlockUtil.method34542(this.field39616, var13);
+                    Direction var13 = BlockUtil.getBestFacingDirection(this.field39616);
+                    float[] var11 = BlockUtil.getRotationsToBlockFace(this.field39616, var13);
                     event.setYaw(var11[0]);
                     event.setPitch(var11[1]);
                     this.mc.player.swingArm(Hand.MAIN_HAND);
-                    this.mc.playerController.onPlayerDamageBlock(this.field39616, BlockUtil.method34580(this.field39616));
+                    this.mc.playerController.onPlayerDamageBlock(this.field39616, BlockUtil.getBestFacingDirection(this.field39616));
                 } else {
                     this.field39616 = (BlockPos) var4.get(0);
-                    Direction var14 = BlockUtil.method34580(this.field39616);
-                    float[] var15 = BlockUtil.method34542(this.field39616, var14);
+                    Direction var14 = BlockUtil.getBestFacingDirection(this.field39616);
+                    float[] var15 = BlockUtil.getRotationsToBlockFace(this.field39616, var14);
                     event.setYaw(var15[0]);
                     event.setPitch(var15[1]);
                     EventKeyPress var12 = new EventKeyPress(0, false, this.field39616);
@@ -361,7 +361,7 @@ public class MinerTracker {
                 }
             }
 
-            BlockPos var17 = BlockUtil.method34564(this.mc.player.rotationYaw, this.mc.player.rotationPitch, 100.0F);
+            BlockPos var17 = BlockUtil.getBlockPosLookingAt(this.mc.player.rotationYaw, this.mc.player.rotationPitch, 100.0F);
             if (var17 != null) {
                 if (this.field39613 != null && this.field39613.size() > 0) {
                     int var18 = RenderUtil.applyAlpha(ClientColors.PALE_ORANGE.getColor(), 0.02F);

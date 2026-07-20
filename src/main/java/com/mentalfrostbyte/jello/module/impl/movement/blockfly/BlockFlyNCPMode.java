@@ -220,7 +220,7 @@ public class BlockFlyNCPMode extends Module {
                     this.field23923 = blockCache;
 
                     if (blockCache != null) {
-                        float[] rotations = BlockUtil.method34542(blockCache.position, blockCache.direction);
+                        float[] rotations = BlockUtil.getRotationsToBlockFace(blockCache.position, blockCache.direction);
                         if (rotations != null) {
                             this.yaw = rotations[0];
                             this.pitch = rotations[1];

@@ -46,7 +46,7 @@ public class BlockFlyHelper {
     public static List<PositionFacing> method35030(Block var0, BlockPos var1, int var2) {
         ArrayList var5 = new ArrayList();
         if (var1 != null && var2 >= 0) {
-            if (!BlockUtil.method34538(var0, var1)) {
+            if (!BlockUtil.canPlaceBlockAt(var0, var1)) {
                 return var5;
             } else {
                 // Order matters: prefer placing on the top face of the block below (most natural
@@ -63,7 +63,7 @@ public class BlockFlyHelper {
                 };
 
                 for (PositionFacing var10 : tryThese) {
-                    // Use a direct solid-block presence check. The previous `!method34538(...)`
+                    // Use a direct solid-block presence check. The previous `!canPlaceBlockAt(...)`
                     // proxy also returned true for "above-player" positions and positions with
                     // entity collision, which let the algorithm pick the player's own body as
                     // a phantom anchor.

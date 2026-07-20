@@ -175,7 +175,7 @@ public class BlockFlyAACMode extends Module {
     }
 
     private boolean method16207() {
-        BlockRayTraceResult var3 = (BlockRayTraceResult) BlockUtil.method34569(RotationCore.currentYaw, RotationCore.currentPitch, BlockUtil.getBlockReachDistance(), 0.0F);
+        BlockRayTraceResult var3 = (BlockRayTraceResult) BlockUtil.rayTraceWithOffset(RotationCore.currentYaw, RotationCore.currentPitch, BlockUtil.getBlockReachDistance(), 0.0F);
         boolean var4 = false;
         if (var3 != null && var3.getType() == RayTraceResult.Type.BLOCK) {
             if (this.access().getStringSettingValueByName("ItemSpoof").equals("None")) {

@@ -247,7 +247,7 @@ public class BlockFlyHypixelMode extends Module {
                         BlockCache var12 = BlockUtil.findValidBlockCache(var11, !this.field23474 && this.getBooleanValueFromSettingName("Downwards"));
                         this.blockCache = var12;
                         if (var12 != null) {
-                            float[] var13 = BlockUtil.method34542(this.blockCache.position, this.blockCache.direction);
+                            float[] var13 = BlockUtil.getRotationsToBlockFace(this.blockCache.position, this.blockCache.direction);
                             if ((double) var12.position.getY() - mc.player.getPosY() < 0.0) {
                                 double var14 = mc.player.getPosX()
                                         - ((double) var12.position.getX() + 0.5 + (double) var12.direction.getXOffset() / 2.0);
