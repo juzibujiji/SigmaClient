@@ -40,6 +40,7 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.BlockNamedItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.client.CAnimateHandPacket;
+import net.minecraft.network.play.client.CPlayerPacket;
 import net.minecraft.util.ActionResultType;
 import net.minecraft.util.Direction;
 import net.minecraft.util.Hand;
@@ -123,6 +124,7 @@ public class BlockFlyCustomMode extends Module {
     private final BooleanSetting eagle;
     private final BooleanSetting sneak;
     private final BooleanSetting advancedBlockSearch;
+    private final BooleanSetting grim1_17rot;
     private final BooleanSetting snap;
     private final BooleanSetting hideSnap;
     private final BooleanSetting renderItemSpoof;
@@ -133,21 +135,17 @@ public class BlockFlyCustomMode extends Module {
 
     public BlockFlyCustomMode() {
         super(ModuleCategory.MOVEMENT, "Custom", "HeyPixel-style scaffold port.");
-        this.registerSetting(this.modeSetting = new ModeSetting("Mode", "Bridge mode.", 0,
-                "Normal", "Telly Bridge", "Keep Y"));
-        this.registerSetting(this.eagle = new BooleanSetting("Eagle",
-                "Auto-sneak on block edges in Normal mode.", true) {
+        this.registerSetting(this.modeSetting = new ModeSetting("Mode", "Bridge mode.", 0, "Normal", "Telly Bridge", "Keep Y"));
+        this.registerSetting(this.eagle = new BooleanSetting("Eagle", "Auto-sneak on block edges in Normal mode.", true) {
             @Override
             public boolean isHidden() {
                 return !BlockFlyCustomMode.this.isNormalMode();
             }
         });
-        this.registerSetting(this.sneak = new BooleanSetting("Sneak",
-                "Pulse sneak periodically while scaffolding.", true));
-        this.registerSetting(this.advancedBlockSearch = new BooleanSetting("Advanced Block Search",
-                "Search yaw/pitch offsets when the direct scaffold ray misses.", true));
-        this.registerSetting(this.snap = new BooleanSetting("Snap",
-                "Snap yaw on Normal placements.", true) {
+        this.registerSetting(this.sneak = new BooleanSetting("Sneak", "Pulse sneak periodically while scaffolding.", true));
+        this.registerSetting(this.advancedBlockSearch = new BooleanSetting("Advanced Block Search", "Search yaw/pitch offsets when the direct scaffold ray misses.", true));
+        this.registerSetting(this.grim1_17rot = new BooleanSetting("Grim1.17Rot","send rotpacket norot",false));
+        this.registerSetting(this.snap = new BooleanSetting("Snap", "Snap yaw on Normal placements.", true) {
             @Override
             public boolean isHidden() {
                 return !BlockFlyCustomMode.this.isNormalMode();
@@ -275,6 +273,9 @@ public class BlockFlyCustomMode extends Module {
 
         this.onPreMotion();
         this.placeBlock();
+        if (grim1_17rot.getCurrentValue()) {
+            mc.getConnection().getNetworkManager().sendPacket(new CPlayerPacket.PositionRotationPacket(mc.player.getPosX(), mc.player.getPosY(), mc.player.getPosZ(), mc.player.rotationYaw, mc.player.rotationPitch, mc.player.onGround));
+        }
     }
 
     private void onPreMotion() {
@@ -328,8 +329,11 @@ public class BlockFlyCustomMode extends Module {
                 && this.snap.getCurrentValue()
                 ? this.correctRotation
                 : this.rots;
-
-        RotationManager.setRotations(visibleRotation.yaw, visibleRotation.pitch);
+        if (grim1_17rot.getCurrentValue()) {
+            mc.getConnection().getNetworkManager().sendPacket(new CPlayerPacket.PositionRotationPacket(mc.player.getPosX(), mc.player.getPosY(), mc.player.getPosZ(), visibleRotation.yaw, visibleRotation.pitch, mc.player.onGround));
+        } else {
+            RotationManager.setRotations(visibleRotation.yaw, visibleRotation.pitch);
+        }
     }
 
     private void handleSneakPulse() {
