@@ -255,6 +255,18 @@ public class MusicManager extends Manager implements MinecraftUtil {
     private String lastYrcLineText = "";
     private long lastYrcUpdateTime = 0L;
 
+    // --- 频谱歌词渲染缓存：避免每帧重复查模块表 / 重复 Skija 文本测量 ---
+    // A. custom font 查找节流缓存（每秒最多查一次模块表）
+    private CustomFont cachedSpectrumFont = null;
+    private long lastSpectrumFontLookupMs = 0L;
+    private boolean spectrumFontLookupInit = false;
+    // B. 频谱文本布局缓存：输入(屏幕尺寸/歌名/歌手/歌词/字体/缩放)不变时复用整套布局
+    private SpectrumTextLayout cachedSpectrumLayout = null;
+    private String cachedSpectrumLayoutKey = null;
+    // C. 逐词前缀宽度缓存：逐词行/字号/字体不变时复用累计宽度数组，避免每帧拼串+测量
+    private String cachedYrcPrefixKey = null;
+    private float[] cachedYrcPrefixWidths = null;
+
     private volatile long mp3SeekTargetSec = -1;
 
     // Suppresses the Now Playing toast caused by restarting the same track for a seek.
@@ -697,6 +709,27 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     private SpectrumTextLayout buildSpectrumTextLayout(int screenWidth, int screenHeight, TrackTitleParts titleParts,
                                                        String lyric, boolean useCustomTypeface, CustomFont customFont) {
+        // 布局只依赖屏幕尺寸/歌名/歌手/歌词/字体状态；这些不变时复用上一帧结果，
+        // 省掉每帧对 fitSpectrumFontSize 的多次 Skija 文本测量（本方法最贵的部分）。
+        float scale = (useCustomTypeface && customFont != null) ? customFont.getSpectrumFontScale() : 1.0F;
+        String artist = titleParts == null ? "" : titleParts.artist;
+        String title = titleParts == null ? "" : titleParts.title;
+        String key = screenWidth + "x" + screenHeight + "|" + useCustomTypeface + "|" + scale
+                + "|" + artist + "" + title + "" + (lyric == null ? "" : lyric);
+
+        if (this.cachedSpectrumLayout != null && key.equals(this.cachedSpectrumLayoutKey)) {
+            return this.cachedSpectrumLayout;
+        }
+
+        SpectrumTextLayout layout = this.computeSpectrumTextLayout(
+                screenWidth, screenHeight, titleParts, lyric, useCustomTypeface, customFont);
+        this.cachedSpectrumLayout = layout;
+        this.cachedSpectrumLayoutKey = key;
+        return layout;
+    }
+
+    private SpectrumTextLayout computeSpectrumTextLayout(int screenWidth, int screenHeight, TrackTitleParts titleParts,
+                                                       String lyric, boolean useCustomTypeface, CustomFont customFont) {
         SpectrumTextLayout layout = new SpectrumTextLayout();
         boolean hasArtist = titleParts != null && !titleParts.artist.isEmpty();
         boolean hasLyric = lyric != null && !lyric.isEmpty();
@@ -854,21 +887,18 @@ public class MusicManager extends Manager implements MinecraftUtil {
             int fullWords = (int) Math.floor(highlightChars);
             float frac = highlightChars - fullWords;
 
-            StringBuilder prefix = new StringBuilder();
-            int limit = Math.min(fullWords, line.words.size());
-            for (int i = 0; i < limit; i++) {
-                prefix.append(line.words.get(i).text);
-            }
+            // 预计算/复用累计前缀宽度：prefixWidths[i] = 前 i 个词拼接后的像素宽度。
+            // 逐词行/字号/字体不变时整帧只查表，避免每帧 new StringBuilder + 整段 shaping。
+            float[] prefixWidths = this.getYrcPrefixWidths(
+                    screenWidth, screenHeight, line, fontSize, useCustomTypeface, fallback);
 
-            float width = prefix.length() == 0 ? 0.0f
-                    : this.measureSpectrumText(screenWidth, screenHeight, prefix.toString(),
-                    fontSize, useCustomTypeface, fallback);
+            int wordCount = line.words.size();
+            int idx = Math.max(0, Math.min(fullWords, wordCount));
+            float width = prefixWidths[idx];
 
-            // 当前词内部插值：加上正在唱的这个词的部分宽度
-            if (frac > 0.0f && fullWords < line.words.size()) {
-                String currentWord = line.words.get(fullWords).text;
-                float currentWordWidth = this.measureSpectrumText(
-                        screenWidth, screenHeight, currentWord, fontSize, useCustomTypeface, fallback);
+            // 当前词内部插值：加上正在唱的这个词的部分宽度（由相邻累计差得到词宽）
+            if (frac > 0.0f && fullWords < wordCount) {
+                float currentWordWidth = prefixWidths[fullWords + 1] - prefixWidths[fullWords];
                 width += currentWordWidth * frac;
             }
 
@@ -880,13 +910,52 @@ public class MusicManager extends Manager implements MinecraftUtil {
         return lyricWidth * progress + 3.0f;
     }
 
+    /**
+     * 返回当前逐词行的累计前缀宽度数组：{@code prefixWidths[i]} 为前 {@code i} 个词
+     * 拼接后的像素宽度（{@code prefixWidths[0] == 0}，长度为 {@code words.size()+1}）。
+     * 按 (行内容 + 字号 + 字体) 缓存，行未变时每帧直接复用，避免重复文本测量。
+     */
+    private float[] getYrcPrefixWidths(int screenWidth, int screenHeight, YrcParser.YrcLine line,
+                                       float fontSize, boolean useCustomTypeface, TrueTypeFont fallback) {
+        String key = line.content + "|" + fontSize + "|" + useCustomTypeface + "|" + screenWidth + "x" + screenHeight;
+        if (this.cachedYrcPrefixWidths != null && key.equals(this.cachedYrcPrefixKey)) {
+            return this.cachedYrcPrefixWidths;
+        }
+
+        int wordCount = line.words.size();
+        float[] widths = new float[wordCount + 1];
+        widths[0] = 0.0f;
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < wordCount; i++) {
+            prefix.append(line.words.get(i).text);
+            widths[i + 1] = this.measureSpectrumText(
+                    screenWidth, screenHeight, prefix.toString(), fontSize, useCustomTypeface, fallback);
+        }
+
+        this.cachedYrcPrefixKey = key;
+        this.cachedYrcPrefixWidths = widths;
+        return widths;
+    }
+
     private CustomFont getSpectrumCustomFont() {
+        // 每帧调用会遍历模块表；这里做 1 秒节流缓存，模块引用是稳定的，
+        // 偶尔晚 1 秒刷新到最新引用对渲染无影响。
+        long now = System.currentTimeMillis();
+        if (this.spectrumFontLookupInit && now - this.lastSpectrumFontLookupMs < 1000L) {
+            return this.cachedSpectrumFont;
+        }
+        this.lastSpectrumFontLookupMs = now;
+        this.spectrumFontLookupInit = true;
         try {
             if (Client.getInstance() == null || Client.getInstance().moduleManager == null) {
+                this.cachedSpectrumFont = null;
                 return null;
             }
-            return (CustomFont) Client.getInstance().moduleManager.getModuleByClass(CustomFont.class);
+            this.cachedSpectrumFont =
+                    (CustomFont) Client.getInstance().moduleManager.getModuleByClass(CustomFont.class);
+            return this.cachedSpectrumFont;
         } catch (Throwable ignored) {
+            this.cachedSpectrumFont = null;
             return null;
         }
     }
