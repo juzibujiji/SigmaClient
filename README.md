@@ -33,7 +33,7 @@ musicplayer优化
 
 三件套适配 1.17+箱子拿快了回弹
 
-inv自定义物品栏(破坏jello和谐)
+InvManager自定义物品栏
 
 gapple blink
 
