@@ -29,4 +29,19 @@ WTF
 Star项目谢谢喵
 
 # 待更新待完善待修复
-musicplayer优化 三件套适配 1.17+箱子拿快了回弹 inv自定义物品栏 gapple blink 完善velocity 完善speed 完善搭路stuck 完善irc 客户端优化 killaura距离判断修复  所有射线统一（需要修改几乎所有关于转头的模块的字段）客户端内置浏览器 修复小游戏 修复targethud 跨版本修复 跨版本更新
+musicplayer优化
+三件套适配 1.17+箱子拿快了回弹
+inv自定义物品栏(破坏jello和谐)
+gapple blink
+完善velocity
+完善speed
+完善搭路stuck
+完善irc
+客户端优化(啥意思。。。)
+killaura距离判断修复
+所有射线统一（需要修改几乎所有关于转头的模块的字段）
+客户端内置浏览器(无人在意)
+修复小游戏
+修复targethud
+跨版本修复
+跨版本更新
