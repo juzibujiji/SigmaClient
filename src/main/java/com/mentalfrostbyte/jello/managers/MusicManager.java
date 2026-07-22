@@ -41,6 +41,9 @@ import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiLogin;
 
 import com.mentalfrostbyte.jello.util.client.network.netease.NeteaseApiSearch;
 
+import com.mentalfrostbyte.jello.util.client.network.qqmusic.QQMusicApi;
+import com.mentalfrostbyte.jello.util.client.network.qqmusic.QQMusicMatcher;
+
 import com.mentalfrostbyte.jello.util.client.render.theme.ClientColors;
 
 import com.mentalfrostbyte.jello.util.client.render.SkijaFontRenderer;
@@ -236,12 +239,21 @@ public class MusicManager extends Manager implements MinecraftUtil {
     // YRC 逐词歌词数据（非空时优先使用逐词高亮，为空时回退到 LRC 行级高亮）
     private List<YrcParser.YrcLine> currentYrcLyrics = null;
 
+    // QQ QRC 异步获取的"代际"号：每次切歌递增，异步结果回来时比对，
+    // 号过期则丢弃，避免上一首歌的 QRC 贴到当前歌上。
+    private final AtomicInteger lyricsGeneration = new AtomicInteger();
+
     private long currentPositionMs = 0;
 
     // 歌词高亮插值动画状态
     private float smoothedLyricProgress = 0.0f;
     private String lastLyricText = "";
     private long lastProgressUpdateTime = 0L;
+
+    // 逐词（YRC/QRC）高亮插值动画状态
+    private float smoothedYrcChars = 0.0f;
+    private String lastYrcLineText = "";
+    private long lastYrcUpdateTime = 0L;
 
     private volatile long mp3SeekTargetSec = -1;
 
@@ -600,9 +612,12 @@ public class MusicManager extends Manager implements MinecraftUtil {
                         float lyricWidth = this.measureSpectrumText(
                                 screenWidth, screenHeight, lyric, fontSize, customSpectrumFont, ResourceRegistry.JelloLightFont18);
 
-                        float progress = this.getLyricProgress();
-
-                        float progressWidth = lyricWidth * progress + 3;
+                        // 逐词高亮：优先用 YRC/QRC 逐词时间精确定位高亮边界，
+                        // 累加已唱词的文本宽度 + 当前词内部插值宽度；
+                        // 无逐词数据时回退到整行线性进度。
+                        float progressWidth = this.computeLyricHighlightWidth(
+                                screenWidth, screenHeight, lyric, fontSize, lyricWidth,
+                                customSpectrumFont, ResourceRegistry.JelloLightFont18);
 
 
                         int dimColor = RenderUtil2.applyAlpha(customSpectrumColor, 0.35F);
@@ -809,6 +824,60 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
     private float clampSpectrumFontSize(float fontSize) {
         return Math.max(10.0F, Math.min(34.0F, fontSize));
+    }
+
+    /**
+     * 计算歌词高亮的像素宽度。
+     *
+     * <p>优先使用当前 YRC/QRC 逐词行：按 {@link #getYrcHighlightChars()} 得到的
+     * "已高亮词数"累加对应词的实际文本宽度，当前词按其内部比例插值，
+     * 从而让高亮边界精确停在正在唱的那个字上（真正的逐字对准）。
+     *
+     * <p>当没有逐词数据、或当前逐词行文本与显示文本不一致时，回退到整行
+     * 线性进度（{@link #getLyricProgress()}），保持旧行为。
+     *
+     * @param lyric     当前显示的整行歌词文本
+     * @param lyricWidth 整行文本的像素宽度
+     * @return 高亮部分的像素宽度
+     */
+    private float computeLyricHighlightWidth(int screenWidth, int screenHeight, String lyric,
+                                             float fontSize, float lyricWidth,
+                                             boolean useCustomTypeface, TrueTypeFont fallback) {
+        YrcParser.YrcLine line = this.getCurrentYrcLine();
+        float highlightChars = this.getYrcHighlightChars();
+
+        // 逐词数据可用，且逐词行文本与当前显示文本一致时，走逐字对准
+        if (line != null && line.words != null && !line.words.isEmpty()
+                && highlightChars >= 0.0f
+                && lyric != null && lyric.equals(line.content)) {
+
+            int fullWords = (int) Math.floor(highlightChars);
+            float frac = highlightChars - fullWords;
+
+            StringBuilder prefix = new StringBuilder();
+            int limit = Math.min(fullWords, line.words.size());
+            for (int i = 0; i < limit; i++) {
+                prefix.append(line.words.get(i).text);
+            }
+
+            float width = prefix.length() == 0 ? 0.0f
+                    : this.measureSpectrumText(screenWidth, screenHeight, prefix.toString(),
+                    fontSize, useCustomTypeface, fallback);
+
+            // 当前词内部插值：加上正在唱的这个词的部分宽度
+            if (frac > 0.0f && fullWords < line.words.size()) {
+                String currentWord = line.words.get(fullWords).text;
+                float currentWordWidth = this.measureSpectrumText(
+                        screenWidth, screenHeight, currentWord, fontSize, useCustomTypeface, fallback);
+                width += currentWordWidth * frac;
+            }
+
+            return Math.min(width + 3.0f, lyricWidth + 3.0f);
+        }
+
+        // 回退：整行线性进度
+        float progress = this.getLyricProgress();
+        return lyricWidth * progress + 3.0f;
     }
 
     private CustomFont getSpectrumCustomFont() {
@@ -1697,6 +1766,9 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
                                                 if (videoData.isNeteaseTrack()) {
 
+                                                    // 新歌开始加载歌词：递增代际号，作废上一首的异步 QQ 结果
+                                                    this.lyricsGeneration.incrementAndGet();
+
                                                     try {
 
                                                         String lrcText = NeteaseApiSearch.getLyrics(videoData.neteaseSongId);
@@ -1717,17 +1789,21 @@ public class MusicManager extends Manager implements MinecraftUtil {
                                                                 System.out.println("[MusicManager] Loaded Netease YRC lyrics for song ID: " + videoData.neteaseSongId
                                                                         + " (" + (this.currentYrcLyrics != null ? this.currentYrcLyrics.size() : 0) + " YRC lines)");
                                                             } else {
-                                                                // 普通 LRC 歌词
+                                                                // 网易云只有行级 LRC（无 yrc 逐词）：
+                                                                // 先用网易云 LRC 兜底，再异步尝试从 QQ 音乐补充 QRC 逐词歌词。
                                                                 this.currentLyrics = LrcParser.parseString(lrcText);
                                                                 this.currentYrcLyrics = null;
                                                                 System.out.println("[MusicManager] Loaded Netease lyrics for song ID: " + videoData.neteaseSongId
-                                                                        + " (" + (this.currentLyrics != null ? this.currentLyrics.size() : 0) + " lines)");
+                                                                        + " (" + (this.currentLyrics != null ? this.currentLyrics.size() : 0) + " lines), trying QQ QRC...");
+                                                                this.fetchQqQrcAsync(videoData);
                                                             }
 
                                                         } else {
 
                                                             this.currentLyrics = null;
                                                             this.currentYrcLyrics = null;
+                                                            // 网易云完全没有歌词：仍尝试 QQ 逐词歌词
+                                                            this.fetchQqQrcAsync(videoData);
 
                                                         }
 
@@ -2649,6 +2725,80 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
 
 
+    /**
+     * 异步从 QQ 音乐获取 QRC 逐词歌词，成功则覆盖 currentYrcLyrics 与 currentLyrics。
+     *
+     * <p>在独立线程中执行（搜索 + 取词 + 解密均为网络/CPU 操作，不能阻塞播放线程）。
+     * 用 {@link #lyricsGeneration} 代际号防止切歌后旧结果错误覆盖新歌歌词。
+     * QQ 匹配失败或解密失败时不改动现有歌词（保留网易云 LRC 兜底）。
+     *
+     * @param videoData 当前网易云在播歌曲
+     */
+    private void fetchQqQrcAsync(final YoutubeVideoData videoData) {
+        if (videoData == null) {
+            return;
+        }
+        final int myGeneration = this.lyricsGeneration.get();
+        final long durationMs = videoData.neteaseDurationMs;
+
+        Thread worker = new Thread(() -> {
+            try {
+                // videoData.title 形如 "歌手 - 歌名"；拆出歌名/歌手用于搜索与匹配
+                TrackTitleParts parts = parseTrackTitle(videoData.title);
+                String name = parts.title;
+                String artist = parts.artist;
+                String keyword = (name + " " + artist).trim();
+
+                List<QQMusicApi.QQTrack> candidates = QQMusicApi.search(keyword, 10);
+                if (candidates.isEmpty()) {
+                    return;
+                }
+
+                QQMusicMatcher.MatchResult match =
+                        QQMusicMatcher.match(candidates, name, artist, durationMs);
+                if (match == null) {
+                    System.out.println("[MusicManager] QQ QRC: no confident match for \""
+                            + keyword + "\"");
+                    return;
+                }
+
+                String qrcText = QQMusicApi.fetchQrc(match.track.songId);
+                if (qrcText == null || !YrcParser.isQrc(qrcText)) {
+                    return; // 无逐词 QRC，保留网易云 LRC
+                }
+
+                List<YrcParser.YrcLine> yrc = YrcParser.parseQrc(qrcText);
+                if (yrc == null || yrc.isEmpty()) {
+                    return;
+                }
+
+                // 代际检查：切歌后旧结果作废
+                if (myGeneration != this.lyricsGeneration.get()) {
+                    return;
+                }
+
+                // 由逐词行重建行级 LRC 文本（供 getCurrentLyric 显示）
+                List<LrcParser.LyricLine> lines = new ArrayList<>();
+                for (YrcParser.YrcLine yl : yrc) {
+                    lines.add(new LrcParser.LyricLine(yl.startTime, yl.content));
+                }
+
+                this.currentYrcLyrics = yrc;
+                this.currentLyrics = lines;
+                System.out.println("[MusicManager] Loaded QQ QRC lyrics for \"" + keyword
+                        + "\" via mid=" + match.track.songMid
+                        + " (score=" + String.format("%.2f", match.score)
+                        + ", " + yrc.size() + " lines)");
+            } catch (Exception e) {
+                System.err.println("[MusicManager] QQ QRC fetch failed: " + e.getMessage());
+            }
+        }, "QQMusicQrcFetcher");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+
+
     public String getCurrentLyric() {
 
         if (currentLyrics == null || currentLyrics.isEmpty())
@@ -2738,6 +2888,104 @@ public class MusicManager extends Manager implements MinecraftUtil {
 
         return smoothedLyricProgress;
 
+    }
+
+
+
+    // ==================== 逐词（YRC/QRC）高亮 ====================
+
+    /** 当前是否有可用的逐词歌词数据。 */
+    public boolean hasYrcLyrics() {
+        return this.currentYrcLyrics != null && !this.currentYrcLyrics.isEmpty();
+    }
+
+    /**
+     * 按当前播放时间选中的逐词行。行选择用真实播放时间，
+     * 与 {@link #getCurrentLyric()} 的行级选择逻辑保持一致，避免高亮与文本错位。
+     *
+     * @return 当前逐词行，无数据时返回 null
+     */
+    public YrcParser.YrcLine getCurrentYrcLine() {
+        if (!hasYrcLyrics()) {
+            return null;
+        }
+        long current = this.currentPositionMs;
+        List<YrcParser.YrcLine> lines = this.currentYrcLyrics;
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).startTime > current) {
+                return i > 0 ? lines.get(i - 1) : lines.get(0);
+            }
+        }
+        return lines.get(lines.size() - 1);
+    }
+
+    /**
+     * 计算当前逐词行的高亮进度：已完整唱过的词数 + 当前词内部的插值比例，
+     * 得到一个 [0, wordCount] 的浮点"已高亮词数"。渲染层据此累加对应词的
+     * 文本宽度来精确定位高亮边界，从而实现真正的逐字对准（而非整行匀速）。
+     *
+     * <p>返回值经过帧率无关的指数平滑，避免逐词跳变。行切换时重置平滑状态。
+     *
+     * @return 已高亮的"词数"（含小数），无逐词数据返回 -1
+     */
+    public float getYrcHighlightChars() {
+        YrcParser.YrcLine line = getCurrentYrcLine();
+        if (line == null || line.words == null || line.words.isEmpty()) {
+            return -1.0f;
+        }
+
+        long current = this.currentPositionMs;
+        List<YrcParser.YrcWord> words = line.words;
+
+        // ===== 计算原始目标：已高亮词数 =====
+        float rawChars;
+        long lineEnd = line.words.get(words.size() - 1).start
+                + line.words.get(words.size() - 1).duration;
+        if (current >= lineEnd) {
+            rawChars = words.size();
+        } else if (current < words.get(0).start) {
+            rawChars = 0.0f;
+        } else {
+            rawChars = words.size();
+            for (int i = 0; i < words.size(); i++) {
+                YrcParser.YrcWord w = words.get(i);
+                if (current < w.start) {
+                    // 落在上一个词结束与本词开始之间的空隙：停在已完成词数上
+                    rawChars = i;
+                    break;
+                }
+                long wordEnd = w.start + w.duration;
+                if (current < wordEnd) {
+                    // 落在本词内部：i 个完整词 + 本词内部插值
+                    float frac = w.duration > 0
+                            ? (float) (current - w.start) / (float) w.duration
+                            : 1.0f;
+                    rawChars = i + Math.max(0.0f, Math.min(1.0f, frac));
+                    break;
+                }
+            }
+        }
+
+        // ===== 行切换重置平滑，避免从上一行尾部滑到新行头部 =====
+        if (!line.content.equals(lastYrcLineText)) {
+            lastYrcLineText = line.content;
+            smoothedYrcChars = rawChars;
+        }
+
+        // ===== 帧率无关的指数平滑 =====
+        long now = System.currentTimeMillis();
+        if (lastYrcUpdateTime == 0L) lastYrcUpdateTime = now;
+        long deltaMs = Math.min(now - lastYrcUpdateTime, 100L);
+        lastYrcUpdateTime = now;
+
+        float speed = 14.0f;
+        float alpha = 1.0f - (float) Math.exp(-speed * deltaMs / 1000.0f);
+        smoothedYrcChars += (rawChars - smoothedYrcChars) * alpha;
+        if (Math.abs(rawChars - smoothedYrcChars) < 0.01f) {
+            smoothedYrcChars = rawChars;
+        }
+
+        return smoothedYrcChars;
     }
 
 
