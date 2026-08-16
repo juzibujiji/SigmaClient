@@ -1,5 +1,6 @@
 package com.mentalfrostbyte.jello.module.impl.combat;
 
+import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
@@ -11,6 +12,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.ProjectileHelper;
+import net.minecraft.scoreboard.ScorePlayerTeam;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.EntityRayTraceResult;
@@ -45,21 +47,30 @@ public class Anthropic extends Module {
     private float pitchVelocity;
 
     private int lastTargetId = Integer.MIN_VALUE;
+    private int switchTicks;
     private long nextAttackTime;
 
     public Anthropic() {
         super(ModuleCategory.COMBAT, "Anthropic", "Independent KillAura experiment.");
 
         this.registerSetting(new ModeSetting("Mode", "Attack one target or multiple targets.", 0,
-                "Single", "Multi"));
+                "Single", "Multi", "Switch"));
         this.registerSetting(new NumberSetting<>("Range", "Maximum attack range.",
                 3.4F, 2.0F, 6.0F, 0.05F));
         this.registerSetting(new NumberSetting<>("Max Targets", "Maximum targets attacked in Multi mode.",
                 4.0F, 1.0F, 8.0F, 1.0F));
+        this.registerSetting(new NumberSetting<>("Switch Delay", "Ticks spent on one target in Switch mode.",
+                5.0F, 2.0F, 20.0F, 1.0F));
         this.registerSetting(new NumberSetting<>("CPS", "Attack cycles per second.",
                 10.0F, 1.0F, 20.0F, 1.0F));
         this.registerSetting(new NumberSetting<>("Rotation Speed", "Maximum adaptive rotation step per tick.",
                 90.0F, 5.0F, 180.0F, 5.0F));
+        this.registerSetting(new NumberSetting<>("Prediction", "Ticks of target motion to aim ahead of.",
+                1.0F, 0.0F, 2.5F, 0.05F));
+        this.registerSetting(new NumberSetting<>("FOV", "Horizontal field of view targets are engaged in.",
+                180.0F, 30.0F, 360.0F, 5.0F));
+        this.registerSetting(new NumberSetting<>("Max Hurt Time", "Only attack targets with a lower hurt time.",
+                10.0F, 0.0F, 10.0F, 1.0F));
         this.registerSetting(new BooleanSetting("Raycast", "Require the server rotation to resolve to a valid target.",
                 true));
         this.registerSetting(new BooleanSetting("Through Walls", "Allow targets behind blocks.",
@@ -93,6 +104,16 @@ public class Anthropic extends Module {
             return;
         }
 
+        // A human cannot aim while a screen is open, while using an item or while
+        // clicking manually; the aura stands down instead of fighting the player.
+        if (mc.currentScreen != null || mc.player.isHandActive()
+                || mc.gameSettings.keyBindAttack.isKeyDown()) {
+            this.clearTargets();
+            this.yawVelocity *= 0.5F;
+            this.pitchVelocity *= 0.5F;
+            return;
+        }
+
         this.attackOrigin = new Vector3d(
                 event.getX(),
                 event.getY() + (double) mc.player.getEyeHeight(),
@@ -107,14 +128,16 @@ public class Anthropic extends Module {
             return;
         }
 
-        this.aimPoint = this.findBestAimPoint(this.primaryTarget, this.attackOrigin, baseYaw, basePitch);
+        // Aim costs are measured from the last applied rotation rather than the raw
+        // server rotation, so the chosen point does not wander across the hitbox.
+        this.aimPoint = this.findBestAimPoint(this.primaryTarget, this.attackOrigin, this.appliedYaw, this.appliedPitch);
         if (this.aimPoint == null) {
             this.clearTargets();
             return;
         }
 
         float[] desiredRotation = this.rotationTo(this.attackOrigin, this.aimPoint);
-        this.updateAdaptiveRotation(baseYaw, basePitch, desiredRotation[0], desiredRotation[1]);
+        this.updateSmoothRotation(baseYaw, basePitch, desiredRotation[0], desiredRotation[1]);
 
         event.setYaw(this.appliedYaw);
         event.setPitch(this.appliedPitch);
@@ -129,16 +152,18 @@ public class Anthropic extends Module {
     }
 
     private boolean updateTargets(float baseYaw, float basePitch) {
-        List<PlayerEntity> candidates = new ArrayList<>();
+        List<ScoredTarget> candidates = new ArrayList<>();
         double engageRange = this.getNumberValueBySettingName("Range") + 1.0D;
+        float halfFov = this.getNumberValueBySettingName("FOV") * 0.5F;
 
         for (AbstractClientPlayerEntity player : mc.world.getPlayers()) {
             if (!this.isBasicTargetValid(player)) {
                 continue;
             }
 
-            if (this.distanceToBox(this.attackOrigin, player.getBoundingBox()) <= engageRange) {
-                candidates.add(player);
+            if (this.distanceToBox(this.attackOrigin, player.getBoundingBox()) <= engageRange
+                    && !this.isOutsideFov(player, baseYaw, halfFov)) {
+                candidates.add(new ScoredTarget(player, this.targetScore(player, baseYaw, basePitch)));
             }
         }
 
@@ -147,17 +172,30 @@ public class Anthropic extends Module {
             return false;
         }
 
-        candidates.sort(Comparator.comparingDouble(player -> this.targetScore(player, baseYaw, basePitch)));
+        candidates.sort(Comparator.comparingDouble(scored -> scored.score));
 
-        PlayerEntity best = candidates.get(0);
-        if (this.primaryTarget != null && candidates.contains(this.primaryTarget)) {
-            double bestScore = this.targetScore(best, baseYaw, basePitch);
-            double oldScore = this.targetScore(this.primaryTarget, baseYaw, basePitch);
+        String mode = this.getStringSettingValueByName("Mode");
+        PlayerEntity best;
+        if ("Switch".equals(mode)) {
+            best = this.pickSwitchTarget(candidates);
+        } else {
+            best = candidates.get(0).player;
 
-            // Small hysteresis keeps the aura from changing target every frame when
-            // two players have nearly identical scores.
-            if (oldScore <= bestScore * 1.15D + 2.0D) {
-                best = this.primaryTarget;
+            if (this.primaryTarget != null) {
+                double bestScore = candidates.get(0).score;
+                double ownScore = Double.NaN;
+                for (ScoredTarget scored : candidates) {
+                    if (scored.player == this.primaryTarget) {
+                        ownScore = scored.score;
+                        break;
+                    }
+                }
+
+                // Small hysteresis keeps the aura from changing target every frame when
+                // two players have nearly identical scores.
+                if (!Double.isNaN(ownScore) && ownScore <= bestScore * 1.15D + 2.0D) {
+                    best = this.primaryTarget;
+                }
             }
         }
 
@@ -171,19 +209,48 @@ public class Anthropic extends Module {
         this.selectedTargets.clear();
         this.selectedTargets.add(best);
 
-        if ("Multi".equals(this.getStringSettingValueByName("Mode"))) {
+        if ("Multi".equals(mode)) {
             int maxTargets = Math.max(1, (int) this.getNumberValueBySettingName("Max Targets"));
-            for (PlayerEntity player : candidates) {
+            for (ScoredTarget scored : candidates) {
                 if (this.selectedTargets.size() >= maxTargets) {
                     break;
                 }
-                if (player != best) {
-                    this.selectedTargets.add(player);
+                if (scored.player != best) {
+                    this.selectedTargets.add(scored.player);
                 }
             }
         }
 
         return true;
+    }
+
+    private PlayerEntity pickSwitchTarget(List<ScoredTarget> candidates) {
+        int delay = Math.max(2, (int) this.getNumberValueBySettingName("Switch Delay"));
+
+        if (this.primaryTarget != null) {
+            for (ScoredTarget scored : candidates) {
+                if (scored.player == this.primaryTarget) {
+                    if (this.switchTicks < delay) {
+                        this.switchTicks++;
+                        return this.primaryTarget;
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Dwell time expired or the target vanished: take the next candidate after
+        // the current one so every switch is a single step down the sorted list.
+        int index = -1;
+        for (int i = 0; i < candidates.size(); i++) {
+            if (candidates.get(i).player == this.primaryTarget) {
+                index = i;
+                break;
+            }
+        }
+
+        this.switchTicks = 0;
+        return candidates.get((index + 1) % candidates.size()).player;
     }
 
     private boolean isBasicTargetValid(PlayerEntity player) {
@@ -192,7 +259,38 @@ public class Anthropic extends Module {
                 && player.isAlive()
                 && !player.isSpectator()
                 && !player.isCreative()
-                && player.getHealth() > 0.0F;
+                && !player.isInvulnerable()
+                && player.getHealth() > 0.0F
+                && !Client.getInstance().botManager.isBot(player)
+                && !Client.getInstance().friendManager.isFriendPure(player)
+                && !this.isTeammate(player);
+    }
+
+    private boolean isTeammate(PlayerEntity player) {
+        Module teams = Client.getInstance().moduleManager.getModuleByClass(Teams.class);
+        if (teams == null || !teams.isEnabled() || mc.player == null) {
+            return false;
+        }
+
+        // Both players must actually be on a scoreboard team; otherwise the check
+        // would treat every player on a team-less server as an ally.
+        if (!(mc.player.getTeam() instanceof ScorePlayerTeam) || !(player.getTeam() instanceof ScorePlayerTeam)) {
+            return false;
+        }
+
+        Integer ownColor = ((ScorePlayerTeam) mc.player.getTeam()).getColor().getColor();
+        Integer otherColor = ((ScorePlayerTeam) player.getTeam()).getColor().getColor();
+        return ownColor != null && ownColor.equals(otherColor);
+    }
+
+    private boolean isOutsideFov(PlayerEntity target, float baseYaw, float halfFov) {
+        if (halfFov >= 179.0F) {
+            return false;
+        }
+
+        Vector3d closest = this.closestPoint(this.attackOrigin, target.getBoundingBox());
+        float yawTo = this.rotationTo(this.attackOrigin, closest)[0];
+        return Math.abs(wrapDegrees(yawTo - baseYaw)) > halfFov;
     }
 
     private double targetScore(PlayerEntity target, float currentYaw, float currentPitch) {
@@ -208,49 +306,77 @@ public class Anthropic extends Module {
         return angularCost * 0.72D + distance * 8.0D;
     }
 
-    private Vector3d findBestAimPoint(PlayerEntity target, Vector3d origin, float currentYaw, float currentPitch) {
-        AxisAlignedBB box = target.getBoundingBox();
-        Vector3d bestPoint = null;
-        double bestCost = Double.MAX_VALUE;
-
-        Vector3d closest = this.closestPoint(origin, box);
-        if (this.canUseAimPoint(origin, closest)) {
-            bestPoint = closest;
-            bestCost = this.aimPointCost(origin, closest, currentYaw, currentPitch);
+    /**
+     * Extrapolates the hitbox along the target's motion. Attacks and range checks
+     * always use the real box; only the aim leads ahead.
+     */
+    private AxisAlignedBB predictedBox(PlayerEntity target) {
+        float lead = this.getNumberValueBySettingName("Prediction");
+        if (lead <= 0.0F) {
+            return target.getBoundingBox();
         }
 
-        // A small 3x3x3 lattice is enough for player hitboxes and avoids the heavy
-        // allocations / large point clouds used by many generic raytrace helpers.
-        double[] fractions = { 0.15D, 0.50D, 0.85D };
-        for (double fx : fractions) {
-            double x = lerp(box.minX, box.maxX, fx);
-            for (double fy : fractions) {
-                double y = lerp(box.minY, box.maxY, fy);
-                for (double fz : fractions) {
-                    double z = lerp(box.minZ, box.maxZ, fz);
-                    Vector3d point = new Vector3d(x, y, z);
-                    if (!this.canUseAimPoint(origin, point)) {
-                        continue;
-                    }
+        double dx = clampMotionAxis(target.getPosX() - target.prevPosX);
+        double dy = clampMotionAxis(target.getPosY() - target.prevPosY);
+        double dz = clampMotionAxis(target.getPosZ() - target.prevPosZ);
+        return target.getBoundingBox().offset(dx * lead, dy * lead, dz * lead);
+    }
 
-                    double cost = this.aimPointCost(origin, point, currentYaw, currentPitch);
-                    if (cost < bestCost) {
-                        bestCost = cost;
-                        bestPoint = point;
-                    }
-                }
+    private static double clampMotionAxis(double motion) {
+        // Teleports and lag spikes produce huge prev/pos deltas; leading by those
+        // would throw the aim far off the real trajectory.
+        return MathHelper.clamp(motion, -1.5D, 1.5D);
+    }
+
+    private Vector3d findBestAimPoint(PlayerEntity target, Vector3d origin, float currentYaw, float currentPitch) {
+        AxisAlignedBB box = this.predictedBox(target);
+
+        // Eight candidates cover a player hitbox well: the closest point, the box
+        // center and the six face centers. They are ranked by cost first, so only
+        // the few best points ever need a block raytrace.
+        List<ScoredPoint> points = new ArrayList<>(8);
+        this.addAimPoint(points, origin, this.closestPoint(origin, box), currentYaw, currentPitch);
+        this.addAimPoint(points, origin, box.getCenter(), currentYaw, currentPitch);
+
+        double cx = (box.minX + box.maxX) * 0.5D;
+        double cy = (box.minY + box.maxY) * 0.5D;
+        double cz = (box.minZ + box.maxZ) * 0.5D;
+        this.addAimPoint(points, origin, new Vector3d(box.minX, cy, cz), currentYaw, currentPitch);
+        this.addAimPoint(points, origin, new Vector3d(box.maxX, cy, cz), currentYaw, currentPitch);
+        this.addAimPoint(points, origin, new Vector3d(cx, box.minY, cz), currentYaw, currentPitch);
+        this.addAimPoint(points, origin, new Vector3d(cx, box.maxY, cz), currentYaw, currentPitch);
+        this.addAimPoint(points, origin, new Vector3d(cx, cy, box.minZ), currentYaw, currentPitch);
+        this.addAimPoint(points, origin, new Vector3d(cx, cy, box.maxZ), currentYaw, currentPitch);
+
+        points.sort(Comparator.comparingDouble(point -> point.cost));
+
+        if (this.getBooleanValueFromSettingName("Through Walls")) {
+            return points.get(0).point;
+        }
+
+        // Visibility is the expensive part, so only the best handful of points are
+        // tested, in cost order: the first one with a clear line of sight wins.
+        int raycastBudget = Math.min(6, points.size());
+        for (int i = 0; i < raycastBudget; i++) {
+            if (this.canUseAimPoint(origin, points.get(i).point)) {
+                return points.get(i).point;
             }
         }
 
-        return bestPoint;
+        return null;
+    }
+
+    private void addAimPoint(List<ScoredPoint> points, Vector3d origin, Vector3d point,
+                             float currentYaw, float currentPitch) {
+        points.add(new ScoredPoint(point, this.aimPointCost(origin, point, currentYaw, currentPitch)));
     }
 
     private double aimPointCost(Vector3d origin, Vector3d point, float currentYaw, float currentPitch) {
         float[] rotation = this.rotationTo(origin, point);
         double yawCost = Math.abs(wrapDegrees(rotation[0] - currentYaw));
         double pitchCost = Math.abs(rotation[1] - currentPitch);
-        double distanceCost = Math.sqrt(origin.squareDistanceTo(point)) * 0.15D;
-        return yawCost + pitchCost * 0.72D + distanceCost;
+        double distanceCost = Math.sqrt(origin.squareDistanceTo(point)) * 0.12D;
+        return yawCost + pitchCost * 0.75D + distanceCost;
     }
 
     private boolean canUseAimPoint(Vector3d origin, Vector3d point) {
@@ -274,40 +400,55 @@ public class Anthropic extends Module {
         return blockDistance + 1.0E-4D >= pointDistance;
     }
 
-    private void updateAdaptiveRotation(float baseYaw, float basePitch, float targetYaw, float targetPitch) {
+    private void updateSmoothRotation(float baseYaw, float basePitch, float targetYaw, float targetPitch) {
         float maxStep = this.getNumberValueBySettingName("Rotation Speed");
         float yawError = wrapDegrees(targetYaw - baseYaw);
         float pitchError = targetPitch - basePitch;
 
-        float yawGain = 0.30F + 0.48F * Math.min(1.0F, Math.abs(yawError) / 90.0F);
-        float pitchGain = 0.34F + 0.46F * Math.min(1.0F, Math.abs(pitchError) / 60.0F);
-
-        float desiredYawStep = MathHelper.clamp(yawError * yawGain, -maxStep, maxStep);
-        float desiredPitchStep = MathHelper.clamp(pitchError * pitchGain, -maxStep, maxStep);
-
-        this.yawVelocity = this.yawVelocity * 0.28F + desiredYawStep * 0.72F;
-        this.pitchVelocity = this.pitchVelocity * 0.24F + desiredPitchStep * 0.76F;
-
-        if (Math.abs(yawError) < 0.35F) {
-            this.yawVelocity = yawError;
-        }
-        if (Math.abs(pitchError) < 0.35F) {
-            this.pitchVelocity = pitchError;
+        if (Math.hypot(yawError, pitchError) < 0.4F) {
+            // Deadzone: settle on the exact aim instead of emitting endless
+            // sub-degree rotations every tick.
+            this.yawVelocity = 0.0F;
+            this.pitchVelocity = 0.0F;
+            this.appliedYaw = wrapDegrees(targetYaw);
+            this.appliedPitch = MathHelper.clamp(targetPitch, -90.0F, 90.0F);
+            return;
         }
 
-        float yaw = baseYaw + this.yawVelocity;
-        float pitch = MathHelper.clamp(basePitch + this.pitchVelocity, -90.0F, 90.0F);
+        // Proportional gain grows with the remaining error: precise near the aim,
+        // decisive on large flicks.
+        float gain = 0.20F + 0.35F * Math.min(1.0F, (float) Math.hypot(yawError, pitchError) / 60.0F);
+        float desiredYawStep = MathHelper.clamp(yawError * gain, -maxStep, maxStep);
+        float desiredPitchStep = MathHelper.clamp(pitchError * gain, -maxStep, maxStep);
+
+        // The smoothed step gives ease-in and ease-out; clamping it to the remaining
+        // error guarantees the rotation can never overshoot the aim point.
+        this.yawVelocity = this.yawVelocity * 0.45F + desiredYawStep * 0.55F;
+        this.pitchVelocity = this.pitchVelocity * 0.45F + desiredPitchStep * 0.55F;
+
+        float yawStep = clampMagnitude(this.yawVelocity, Math.abs(yawError));
+        float pitchStep = clampMagnitude(this.pitchVelocity, Math.abs(pitchError));
+
+        float yaw = baseYaw + yawStep;
+        float pitch = MathHelper.clamp(basePitch + pitchStep, -90.0F, 90.0F);
 
         float gcd = this.mouseGcd();
         if (gcd > 0.0F) {
-            float yawDelta = yaw - baseYaw;
-            float pitchDelta = pitch - basePitch;
-            yaw = baseYaw + yawDelta - yawDelta % gcd;
-            pitch = basePitch + pitchDelta - pitchDelta % gcd;
+            yawStep = yaw - baseYaw;
+            pitchStep = pitch - basePitch;
+            yaw = baseYaw + yawStep - yawStep % gcd;
+            pitch = basePitch + pitchStep - pitchStep % gcd;
         }
 
-        this.appliedYaw = yaw;
+        this.appliedYaw = wrapDegrees(yaw);
         this.appliedPitch = MathHelper.clamp(pitch, -90.0F, 90.0F);
+    }
+
+    private static float clampMagnitude(float value, float cap) {
+        if (cap < 0.0F) {
+            throw new IllegalArgumentException("cap must be non-negative");
+        }
+        return MathHelper.clamp(value, -cap, cap);
     }
 
     private float mouseGcd() {
@@ -327,11 +468,22 @@ public class Anthropic extends Module {
         }
 
         float range = this.getNumberValueBySettingName("Range");
-        boolean multi = "Multi".equals(this.getStringSettingValueByName("Mode"));
+        String mode = this.getStringSettingValueByName("Mode");
         boolean raycast = this.getBooleanValueFromSettingName("Raycast");
         boolean attacked = false;
 
-        if (!multi) {
+        if ("Multi".equals(mode)) {
+            // Multi intentionally means "attack all selected valid targets". A single
+            // server rotation cannot geometrically point at several separated players,
+            // so exact crosshair raycast is a Single/Switch-mode condition. Multi
+            // still uses per-target block visibility unless Through Walls is enabled.
+            for (PlayerEntity target : this.selectedTargets) {
+                if (this.isAttackableNow(target, range)) {
+                    this.attackEntity(target);
+                    attacked = true;
+                }
+            }
+        } else {
             PlayerEntity target = this.primaryTarget;
 
             if (raycast) {
@@ -347,18 +499,6 @@ public class Anthropic extends Module {
                 this.attackEntity(target);
                 attacked = true;
             }
-        } else {
-            // Multi intentionally means "attack all selected valid targets". A single
-            // server rotation cannot geometrically point at several separated players,
-            // so exact crosshair raycast is a Single-mode condition. Multi still uses
-            // per-target block visibility unless Through Walls is enabled.
-            for (PlayerEntity target : this.selectedTargets) {
-                if (!this.isAttackableNow(target, range)) {
-                    continue;
-                }
-                this.attackEntity(target);
-                attacked = true;
-            }
         }
 
         if (attacked) {
@@ -371,6 +511,14 @@ public class Anthropic extends Module {
             return false;
         }
 
+        // Hurt time gate: a 1.8 target is invulnerable to equal damage for most of
+        // its hurt animation, so clicking into that window wastes swings.
+        if (target.hurtTime > (int) this.getNumberValueBySettingName("Max Hurt Time")) {
+            return false;
+        }
+
+        // Range is measured on the real hitbox, never the predicted one; the server
+        // resolves the attack against the current position.
         if (this.distanceToBox(this.attackOrigin, target.getBoundingBox()) > range) {
             return false;
         }
@@ -416,6 +564,12 @@ public class Anthropic extends Module {
     }
 
     private boolean canRaycastEntity(Entity entity) {
+        if (entity instanceof PlayerEntity) {
+            // Keeps the crosshair from "locking onto" friends or bots that merely
+            // stand between the player and the intended target.
+            return this.isBasicTargetValid((PlayerEntity) entity) && entity.canBeCollidedWith();
+        }
+
         return entity != mc.player
                 && entity instanceof LivingEntity
                 && entity.isAlive()
@@ -430,9 +584,18 @@ public class Anthropic extends Module {
 
     private void scheduleNextAttack(long now) {
         double cps = Math.max(1.0D, this.getNumberValueBySettingName("CPS"));
-        double jitter = ThreadLocalRandom.current().nextDouble(0.92D, 1.08D);
-        long delay = Math.max(1L, Math.round(1000.0D / (cps * jitter)));
-        this.nextAttackTime = now + delay;
+        double delay = 1000.0D / cps * ThreadLocalRandom.current().nextDouble(0.85D, 1.15D);
+
+        // Click rhythm is not a metronome: most intervals hover around the target
+        // CPS, with occasional double clicks and short hesitations.
+        double roll = ThreadLocalRandom.current().nextDouble();
+        if (roll < 0.08D) {
+            delay *= 0.55D;
+        } else if (roll > 0.95D) {
+            delay += ThreadLocalRandom.current().nextDouble(40.0D, 110.0D);
+        }
+
+        this.nextAttackTime = now + Math.max(30L, Math.round(delay));
     }
 
     private float[] rotationTo(Vector3d from, Vector3d to) {
@@ -458,10 +621,6 @@ public class Anthropic extends Module {
         return Math.sqrt(point.squareDistanceTo(closest));
     }
 
-    private static double lerp(double min, double max, double fraction) {
-        return min + (max - min) * fraction;
-    }
-
     private static float wrapDegrees(float value) {
         return MathHelper.wrapDegrees(value);
     }
@@ -472,6 +631,7 @@ public class Anthropic extends Module {
         this.attackOrigin = null;
         this.selectedTargets.clear();
         this.lastTargetId = Integer.MIN_VALUE;
+        this.switchTicks = 0;
     }
 
     private void clearState() {
@@ -481,5 +641,25 @@ public class Anthropic extends Module {
         this.appliedYaw = 0.0F;
         this.appliedPitch = 0.0F;
         this.nextAttackTime = 0L;
+    }
+
+    private static final class ScoredTarget {
+        private final PlayerEntity player;
+        private final double score;
+
+        private ScoredTarget(PlayerEntity player, double score) {
+            this.player = player;
+            this.score = score;
+        }
+    }
+
+    private static final class ScoredPoint {
+        private final Vector3d point;
+        private final double cost;
+
+        private ScoredPoint(Vector3d point, double cost) {
+            this.point = point;
+            this.cost = cost;
+        }
     }
 }

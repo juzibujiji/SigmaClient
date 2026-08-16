@@ -1,7 +1,7 @@
 package com.mentalfrostbyte.jello.module.impl.combat.aimbot;
 
 import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
-import com.mentalfrostbyte.jello.managers.RotationManager;
+import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.combat.Aimbot;
@@ -158,7 +158,7 @@ public abstract class NaturalAimbotMode extends Module {
         mc.player.rotationYaw = newYaw;
         mc.player.rotationPitch = newPitch;
         mc.player.rotationYawHead = newYaw;
-        RotationManager.setRotations(currentYaw,currentPitch);
+        RotationCore.setRotations(currentYaw,currentPitch);
         this.rememberOutput(newYaw, newPitch);
     }
 
