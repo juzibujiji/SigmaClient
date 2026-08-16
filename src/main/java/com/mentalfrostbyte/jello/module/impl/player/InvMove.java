@@ -14,11 +14,18 @@ package com.mentalfrostbyte.jello.module.impl.player;
  * From InvMove: the AACP sprint spoof, NoSprint, the Hypixel move slowdown and the
  * text-input screen guards. Its screen check was "not an InventoryScreen || not a ChestScreen",
  * which is always true, so the sprint state was only ever hidden and never restored.
+ * Grim mode: Rise 6.9.5 GrimInventoryMove. GuiInventory/GuiChest -> InventoryScreen/ChestScreen.
+ * Rise's SprintEvent fires after vanilla's sprint decisions, so its handler only needed
+ * setSprinting(false); EventSprint fires before them, so it is also cancelled here, otherwise
+ * vanilla instantly re-starts sprint and the server sees START/STOP_SPRINTING spam. Walks in
+ * any container like Hypixel mode. Rise's "Manager Extra Sprint Ticks" setting only fed its
+ * Manager module, which has no counterpart here.
  */
 
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventSendPacket;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventTick;
+import com.mentalfrostbyte.jello.event.impl.player.EventSprint;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.gui.impl.jello.ingame.holders.KeyboardHolder;
@@ -33,6 +40,7 @@ import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.EditBookScreen;
 import net.minecraft.client.gui.screen.EditSignScreen;
 import net.minecraft.client.gui.screen.inventory.AnvilScreen;
+import net.minecraft.client.gui.screen.inventory.ChestScreen;
 import net.minecraft.client.gui.screen.inventory.ContainerScreen;
 import net.minecraft.client.gui.screen.inventory.CreativeScreen;
 import net.minecraft.client.gui.screen.inventory.InventoryScreen;
@@ -54,6 +62,7 @@ public class InvMove extends Module {
     private static final int VANILLA = 0;
     private static final int LEGIT = 1;
     private static final int HYPIXEL = 2;
+    private static final int GRIM = 3;
     private static final int CLICK_DELAY_TICKS = 8;
     private static final int CREATIVE_SEARCH_TAB = 5;
     private static final double SLOWDOWN_FACTOR = 0.7;
@@ -71,7 +80,7 @@ public class InvMove extends Module {
 
     public InvMove() {
         super(ModuleCategory.PLAYER, "InvMove", "Move while a screen is open");
-        this.mode = new ModeSetting("Mode", "Bypass strategy", VANILLA, "Vanilla", "Legit", "Hypixel");
+        this.mode = new ModeSetting("Mode", "Bypass strategy", VANILLA, "Vanilla", "Legit", "Hypixel", "Grim");
         this.guiEnabled = new BooleanSetting("ClickGUI", "Also move while a client screen is open", true);
         this.aacp = new BooleanSetting("AACP", "Hide the sprint state from the server while a container is open", false);
         this.noSprint = new BooleanSetting("NoSprint", "Stop sprinting client side while a container is open", false);
@@ -131,6 +140,23 @@ public class InvMove extends Module {
         if (mc.currentScreen instanceof ContainerScreen) {
             event.setX(event.getX() * SLOWDOWN_FACTOR);
             event.setZ(event.getZ() * SLOWDOWN_FACTOR);
+        }
+    }
+
+    /**
+     * Grim: never sprint while the own inventory or a chest is open. Rise fires its SprintEvent
+     * after vanilla's sprint decisions, so a plain setSprinting(false) stuck; EventSprint fires
+     * before them, so cancelling is needed as well or vanilla re-starts sprint in the same tick.
+     */
+    @EventTarget
+    public void onSprint(EventSprint event) {
+        if (!this.isEnabled() || mc.player == null || this.mode.getModeIndex() != GRIM) {
+            return;
+        }
+
+        if (mc.currentScreen instanceof InventoryScreen || mc.currentScreen instanceof ChestScreen) {
+            mc.player.setSprinting(false);
+            event.cancelled = true;
         }
     }
 

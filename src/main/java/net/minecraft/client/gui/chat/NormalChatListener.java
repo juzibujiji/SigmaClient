@@ -26,7 +26,7 @@ public class NormalChatListener implements IChatListener
         }
         else
         {
-            this.mc.ingameGUI.getChatGUI().func_238495_b_(message);
+            this.mc.ingameGUI.getChatGUI().printChatMessageWithDelay(message);
         }
     }
 }

@@ -207,6 +207,10 @@ public class DebugOverlayGui extends AbstractGui
         this.fontRenderer.renderStrings(list, aguipoint, 14737632, p_230025_1_.getLast().getMatrix(), false, this.fontRenderer.getBidiFlag());
     }
 
+    public List<String> getLeftDebugLines() {
+        return this.getDebugInfoLeft();
+    }
+
     protected List<String> getDebugInfoLeft()
     {
         if (this.mc.debug != this.debugOF)

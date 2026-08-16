@@ -35,7 +35,11 @@ public class ChatScreen extends Screen
      * is the text that appears when you press the chat key and the input box appears pre-filled
      */
     private String defaultInputFieldText = "";
-    private CommandSuggestionHelper commandSuggestionHelper;
+    protected CommandSuggestionHelper commandSuggestionHelper;
+
+    public String getDefaultInputFieldText() {
+        return this.defaultInputFieldText;
+    }
 
     // HUD 拖拽状态（自包含，不依赖 ChatChangeXY）
     private boolean hudDragging = false;
@@ -228,12 +232,12 @@ public class ChatScreen extends Screen
             {
                 NewChatGui newchatgui = this.minecraft.ingameGUI.getChatGUI();
 
-                if (newchatgui.func_238491_a_(mouseX, mouseY))
+                if (newchatgui.clickQueuedMessageArea(mouseX, mouseY))
                 {
                     return true;
                 }
 
-                Style style = newchatgui.func_238494_b_(mouseX, mouseY);
+                Style style = newchatgui.getStyleAt(mouseX, mouseY);
 
                 if (style != null && this.handleComponentClicked(style))
                 {
@@ -315,7 +319,7 @@ public class ChatScreen extends Screen
         fill(matrices, 2, this.height - 14, this.width - 2, this.height - 2, (int)(minecraft.gameSettings.accessibilityTextBackgroundOpacity * 255) << 24);
         this.inputField.render(matrices, mouseX, mouseY, delta);
         this.commandSuggestionHelper.drawSuggestionList(matrices, mouseX, mouseY);
-        Style style = this.minecraft.ingameGUI.getChatGUI().func_238494_b_((double)mouseX, (double)mouseY);
+        Style style = this.minecraft.ingameGUI.getChatGUI().getStyleAt((double)mouseX, (double)mouseY);
 
         if (style != null && style.getHoverEvent() != null)
         {

@@ -457,7 +457,7 @@ public class IngameGui extends AbstractGui
             RenderSystem.pushMatrix();
             RenderSystem.translatef(0.0F, (float)(this.scaledHeight - 48), 0.0F);
             this.mc.getProfiler().startSection("chat");
-            this.persistantChatGUI.func_238492_a_(matrixStack, this.ticks);
+            this.persistantChatGUI.renderChat(matrixStack, this.ticks);
             this.mc.getProfiler().endSection();
             RenderSystem.popMatrix();
             scoreobjective1 = scoreboard.getObjectiveInDisplaySlot(0);

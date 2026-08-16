@@ -20,7 +20,7 @@ public class RenderComponentsUtil
         return Minecraft.getInstance().gameSettings.chatColor ? p_238504_0_ : TextFormatting.getTextWithoutFormattingCodes(p_238504_0_);
     }
 
-    public static List<IReorderingProcessor> func_238505_a_(ITextProperties p_238505_0_, int p_238505_1_, FontRenderer p_238505_2_)
+    public static List<IReorderingProcessor> wrapComponents(ITextProperties p_238505_0_, int p_238505_1_, FontRenderer p_238505_2_)
     {
         TextPropertiesManager textpropertiesmanager = new TextPropertiesManager();
         p_238505_0_.getComponentWithStyle((p_238503_1_, p_238503_2_) ->

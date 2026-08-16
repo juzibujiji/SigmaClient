@@ -4,6 +4,7 @@ import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.data.ModuleWithModuleSettings;
 import com.mentalfrostbyte.jello.module.impl.movement.longjump.NCPLongJump;
 import com.mentalfrostbyte.jello.module.impl.movement.longjump.CubecraftLongJump;
+import com.mentalfrostbyte.jello.module.impl.movement.longjump.GrimLongJump;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 
@@ -13,7 +14,8 @@ public class LongJump extends ModuleWithModuleSettings {
                 "LongJump",
                 "Makes you jump far away",
                 new NCPLongJump(),
-                new CubecraftLongJump());
+                new CubecraftLongJump(),
+                new GrimLongJump());
         this.registerSetting(new BooleanSetting("Auto Disable", "Disable Longjump when landing", true));
         this.registerSetting(new BooleanSetting("BorderJump", "Jumps when you are close to a border", true));
         this.registerSetting(new BooleanSetting("Auto Jump", "Automatically jumps when you can", true));

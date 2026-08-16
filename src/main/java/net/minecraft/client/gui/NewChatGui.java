@@ -31,14 +31,14 @@ public class NewChatGui extends AbstractGui {
     private final Deque<ITextComponent> queuedMessages = Queues.newArrayDeque();
     private int scrollPos;
     private boolean isScrolled;
-    private long field_238490_l_ = 0L;
+    private long lastQueuedMessageTime = 0L;
     private int lastChatWidth = 0;
 
     public NewChatGui(Minecraft mcIn) {
         this.mc = mcIn;
     }
 
-    public void func_238492_a_(MatrixStack matrix, int currentTick) {
+    public void renderChat(MatrixStack matrix, int currentTick) {
         int chatWidth = this.getChatWidth();
 
         if (this.lastChatWidth != chatWidth) {
@@ -48,6 +48,13 @@ public class NewChatGui extends AbstractGui {
 
         if (!this.isChatHidden()) {
             this.clearExpiredChatLines();
+
+            // Custom chat (ChatUI module) draws its own panel in the HUD pass and fires its
+            // own EventRenderChat for the offset; skip every vanilla element here.
+            if (com.mentalfrostbyte.jello.module.impl.gui.chatui.RiseChatUI.isActive()) {
+                return;
+            }
+
             int maxVisibleLines = this.getLineCount();
             int totalChatLines = this.drawnChatLines.size();
 
@@ -69,6 +76,10 @@ public class NewChatGui extends AbstractGui {
 
                 EventRenderChat eventRenderChat = new EventRenderChat();
                 EventBus.call(eventRenderChat);
+                if (eventRenderChat.cancelled) {
+                    RenderSystem.popMatrix();
+                    return;
+                }
                 int chatYOffset = eventRenderChat.getYOffset();
 
                 for (int lineIndex = 0; lineIndex + this.scrollPos < this.drawnChatLines.size() && lineIndex < maxVisibleLines; ++lineIndex) {
@@ -189,17 +200,17 @@ public class NewChatGui extends AbstractGui {
      * prints the ChatComponent to Chat. If the ID is not 0, deletes an existing Chat Line of that ID from the GUI
      */
     public void printChatMessageWithOptionalDeletion(ITextComponent chatComponent, int chatLineId) {
-        this.func_238493_a_(chatComponent, chatLineId, this.mc.ingameGUI.getTicks(), false);
+        this.setChatLine(chatComponent, chatLineId, this.mc.ingameGUI.getTicks(), false);
         LOGGER.info("[CHAT] {}", (Object) chatComponent.getString().replaceAll("\r", "\\\\r").replaceAll("\n", "\\\\n"));
     }
 
-    private void func_238493_a_(ITextComponent p_238493_1_, int p_238493_2_, int p_238493_3_, boolean p_238493_4_) {
+    private void setChatLine(ITextComponent p_238493_1_, int p_238493_2_, int p_238493_3_, boolean p_238493_4_) {
         if (p_238493_2_ != 0) {
             this.deleteChatLine(p_238493_2_);
         }
 
         int i = MathHelper.floor((double) this.getChatWidth() / this.getScale());
-        List<IReorderingProcessor> list = RenderComponentsUtil.func_238505_a_(p_238493_1_, i, this.mc.fontRenderer);
+        List<IReorderingProcessor> list = RenderComponentsUtil.wrapComponents(p_238493_1_, i, this.mc.fontRenderer);
         boolean flag = this.getChatOpen();
 
         for (IReorderingProcessor ireorderingprocessor : list) {
@@ -230,12 +241,19 @@ public class NewChatGui extends AbstractGui {
 
         for (int i = this.chatLines.size() - 1; i >= 0; --i) {
             ChatLine<ITextComponent> chatline = this.chatLines.get(i);
-            this.func_238493_a_(chatline.getLineString(), chatline.getChatLineID(), chatline.getUpdatedCounter(), true);
+            this.setChatLine(chatline.getLineString(), chatline.getChatLineID(), chatline.getUpdatedCounter(), true);
         }
     }
 
     public List<String> getSentMessages() {
         return this.sentMessages;
+    }
+
+    /**
+     * Vanilla-wrapped visible lines (newest first) for custom chat renderers.
+     */
+    public List<ChatLine<IReorderingProcessor>> getDrawnChatLines() {
+        return this.drawnChatLines;
     }
 
     /**
@@ -269,14 +287,14 @@ public class NewChatGui extends AbstractGui {
         }
     }
 
-    public boolean func_238491_a_(double p_238491_1_, double p_238491_3_) {
+    public boolean clickQueuedMessageArea(double p_238491_1_, double p_238491_3_) {
         if (this.getChatOpen() && !this.mc.gameSettings.hideGUI && !this.isChatHidden() && !this.queuedMessages.isEmpty()) {
             double d0 = p_238491_1_ - 2.0D;
             double d1 = (double) this.mc.getMainWindow().getScaledHeight() - p_238491_3_ - 40.0D;
 
             if (d0 <= (double) MathHelper.floor((double) this.getChatWidth() / this.getScale()) && d1 < 0.0D && d1 > (double) MathHelper.floor(-9.0D * this.getScale())) {
                 this.printChatMessage(this.queuedMessages.remove());
-                this.field_238490_l_ = System.currentTimeMillis();
+                this.lastQueuedMessageTime = System.currentTimeMillis();
                 return true;
             } else {
                 return false;
@@ -287,7 +305,7 @@ public class NewChatGui extends AbstractGui {
     }
 
     @Nullable
-    public Style func_238494_b_(double p_238494_1_, double p_238494_3_) {
+    public Style getStyleAt(double p_238494_1_, double p_238494_3_) {
         if (this.getChatOpen() && !this.mc.gameSettings.hideGUI && !this.isChatHidden()) {
             double d0 = p_238494_1_ - 2.0D;
             double d1 = (double) this.mc.getMainWindow().getScaledHeight() - p_238494_3_ - 40.0D;
@@ -367,7 +385,7 @@ public class NewChatGui extends AbstractGui {
         return this.getChatHeight() / 9;
     }
 
-    private long func_238497_j_() {
+    private long getChatDelayMillis() {
         return (long) (this.mc.gameSettings.chatDelay * 1000.0D);
     }
 
@@ -375,22 +393,22 @@ public class NewChatGui extends AbstractGui {
         if (!this.queuedMessages.isEmpty()) {
             long i = System.currentTimeMillis();
 
-            if (i - this.field_238490_l_ >= this.func_238497_j_()) {
+            if (i - this.lastQueuedMessageTime >= this.getChatDelayMillis()) {
                 this.printChatMessage(this.queuedMessages.remove());
-                this.field_238490_l_ = i;
+                this.lastQueuedMessageTime = i;
             }
         }
     }
 
-    public void func_238495_b_(ITextComponent p_238495_1_) {
+    public void printChatMessageWithDelay(ITextComponent p_238495_1_) {
         if (this.mc.gameSettings.chatDelay <= 0.0D) {
             this.printChatMessage(p_238495_1_);
         } else {
             long i = System.currentTimeMillis();
 
-            if (i - this.field_238490_l_ >= this.func_238497_j_()) {
+            if (i - this.lastQueuedMessageTime >= this.getChatDelayMillis()) {
                 this.printChatMessage(p_238495_1_);
-                this.field_238490_l_ = i;
+                this.lastQueuedMessageTime = i;
             } else {
                 this.queuedMessages.add(p_238495_1_);
             }
