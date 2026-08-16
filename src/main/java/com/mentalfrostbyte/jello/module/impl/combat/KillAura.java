@@ -38,6 +38,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.ProjectileHelper;
 import net.minecraft.item.SwordItem;
+import net.minecraft.network.play.client.CAnimateHandPacket;
 import net.minecraft.network.play.client.CPlayerPacket;
 import net.minecraft.network.play.server.SEntityStatusPacket;
 import net.minecraft.network.play.server.SAnimateHandPacket;
@@ -66,6 +67,7 @@ public class KillAura extends Module {
     private final BooleanSetting useRotationSpeed;
     private final BooleanSetting hitEvent;
     private final BooleanSetting grimkeepsprinttest;
+    private final ModeSetting noSwingMode;
     public HashMap<Entity, Animation> entityAnimation = new HashMap<>();
     public static InteractAutoBlock autoBlock;
     private PredictionAutoBlock predictionAutoBlock;
@@ -147,7 +149,9 @@ public class KillAura extends Module {
         });
         this.registerSetting(new BooleanSetting("Cooldown", "Use attack cooldown (1.9+)", false));
         this.registerSetting(new NumberSetting<>("Cooldown Delay", "Delay value", 1f, 0f, 1f, 0.05f));
-        this.registerSetting(new BooleanSetting("No swing", "Hit without swinging", false));
+        this.registerSetting(this.noSwingMode = new ModeSetting("No swing",
+                "None = vanilla, Spoof = hidden from you only, Grim = no swing at all",
+                0, "None", "Spoof", "Grim"));
         this.registerSetting(new BooleanSetting("Disable on death", "Disable on death", true));
         this.registerSetting(new BooleanSetting("Disable on use", "Disable on use", true));
         this.registerSetting(new BooleanSetting("Through walls", "Target entities through walls", true));
@@ -911,7 +915,7 @@ public class KillAura extends Module {
                         }
                         
                         if (grimkeepsprinttest.getCurrentValue()) {
-                            mc.player.swingArm(Hand.MAIN_HAND);
+                            this.swingHand();
                         }
 
                         if (rotationMode.currentValue.equals("Grim1.17")) {
@@ -922,30 +926,22 @@ public class KillAura extends Module {
                         if (ViaLoadingBase.getInstance().getTargetVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)) {
                             if (this.getBooleanValueFromSettingName("Raytrace") && this.getBooleanValueFromSettingName("RaytraceMultiAttack")) {
                                 for (LivingEntity entitys : raytracelist) {
-                                    if (!this.getBooleanValueFromSettingName("No swing")) {
-                                        mc.player.swingArm(Hand.MAIN_HAND);
-                                    }
+                                    this.swingHand();
                                     mc.playerController.attackEntity(mc.player, entitys);
                                 }
                             } else {
-                                if (!this.getBooleanValueFromSettingName("No swing")) {
-                                    mc.player.swingArm(Hand.MAIN_HAND);
-                                }
+                                this.swingHand();
                                 mc.playerController.attackEntity(mc.player, entity);
                             }
                         } else {
                             if (this.getBooleanValueFromSettingName("Raytrace") && this.getBooleanValueFromSettingName("RaytraceMultiAttack")) {
                                 for (LivingEntity entitys : raytracelist) {
                                     mc.playerController.attackEntity(mc.player, entitys);
-                                    if (!this.getBooleanValueFromSettingName("No swing")) {
-                                        mc.player.swingArm(Hand.MAIN_HAND);
-                                    }
+                                    this.swingHand();
                                 }
                             } else {
                                 mc.playerController.attackEntity(mc.player, entity);
-                                if (!this.getBooleanValueFromSettingName("No swing")) {
-                                    mc.player.swingArm(Hand.MAIN_HAND);
-                                }
+                                this.swingHand();
                             }
                         }
 
@@ -978,6 +974,19 @@ public class KillAura extends Module {
                     }
                 }
             }
+        }
+    }
+
+    private void swingHand() {
+        switch (this.noSwingMode.getCurrentValue()) {
+            case "Grim":
+                break;
+            case "Spoof":
+                // packet only: the server still sees the swing, the local arm never animates
+                mc.getConnection().sendPacket(new CAnimateHandPacket(Hand.MAIN_HAND));
+                break;
+            default:
+                mc.player.swingArm(Hand.MAIN_HAND);
         }
     }
 
