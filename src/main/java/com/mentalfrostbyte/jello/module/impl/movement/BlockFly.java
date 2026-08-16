@@ -50,9 +50,9 @@ public class BlockFly extends ModuleWithModuleSettings {
                 // SouthSide: OpenSSNGScaffoldAndClutch port — telly/snap scaffold with
                 // FallingPlayer clutch self-save.
                 new BlockFlySouthSideMode(),
-                new BlockFlyLegitMode()
+                new BlockFlyLegitMode(),
                 // Unfair LegitTelly port: edge-armed scripted straight telly bridge.
-                //new BlockFlyTellyMode()
+                new BlockFlyTellyMode()
         );
         this.registerSetting(
                 new ModeSetting("ItemSpoof", "Item spoofing mode", 2, "None", "Switch", "Spoof", "LiteSpoof"));
