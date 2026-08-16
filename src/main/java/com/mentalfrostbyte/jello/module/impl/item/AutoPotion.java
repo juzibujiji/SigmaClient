@@ -196,7 +196,7 @@ public class AutoPotion extends Module {
                     this.field23811 = 1;
                     //var1.setYaw(var9[0]);
                     //var1.setPitch(var9[1]);
-                    RotationManager.setRotations(var9[0], var9[1]);
+                    RotationCore.setRotations(var9[0], var9[1]);
                 } else {
                     mc.getConnection().sendPacket(new CPlayerPacket.RotationPacket(var9[0], var9[1], !var8 && mc.player.isOnGround()));
                     mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.MAIN_HAND));
