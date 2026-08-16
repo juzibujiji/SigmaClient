@@ -42,7 +42,6 @@ public class BlockFly extends ModuleWithModuleSettings {
     public BlockFly() {
         super(ModuleCategory.MOVEMENT, "BlockFly", "Allows you to automatically bridge",
                 new BlockFlyNCPMode(),
-                new BlockFlyAACMode(),
                 new BlockFlySmoothMode(),
                 new BlockFlyHypixelMode(),
                 new BlockFlyCustomMode(),
