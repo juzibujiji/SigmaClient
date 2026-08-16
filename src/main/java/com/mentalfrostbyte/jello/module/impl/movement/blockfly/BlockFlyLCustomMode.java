@@ -5,7 +5,7 @@ import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdateHeldItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.gui.base.animations.Animation;
-import com.mentalfrostbyte.jello.managers.RotationManager;
+import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
@@ -532,7 +532,7 @@ public class BlockFlyLCustomMode extends Module {
             // Glue the visible/packet rotation to the player's real look so nothing is steered.
             this.rots = new Rotation(mc.player.rotationYaw, mc.player.rotationPitch);
             this.lastRots = new Rotation(this.rots.yaw, this.rots.pitch);
-            RotationManager.setRotations(mc.player.rotationYaw, mc.player.rotationPitch);
+            RotationCore.setRotations(mc.player.rotationYaw, mc.player.rotationPitch);
             return;
         }
         this.active = true;
@@ -648,7 +648,7 @@ public class BlockFlyLCustomMode extends Module {
                 && this.snap.getCurrentValue()
                 ? this.correctRotation
                 : this.rots;
-        RotationManager.setRotations(visible.yaw, visible.pitch);
+        RotationCore.setRotations(visible.yaw, visible.pitch);
     }
 
     /**

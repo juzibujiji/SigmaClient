@@ -12,7 +12,6 @@ import com.mentalfrostbyte.jello.event.impl.player.action.EventStopUseItem;
 import com.mentalfrostbyte.jello.event.impl.player.action.EventUseItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.gui.base.animations.Animation;
-import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.managers.util.notifs.Notification;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
@@ -358,7 +357,7 @@ public class KillAura extends Module {
                     this.currentRotation.yaw = JelloAI.getCurrentYaw();
                     this.currentRotation.pitch = JelloAI.getCurrentPitch();
 
-                    // Publish rotations through the standard RotationManager pipeline.
+                    // Publish rotations to RotationCore (KillAura always rotates, regardless of crtMov mode)
                     this.publishRotations(this.currentRotation.yaw, this.currentRotation.pitch);
                 } else if (eventUpdateYaw - mc.player.rotationYaw != 0.0F
                         && (rotationMode.currentValue.equals("Test1") || rotationMode.currentValue.equals("Test"))
@@ -783,11 +782,11 @@ public class KillAura extends Module {
     }
 
     /**
-     * KillAura publishes its rotations through RotationManager. The active CorrectMovement
-     * module applies movement correction and optional Zen smoothing.
+     * KillAura always publishes its rotations to RotationCore. The active CorrectMovement
+     * mode reads them from there; CorrectMovement itself only manages movement correction.
      */
     private void publishRotations(float yaw, float pitch) {
-        RotationManager.setRotations(yaw, pitch);
+        RotationCore.setRotations(yaw, pitch);
     }
 
     private EntityRayTraceResult rayTraceWithKillAuraRotation(LivingEntity expectedTarget) {

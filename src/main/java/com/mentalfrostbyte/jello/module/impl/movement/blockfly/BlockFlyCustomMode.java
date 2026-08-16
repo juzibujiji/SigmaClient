@@ -7,7 +7,7 @@ import com.mentalfrostbyte.jello.event.impl.player.EventUpdateHeldItem;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventJump;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventSafeWalk;
-import com.mentalfrostbyte.jello.managers.RotationManager;
+import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.movement.BlockFly;
@@ -339,7 +339,7 @@ public class BlockFlyCustomMode extends Module {
         if (grim1_17rot.getCurrentValue()) {
             mc.getConnection().getNetworkManager().sendPacket(new CPlayerPacket.PositionRotationPacket(mc.player.getPosX(), mc.player.getPosY(), mc.player.getPosZ(), visibleRotation.yaw, visibleRotation.pitch, mc.player.onGround));
         } else {
-            RotationManager.setRotations(visibleRotation.yaw, visibleRotation.pitch);
+            RotationCore.setRotations(visibleRotation.yaw, visibleRotation.pitch);
         }
     }
 

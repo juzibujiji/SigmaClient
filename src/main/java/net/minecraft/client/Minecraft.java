@@ -62,7 +62,6 @@ import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
 import de.florianmichael.viamcp.ViaMCP;
-import de.florianmichael.viamcp.fixes.AttackOrder;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;
@@ -1444,8 +1443,15 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
                 }
                 switch (this.objectMouseOver.getType()) {
                     case ENTITY:
-                        AttackOrder.sendFixedAttack(this.player,
-                                ((EntityRayTraceResult) this.objectMouseOver).getEntity(), Hand.MAIN_HAND);
+                        // Legacy (<=1.8) clients swing before the attack; modern ones after.
+                        Entity target = ((EntityRayTraceResult) this.objectMouseOver).getEntity();
+                        if (JelloPortal.getVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)) {
+                            this.player.swingArm(Hand.MAIN_HAND);
+                            this.playerController.attackEntity(this.player, target);
+                        } else {
+                            this.playerController.attackEntity(this.player, target);
+                            this.player.swingArm(Hand.MAIN_HAND);
+                        }
 
                         if (rayTraceEvent != null) {
                             rayTraceEvent.unhover();
@@ -1470,7 +1476,10 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
                         this.player.resetCooldown();
                 }
 
-                AttackOrder.sendConditionalSwing(this.objectMouseOver, Hand.MAIN_HAND);
+                // The swing only follows non-entity hits (block/miss); entity hits swing in clickEntityOrder above.
+                if (this.objectMouseOver != null && this.objectMouseOver.getType() != RayTraceResult.Type.ENTITY) {
+                    this.player.swingArm(Hand.MAIN_HAND);
+                }
             }
         }
     }

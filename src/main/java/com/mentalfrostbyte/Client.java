@@ -58,7 +58,10 @@ public class Client implements MinecraftUtil {
     public MusicManager musicManager;
     public PlayerStateTracker playerTracker;
     public MinerTracker minerTracker;
-    public RotationManager rotationManager;
+    // Retired: managers/RotationManager duplicated the CorrectMovement modes' packet and
+    // movement handlers and ran alongside them. Each crtmov mode now owns its correction,
+    // and the publish API lives on RotationCore.setRotations.
+    // public RotationManager rotationManager;
 
     public static boolean dontRenderHand = false;
     public boolean loading = true;
@@ -77,8 +80,8 @@ public class Client implements MinecraftUtil {
         } catch (IOException exception) {
             logger.error(exception);
         }
-        rotationManager = new RotationManager();
-        rotationManager.init();
+        // rotationManager = new RotationManager();
+        // rotationManager.init();
 
         JelloAI.init();
         guiManager = new GuiManager();
