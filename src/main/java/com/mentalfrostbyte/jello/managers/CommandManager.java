@@ -49,6 +49,7 @@ public class CommandManager extends Manager {
         this.register(new KillPotion());
         this.register(new Enchant());
         this.register(new TP());
+        this.register(new Sync());
         this.register(new Ysm());
         this.register(new IRC());
     }
