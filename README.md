@@ -23,6 +23,11 @@ Some bypass: liquidbounce.net
 
 This project itself is licensed under **GPL-3.0**, while the original MIT-licensed portions remain subject to their original MIT License terms.
 
+#### 声明
+这个另一个SigmaClient完全以我为主，会添加一些额外的有趣内容。
+
+和其他绕过
+
 # haha
 
 wait for weekends

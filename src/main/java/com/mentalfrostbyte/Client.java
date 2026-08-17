@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Client implements MinecraftUtil {
+    //额，无论怎么说，SigmaClient应该只是小兴趣，不应该为了cooperate而crash
     public static int currentVersionIndex = 28;
     public static final Logger logger = LogManager.getLogger("Jello");
 
