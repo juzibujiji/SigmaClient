@@ -131,8 +131,7 @@ public class KillAura extends Module {
                 new NumberSetting<>("Max CPS", "Max CPS value", 8.0F, 1.0F, 20.0F, 1.0F)
                         .addObserver(var1 -> autoBlock.initializeCpsTimings()));
         this.registerSetting(new BooleanSetting("Interact autoblock", "Send interact packet when blocking", true));
-        this.registerSetting(
-                this.hitEvent = new BooleanSetting("HitEvent", "Change the hit event (vanilla autoblock?legit)", true));
+        this.registerSetting(this.hitEvent = new BooleanSetting("HitEvent", "Change the hit event (vanilla autoblock?legit)", true));
         this.registerSetting(new BooleanSetting("Perfect Hit", "Hit entities at the perfect moment", false));
         this.registerSetting(this.grimkeepsprinttest = new BooleanSetting("1.9+GrimKeepSprint","Grim Cooldown KS",false));
         this.registerSetting(new BooleanSetting("Players", "Hit players", true));
