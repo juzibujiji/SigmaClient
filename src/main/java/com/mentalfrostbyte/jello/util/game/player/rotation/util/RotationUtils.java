@@ -3,6 +3,7 @@ package com.mentalfrostbyte.jello.util.game.player.rotation.util;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.module.impl.movement.BlockFly;
 import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
+import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.util.MouseSmoother;
 import net.minecraft.entity.Entity;
@@ -13,6 +14,241 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class RotationUtils {
     private static final Minecraft mc = Minecraft.getInstance();
+
+    // =====================================================================================
+    // Rise 6.9.5 RotationComponent port
+    //
+    // Field names mirror Rise's decompiled component:
+    //   fk -> riseYaw / risePitch   (current smoothed server rotation)
+    //   fl -> riseLastYaw / riseLastPitch (last rotation used as smoothing origin)
+    //   fm -> riseTargetYaw / riseTargetPitch (raw module target)
+    //   ft / fu -> riseWanderAngle / riseWanderYaw / riseWanderPitch (flick wander state)
+    // =====================================================================================
+    private static float riseTargetYaw;
+    private static float riseTargetPitch;
+    private static float riseYaw;
+    private static float risePitch;
+    private static float riseLastYaw;
+    private static float riseLastPitch;
+    private static float riseWanderAngle;
+    private static float riseWanderYaw;
+    private static float riseWanderPitch;
+    private static double riseRotationSpeed;
+    private static Entity riseTargetEntity;
+    private static double riseRange;
+    private static boolean riseThroughWalls;
+    private static boolean riseLook;
+    private static boolean riseActive;
+
+    public static void riseReset(float yaw, float pitch) {
+        riseTargetYaw = riseYaw = riseLastYaw = yaw;
+        riseTargetPitch = risePitch = riseLastPitch = pitch;
+        riseWanderAngle = 0.0F;
+        riseWanderYaw = 0.0F;
+        riseWanderPitch = 0.0F;
+        riseRotationSpeed = 0.0D;
+        riseTargetEntity = null;
+        riseRange = 0.0D;
+        riseThroughWalls = false;
+        riseLook = true;
+        riseActive = false;
+    }
+
+    public static boolean riseIsActive() {
+        return riseActive;
+    }
+
+    public static float riseGetYaw() {
+        return riseYaw;
+    }
+
+    public static float riseGetPitch() {
+        return risePitch;
+    }
+
+    /**
+     * Equivalent of {@code RotationComponent.a(vec2, speed, movementFix, function, silent, look)}.
+     * {@code speed} is Rise's raw rotation-speed setting; like Rise it is multiplied by 36 before
+     * being used as the per-tick max delta.
+     */
+    public static void riseSetRotations(float targetYaw, float targetPitch, double speed, Entity target,
+                                        double range, boolean throughWalls, boolean silent, boolean look) {
+        if (mc.player == null) {
+            return;
+        }
+
+        riseTargetYaw = targetYaw;
+        riseTargetPitch = MathHelper.clamp(targetPitch, -90.0F, 90.0F);
+        riseRotationSpeed = speed * 36.0D;
+        riseTargetEntity = target;
+        riseRange = range;
+        riseThroughWalls = throughWalls;
+        riseLook = look;
+        riseActive = true;
+        riseUpdateCurrentRotation();
+    }
+
+    /**
+     * Rise's {@code bJ()}: one smoothed step from {@code fl} towards {@code fm}, including the
+     * FPS sub-iteration loop, micro-jitter, sensitivity-patch quantization, and the random
+     * flick-guard path when the raw target is more than five degrees away from the current rotation.
+     */
+    public static void riseUpdateCurrentRotation() {
+        if (!riseActive || mc.player == null) {
+            return;
+        }
+
+        float targetYaw = riseTargetYaw;
+        float targetPitch = riseTargetPitch;
+
+        if (riseTargetEntity != null && riseRange > 0.0D
+                && (Math.abs(targetYaw - riseYaw) > 5.0F || Math.abs(targetPitch - risePitch) > 5.0F)) {
+            float[] flicked = riseApplyFlickGuard(targetYaw, targetPitch);
+            targetYaw = flicked[0];
+            targetPitch = flicked[1];
+        }
+
+        float[] smoothed = riseSmoothRotation(riseLastYaw, riseLastPitch, targetYaw, targetPitch,
+                riseRotationSpeed + Math.random());
+        riseYaw = smoothed[0];
+        risePitch = smoothed[1];
+        riseLastYaw = riseYaw;
+        riseLastPitch = risePitch;
+
+        if (riseLook && mc.gameRenderer != null) {
+            mc.gameRenderer.getMouseOver(1.0F);
+        }
+    }
+
+    /**
+     * Rise applies the head/body part of the rotation in PreMotion, independently of the
+     * movement-correction mode. In 1.16.5 the equivalent fields are rotationYawHead for the
+     * head and renderYawOffset for the body. When silent is false Rise also writes the actual
+     * camera rotation in the same event.
+     */
+    public static void riseSyncVisuals(float yaw, float pitch, boolean silent) {
+        if (mc.player == null) {
+            return;
+        }
+
+        mc.player.rotationYawHead = yaw;
+        mc.player.renderYawOffset = yaw;
+
+        if (!silent) {
+            mc.player.rotationYaw = yaw;
+            mc.player.rotationPitch = pitch;
+        }
+    }
+
+    /**
+     * Rise's flick guard: instead of turning straight onto a freshly acquired target, walk a
+     * small random offset path. Each offset is raytrace-validated against the target; when the
+     * first offset is invalid the walk is redirected towards the original target, and when that
+     * is still invalid the walk restarts with Rise's two-degree fallback offset.
+     */
+    private static float[] riseApplyFlickGuard(float targetYaw, float targetPitch) {
+        double distance = Math.random() * Math.random() * Math.random() * 20.0D;
+        float directionSign = mc.player.ticksExisted / 10 % 2 == 0 ? -1.0F : 1.0F;
+
+        riseWanderAngle += (float) ((20.0D
+                + (Math.random() - 0.5D) * (Math.random() * Math.random() * Math.random() * 360.0D))
+                * directionSign);
+        riseWanderYaw += (float) (-MathHelper.sin((float) Math.toRadians(riseWanderAngle)) * distance);
+        riseWanderPitch += (float) (MathHelper.cos((float) Math.toRadians(riseWanderAngle)) * distance);
+
+        float yaw = targetYaw + riseWanderYaw;
+        float pitch = targetPitch + riseWanderPitch;
+
+        if (!riseValidateRotation(yaw, pitch)) {
+            riseWanderAngle = (float) Math.toDegrees(Math.atan2(targetYaw - yaw, pitch - targetPitch)) - 180.0F;
+            riseWanderYaw += (float) (-MathHelper.sin((float) Math.toRadians(riseWanderAngle)) * distance);
+            riseWanderPitch += (float) (MathHelper.cos((float) Math.toRadians(riseWanderAngle)) * distance);
+            yaw = targetYaw + riseWanderYaw;
+            pitch = targetPitch + riseWanderPitch;
+        }
+
+        if (!riseValidateRotation(yaw, pitch)) {
+            riseWanderYaw = 0.0F;
+            riseWanderPitch = 0.0F;
+            yaw = targetYaw + (float) (Math.random() * 2.0D);
+            pitch = targetPitch + (float) (Math.random() * 2.0D);
+        }
+
+        return new float[] { yaw, pitch };
+    }
+
+    private static boolean riseValidateRotation(float yaw, float pitch) {
+        if (mc.player == null || mc.world == null || riseTargetEntity == null || riseRange <= 0.0D) {
+            return true;
+        }
+
+        return BlockUtil.rayTraceEntitiesnolastpos(yaw, pitch, (float) riseRange, riseThroughWalls)
+                .contains(riseTargetEntity);
+    }
+
+    /**
+     * Rise {@code RotationUtil.e/b}: one Euclidean rotation step followed by
+     * {@code (debugFPS / 20 + random * 10)} sensitivity-patch quantization sub-iterations.
+     * Every active sub-iteration also applies Rise's tiny random yaw/pitch jitter.
+     */
+    private static float[] riseSmoothRotation(float lastYaw, float lastPitch, float targetYaw,
+                                              float targetPitch, double speed) {
+        float wrappedYaw = MathHelper.wrapDegrees(targetYaw - lastYaw);
+        float pitchDelta = targetPitch - lastPitch;
+        double length = Math.sqrt((double) wrappedYaw * wrappedYaw + (double) pitchDelta * pitchDelta);
+
+        float stepYaw = 0.0F;
+        float stepPitch = 0.0F;
+
+        if (length >= 1.0E-4D) {
+            double yawRatio = Math.abs(wrappedYaw / length);
+            double pitchRatio = Math.abs(pitchDelta / length);
+            double maxStepYaw = speed * yawRatio;
+            double maxStepPitch = speed * pitchRatio;
+            stepYaw = (float) Math.max(Math.min(wrappedYaw, maxStepYaw), -maxStepYaw);
+            stepPitch = (float) Math.max(Math.min(pitchDelta, maxStepPitch), -maxStepPitch);
+        }
+
+        float yaw = lastYaw + stepYaw;
+        float pitch = lastPitch + stepPitch;
+
+        int iterations = (int) (Minecraft.getFps() / 20.0D + Math.random() * 10.0D);
+        for (int i = 1; i <= iterations; i++) {
+            if (Math.abs(stepYaw) + Math.abs(stepPitch) > 1.0E-4F) {
+                yaw += (float) ((Math.random() - 0.5D) / 1000.0D);
+                pitch -= (float) (Math.random() / 200.0D);
+            }
+
+            float[] patched = riseApplySensitivityPatch(yaw, pitch);
+            yaw = patched[0];
+            pitch = Math.max(-90.0F, Math.min(90.0F, patched[1]));
+        }
+
+        return new float[] { yaw, pitch };
+    }
+
+    /**
+     * Rise {@code RotationUtil.m}: quantize to the client's real mouse-sensitivity grid against
+     * lastReportedYaw / lastReportedPitch (Rise's getPreviousRotation uses those same fields).
+     * The tiny random sensitivity term is part of Rise's anti-flick quantization.
+     */
+    private static float[] riseApplySensitivityPatch(float yaw, float pitch) {
+        if (mc.player == null) {
+            return new float[] { yaw, pitch };
+        }
+
+        float sensitivity = (float) (mc.gameSettings.mouseSensitivity * (1.0D + Math.random() / 1000000.0D)
+                * 0.6D + 0.2D);
+        double gcd = sensitivity * sensitivity * sensitivity * 8.0D * 0.15D;
+
+        float baseYaw = mc.player.lastReportedYaw;
+        float basePitch = mc.player.lastReportedPitch;
+        float patchedYaw = baseYaw + (float) (Math.round((yaw - baseYaw) / gcd) * gcd);
+        float patchedPitch = basePitch + (float) (Math.round((pitch - basePitch) / gcd) * gcd);
+
+        return new float[] { patchedYaw, MathHelper.clamp(patchedPitch, -90.0F, 90.0F) };
+    }
+
 
     public static Rotation limitAngleChange(Rotation currentRotation, Rotation targetRotation, float horizontalSpeed, float verticalSpeed) {
         float yawDifference = getAngleDifference(targetRotation.yaw, currentRotation.yaw);

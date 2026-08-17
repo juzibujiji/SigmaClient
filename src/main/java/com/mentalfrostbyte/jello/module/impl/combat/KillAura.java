@@ -4,6 +4,7 @@ import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.network.EventReceivePacket;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender2DOffset;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender3D;
+import com.mentalfrostbyte.jello.event.impl.game.render.EventRenderEntity;
 import com.mentalfrostbyte.jello.event.impl.game.world.EventLoadWorld;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.EventRunTicks;
@@ -200,6 +201,7 @@ public class KillAura extends Module {
         this.lastRotation = new Rotation(mc.player.lastReportedYaw, mc.player.lastReportedPitch);
         this.currentRotation = new Rotation(mc.player.rotationYaw, mc.player.rotationPitch);
         rotation = new Rotation(mc.player.rotationYaw, mc.player.rotationPitch);
+        RotationUtils.riseReset(mc.player.rotationYaw, mc.player.rotationPitch);
         this.targetPitch = -1.0F;
         autoBlock
                 .setBlockingState(mc.player.getHeldItem(Hand.MAIN_HAND).getItem() instanceof SwordItem
@@ -228,6 +230,9 @@ public class KillAura extends Module {
         targetData = null;
         this.targets = null;
         isActive = false;
+        if (mc.player != null) {
+            RotationUtils.riseReset(mc.player.rotationYaw, mc.player.rotationPitch);
+        }
 
         // Reset JelloAI rotations when KillAura is disabled
         if (rotationMode.currentValue.equals("JelloAI")) {
@@ -338,6 +343,8 @@ public class KillAura extends Module {
 
                 this.updateRotation();
 
+                boolean riseRotation = rotationMode.currentValue.equals("Rise");
+
                 // Add JelloAI rotation handling
                 if (rotationMode.currentValue.equals("JelloAI") && targetEntity != null) {
                     // Let JelloAI handle the rotations
@@ -357,8 +364,15 @@ public class KillAura extends Module {
                     this.currentRotation.pitch = eventUpdatePitch;
                 }
 
-                // Only apply GCD and rotation limits if not using JelloAI
-                if (!rotationMode.currentValue.equals("JelloAI") && !rotationMode.currentValue.equals("Grim1.17")) {
+                if (riseRotation) {
+                    // Rise's RotationComponent is its own pipeline: Rise-set target, *36 speed,
+                    // FPS quantization loop, random jitter, flick guard, sensitivity patch.
+                    // Do not run it through the legacy limitAngleChange + gcdFix pass again.
+                    this.currentRotation.yaw = RotationUtils.riseGetYaw();
+                    this.currentRotation.pitch = RotationUtils.riseGetPitch();
+                    this.publishRotations(this.currentRotation.yaw, this.currentRotation.pitch);
+                } else if (!rotationMode.currentValue.equals("JelloAI") && !rotationMode.currentValue.equals("Grim1.17")) {
+                    // Only apply GCD and rotation limits if not using JelloAI
                     float hSpeed = rotationSpeed.currentValue;
                     float vSpeed = rotationSpeed.currentValue;
 
@@ -377,7 +391,9 @@ public class KillAura extends Module {
                     this.publishRotations(currentRotation.yaw, currentRotation.pitch);
                 }
 
-                mc.gameRenderer.getMouseOver(1.0F); // might fix issue with slow raytrace update
+                if (!riseRotation) {
+                    mc.gameRenderer.getMouseOver(1.0F); // might fix issue with slow raytrace update
+                }
 
                 if (!this.hitEvent.currentValue) {
                     //mc.getConnection().getNetworkManager().sendPacket(new CHeldItemChangePacket((mc.player.inventory.currentItem + 1) % 9));
@@ -445,6 +461,22 @@ public class KillAura extends Module {
                 eventUpdateYaw = event.getYaw();
                 eventUpdatePitch = event.getPitch();
 
+                if (rotationMode.currentValue.equals("Rise")
+                        && targetEntity != null
+                        && !this.targets.isEmpty()
+                        && RotationUtils.riseIsActive()) {
+                    // Rise RotationComponent's PreMotion part: the smoothed fk rotation goes onto
+                    // the packet and is mirrored to head/body, regardless of movement correction.
+                    event.setYaw(RotationUtils.riseGetYaw());
+                    event.setPitch(RotationUtils.riseGetPitch());
+                    RotationCore.lastYaw = event.getYaw();
+                    RotationCore.lastPitch = event.getPitch();
+                    RotationUtils.riseSyncVisuals(
+                            event.getYaw(),
+                            event.getPitch(),
+                            this.getBooleanValueFromSettingName("Silent"));
+                }
+
                 if (targetEntity != null && !this.targets.isEmpty()) {
                     //event.setYaw(RotationCore.currentYaw);
                     //event.setPitch(RotationCore.currentPitch);
@@ -470,6 +502,29 @@ public class KillAura extends Module {
             mc.player.rotationPitch = var5;
         }
     }
+
+    /**
+     * Rise overrides the local player model's head/body pitch and yaw every frame while a
+     * RotationComponent rotation is active. This is the 1.16.5 equivalent of Rise's
+     * PreMotion {@code rotationYawHead} write plus its ModelBiped {@code po} pitch patch.
+     */
+    @EventTarget
+    public void onRenderEntity(EventRenderEntity event) {
+        if (mc.player == null
+                || event.getEntity() != mc.player
+                || !rotationMode.currentValue.equals("Rise")
+                || !RotationUtils.riseIsActive()) {
+            return;
+        }
+
+        float yaw = RotationUtils.riseGetYaw();
+        float pitch = RotationUtils.riseGetPitch();
+        event.setYawOffset(yaw);
+        event.setHeadYaw(yaw);
+        event.setYaw(0.0F);
+        event.setPitch(pitch);
+    }
+
 
     @EventTarget
     @HighestPriority
@@ -576,6 +631,9 @@ public class KillAura extends Module {
                 this.attackTimer = (int) autoBlock.getCpsTiming(0);
                 this.animationTimer = 0;
                 isActive = false;
+                if (rotationMode.currentValue.equals("Rise")) {
+                    RotationUtils.riseReset(mc.player.rotationYaw, mc.player.rotationPitch);
+                }
                 this.currentRotation.yaw = mc.player.rotationYaw;
                 this.currentRotation.pitch = mc.player.rotationPitch;
                 rotation.yaw = this.currentRotation.yaw;
@@ -664,6 +722,9 @@ public class KillAura extends Module {
             this.attackTimer = (int) autoBlock.getCpsTiming(0);
             this.animationTimer = 0;
             isActive = false;
+            if (rotationMode.currentValue.equals("Rise")) {
+                RotationUtils.riseReset(mc.player.rotationYaw, mc.player.rotationPitch);
+            }
             this.currentRotation.yaw = mc.player.rotationYaw;
             this.currentRotation.pitch = mc.player.rotationPitch;
             rotation.yaw = this.currentRotation.yaw;
@@ -679,6 +740,11 @@ public class KillAura extends Module {
 
         Rotation advancedRotation = RotationUtils.getAdvancedRotation(entity,
                 !this.getBooleanValueFromSettingName("Through walls"));
+        if (advancedRotation == null && rotationMode.currentValue.equals("Rise")) {
+            // Rise falls back to the standard bounding-box point instead of crashing the aura
+            // when every raytrace-visible point is obstructed.
+            advancedRotation = RotationUtils.getRotationsToPosition(RotationUtils.getEntityPosition(entity));
+        }
 
         float targetYawDifference = RotationUtils.wrapAngleDifference(this.currentRotation.yaw, advancedRotation.yaw);
         float targetPitchDifference = advancedRotation.pitch - this.currentRotation.pitch;
@@ -722,8 +788,7 @@ public class KillAura extends Module {
                 this.currentRotation.pitch = advancedRotation.pitch;
                 break;
             case "Rise":
-                this.currentRotation.yaw = advancedRotation.yaw;
-                this.currentRotation.pitch = advancedRotation.pitch;
+                this.updateRiseRotation(entity, advancedRotation);
                 break;
             case "Grim1.17":
                 this.currentRotation.yaw = advancedRotation.yaw;
@@ -774,6 +839,31 @@ public class KillAura extends Module {
 
         this.currentRotation.pitch = MathHelper.clamp(this.currentRotation.pitch, -90.0F, 90.0F);
     }
+
+    /**
+     * Feed the Rise rotation mode into the ported RotationComponent pipeline.
+     * Rise multiplies its raw speed setting by 36 inside RotationComponent, so the same is
+     * done here. When the local "Use Rotation Speed" toggle is off, use the setting maximum
+     * as a de-facto snap (equivalent to bypassing the limit in Rise units).
+     */
+    private void updateRiseRotation(Entity entity, Rotation target) {
+        float speed = this.useRotationSpeed.currentValue ? this.rotationSpeed.currentValue : 360.0F;
+        boolean throughWalls = this.getBooleanValueFromSettingName("Through walls");
+
+        RotationUtils.riseSetRotations(
+                target.yaw,
+                target.pitch,
+                speed,
+                entity,
+                this.getNumberValueBySettingName("Range"),
+                throughWalls,
+                this.getBooleanValueFromSettingName("Silent"),
+                true);
+
+        this.currentRotation.yaw = RotationUtils.riseGetYaw();
+        this.currentRotation.pitch = RotationUtils.riseGetPitch();
+    }
+
 
     /**
      * KillAura always publishes its rotations to RotationCore. The active CorrectMovement
