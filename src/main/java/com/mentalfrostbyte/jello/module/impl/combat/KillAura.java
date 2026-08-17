@@ -117,6 +117,7 @@ public class KillAura extends Module {
                 "The way you will look at entities",
                 0,
                 "NCP",
+                "Rise",
                 "AAC", "Smooth",
                 "LockView", "Test",
                 "Test2", "JelloAI", "Grim1.17", "None"));
@@ -717,6 +718,10 @@ public class KillAura extends Module {
                 this.currentRotation.pitch += targetPitchDifference;
                 break;
             case "NCP":
+                this.currentRotation.yaw = advancedRotation.yaw;
+                this.currentRotation.pitch = advancedRotation.pitch;
+                break;
+            case "Rise":
                 this.currentRotation.yaw = advancedRotation.yaw;
                 this.currentRotation.pitch = advancedRotation.pitch;
                 break;

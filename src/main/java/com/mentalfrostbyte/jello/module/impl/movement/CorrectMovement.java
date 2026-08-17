@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.module.impl.movement;
 
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.data.ModuleWithModuleSettings;
+import com.mentalfrostbyte.jello.module.impl.movement.crtmov.Rise;
 import com.mentalfrostbyte.jello.module.impl.movement.crtmov.Sigma;
 import com.mentalfrostbyte.jello.module.impl.movement.crtmov.Vape;
 import com.mentalfrostbyte.jello.module.impl.movement.crtmov.Zen;
@@ -12,6 +13,7 @@ public class CorrectMovement extends ModuleWithModuleSettings {
                 "CorrectMovement",
                 "juzi suck my dick" ,
                 new Zen(),
+                new Rise(),
                 new Vape(),
                 new Sigma()
         );
