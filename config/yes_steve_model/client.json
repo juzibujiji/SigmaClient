@@ -6,6 +6,9 @@
   "extraPlayerY": 10,
   "extraPlayerScale": 40.0,
   "extraPlayerYawOffset": 5.0,
-  "selectedModelId": "小昔涟(ysm2.4.1).ysm",
-  "selectedTextureId": ""
+  "selectedModelId": "wine_fox/07_jk",
+  "selectedTextureId": "skin",
+  "showModelIdFirst": false,
+  "disclaimerShow": false,
+  "starModels": []
 }
