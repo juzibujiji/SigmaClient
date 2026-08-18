@@ -72,6 +72,7 @@ public class KillAura extends Module {
     public HashMap<Entity, Animation> entityAnimation = new HashMap<>();
     public static InteractAutoBlock autoBlock;
     private PredictionAutoBlock predictionAutoBlock;
+    private AuraESP auraESP;
     private int attackTimer;
     private int animationTimer;
     private float eventUpdateYaw, eventUpdatePitch;
@@ -159,7 +160,19 @@ public class KillAura extends Module {
         this.registerSetting(new BooleanSetting("Silent", "Silent rotations", true));
         this.registerSetting(new BooleanSetting("ESP", "ESP on targets", true));
         this.registerSetting(
-                new ColorSetting("ESP Color", "The render color", ClientColors.LIGHT_GREYISH_BLUE.getColor()));
+                new ColorSetting("ESP Color", "The render color", ClientColors.LIGHT_GREYISH_BLUE.getColor()) {
+                    @Override
+                    public boolean isHidden() {
+                        return !getBooleanValueFromSettingName("ESP");
+                    }
+                });
+        this.registerSetting(
+                new NumberSetting<>("ESP Alpha", "Opacity multiplier for the target ESP", 1.0F, 0.05F, 1.0F, 0.05F) {
+                    @Override
+                    public boolean isHidden() {
+                        return !getBooleanValueFromSettingName("ESP");
+                    }
+                });
     }
 
     public static Rotation getCurrentRotation(KillAura var0) {
@@ -183,6 +196,7 @@ public class KillAura extends Module {
         this.targets = new ArrayList<TimedEntity>();
         autoBlock = new InteractAutoBlock(this);
         this.predictionAutoBlock = new PredictionAutoBlock(this, autoBlock);
+        this.auraESP = new AuraESP(this);
         super.initialize();
     }
 
@@ -578,8 +592,9 @@ public class KillAura extends Module {
             }
 
             for (Entry<Entity, Animation> var11 : this.entityAnimation.entrySet()) {
-                AuraESP auraESP = new AuraESP(this);
-                auraESP.renderEsp(var11.getKey());
+                if (this.getBooleanValueFromSettingName("ESP")) {
+                    this.auraESP.renderEsp(var11.getKey());
+                }
             }
         }
     }

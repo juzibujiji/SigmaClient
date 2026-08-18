@@ -1,5 +1,6 @@
 package com.mentalfrostbyte.jello.module.impl.combat.killaura;
 
+import com.mentalfrostbyte.jello.gui.base.animations.Animation;
 import com.mentalfrostbyte.jello.module.impl.combat.KillAura;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
@@ -49,7 +50,11 @@ public class AuraESP {
         var7 = !var8 ? var7 * 2.0F : 1.0F - var7 * 2.0F % 1.0F;
         GL11.glTranslatef(0.0F, (var1.getHeight() + 0.4F) * var7, 0.0F);
         float var9 = (float) Math.sin((double) var7 * Math.PI);
-        this.esppp(var8, 0.45F * var9, 0.6F, 0.35F * var9, killauraMod.entityAnimation.get(var1).getDuration());
+        Animation var10 = killauraMod.entityAnimation.get(var1);
+        if (var10 != null) {
+            this.esppp(var8, 0.45F * var9, 0.6F, 0.35F * var9,
+                    var10.calcPercent() * killauraMod.getNumberValueBySettingName("ESP Alpha"));
+        }
         GL11.glPushMatrix();
         GL11.glTranslated(
                 mc.gameRenderer.getActiveRenderInfo().getPos().getX(),
