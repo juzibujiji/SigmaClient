@@ -4,7 +4,7 @@ import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMove;
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
-import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.movement.Fly;
@@ -71,7 +71,7 @@ public class AutoMLG extends Module {
                 float[] var4 = RotationUtil.rotationToPos(
                         (double) this.field23650.getX() + 0.5,  (double) this.field23650.getY() + 0.5 , (double) this.field23650.getZ() + 0.5
                 );
-                RotationCore.setRotations(var4[0],var4[1]);
+                RotationManager.setRotations(var4[0],var4[1]);
                 //var1.setYaw(var4[0]);
                 //var1.setPitch(var4[1]);
             }
@@ -105,7 +105,7 @@ public class AutoMLG extends Module {
                 if (var5 != null) {
                     if (/*var1.isPre() && */preTicks == -1) {
                         float[] var6 = RotationUtil.rotationToPos((double) var5.getX() + 0.5, (double) var5.getY() + 0.5, (double) var5.getZ() + 0.5);
-                        RotationCore.setRotations(var6[0],var6[1]);
+                        RotationManager.setRotations(var6[0],var6[1]);
                         //var1.setYaw(var6[0]);
                         //var1.setPitch(var6[1]);
                         if (var7 != mc.player.inventory.currentItem) {

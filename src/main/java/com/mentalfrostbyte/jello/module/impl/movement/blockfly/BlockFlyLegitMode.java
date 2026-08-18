@@ -13,7 +13,7 @@ import com.mentalfrostbyte.jello.module.impl.movement.BlockFly;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.game.player.InvManagerUtil;
-import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.util.game.player.rotation.util.RotationUtils;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ContainerBlock;
@@ -1012,7 +1012,7 @@ public final class BlockFlyLegitMode extends Module {
         if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) {
             return;
         }
-        RotationCore.setRotations(yaw, pitch);
+        RotationManager.setRotations(yaw, pitch);
     }
 
     private AimOffset updateZitter(PlacementKey key, long now) {

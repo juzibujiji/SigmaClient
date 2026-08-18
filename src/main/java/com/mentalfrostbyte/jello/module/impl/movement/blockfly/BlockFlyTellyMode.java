@@ -18,7 +18,7 @@ import com.mentalfrostbyte.jello.gui.impl.others.ChatUtil;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
-import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.Minecraft;
@@ -1159,7 +1159,7 @@ public class BlockFlyTellyMode extends Module {
         rotationActive = false;
         // Camera stays under user control; packet/crosshair rotations are silent
         // (EventMotion + RotationCore carry scriptedRotationYaw/Pitch).
-        RotationCore.setRotations(baseYaw, 74.52f);
+        RotationManager.setRotations(baseYaw, 74.52f);
         takeoverDetectionAt = 0L;
         takeoverCameraValid = false;
         clearInitialMovementHolds();
@@ -1199,7 +1199,7 @@ public class BlockFlyTellyMode extends Module {
         adaptiveAimUpdatedAt = 0L;
         scriptedRotationYaw = 0.0f;
         scriptedRotationPitch = 0.0f;
-        if (mc.player != null) RotationCore.setRotations(mc.player.rotationYaw, mc.player.rotationPitch);
+        if (mc.player != null) RotationManager.setRotations(mc.player.rotationYaw, mc.player.rotationPitch);
         takeoverDetectionAt = 0L;
         takeoverCameraValid = false;
         takeoverCameraYaw = 0.0f;
@@ -1352,7 +1352,7 @@ public class BlockFlyTellyMode extends Module {
     void holdScriptedRotation() {
         // 1.16.5 port: silent rotation. Do not mutate the camera entity; the
         // rotation is published for the crosshair and carried by EventMotion.
-        RotationCore.setRotations(scriptedRotationYaw, scriptedRotationPitch);
+        RotationManager.setRotations(scriptedRotationYaw, scriptedRotationPitch);
     }
 
     float quantizeFrom(float origin, float value) {

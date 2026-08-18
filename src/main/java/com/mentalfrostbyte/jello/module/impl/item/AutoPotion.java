@@ -4,7 +4,7 @@ package com.mentalfrostbyte.jello.module.impl.item;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
-import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.combat.Criticals;
@@ -196,7 +196,7 @@ public class AutoPotion extends Module {
                     this.field23811 = 1;
                     //var1.setYaw(var9[0]);
                     //var1.setPitch(var9[1]);
-                    RotationCore.setRotations(var9[0], var9[1]);
+                    RotationManager.setRotations(var9[0], var9[1]);
                 } else {
                     mc.getConnection().sendPacket(new CPlayerPacket.RotationPacket(var9[0], var9[1], !var8 && mc.player.isOnGround()));
                     mc.getConnection().sendPacket(new CPlayerTryUseItemPacket(Hand.MAIN_HAND));

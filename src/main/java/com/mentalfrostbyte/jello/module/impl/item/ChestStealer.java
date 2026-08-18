@@ -10,6 +10,7 @@ import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
 import com.mentalfrostbyte.jello.util.game.player.InvManagerUtil;
 import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.util.system.math.counter.TimerUtil;
 import com.mentalfrostbyte.jello.util.game.player.combat.RotationUtil;
 import com.mentalfrostbyte.jello.util.game.world.blocks.BlockUtil;
@@ -117,7 +118,7 @@ public class ChestStealer extends Module {
                             this.targetChest = var7;
                             //var1.setYaw(var13[0]);
                             //var1.setPitch(var13[1]);
-                            RotationCore.setRotations(var16[0], var16[1]);
+                            RotationManager.setRotations(var16[0], var16[1]);
                             var14 = true;
                         }
                     }

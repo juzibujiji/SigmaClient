@@ -1,30 +1,42 @@
 package com.mentalfrostbyte.jello.module.impl.movement;
 
+import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
-import com.mentalfrostbyte.jello.module.data.ModuleWithModuleSettings;
-import com.mentalfrostbyte.jello.module.impl.movement.crtmov.Rise;
-import com.mentalfrostbyte.jello.module.impl.movement.crtmov.Sigma;
-import com.mentalfrostbyte.jello.module.impl.movement.crtmov.Vape;
-import com.mentalfrostbyte.jello.module.impl.movement.crtmov.Zen;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
-public class CorrectMovement extends ModuleWithModuleSettings {
+public class CorrectMovement extends Module {
     public CorrectMovement() {
-        super(ModuleCategory.MOVEMENT,
-                "CorrectMovement",
-                "juzi suck my dick" ,
-                new Zen(),
-                new Rise(),
-                new Vape(),
-                new Sigma()
-        );
-
+        super(ModuleCategory.MOVEMENT, "CorrectMovement", "Correct your movement.");
         this.registerSetting(new BooleanSetting("FixLook","FixLook",true));
-        //SB桔子,居然欺诈跟有四correctmovement真实可用.
     }
 
     /**
-     * Correction lives in the selected mode (see crtmov/CorrectorMode), not here and not in
-     * managers/RotationManager, which is retired. This module only owns the mode list and the
-     * shared FixLook setting.
+     * In RotationManager
      */
+    /*
+    @EventTarget
+    //@HighestPriority
+    public void onInput(EventMoveInput event) {
+        MovementUtil.silentStrafe(event, RotationCore.currentYaw);
+    }
+
+    @EventTarget
+    //@HighestPriority
+    public void onJump(EventJump event) {
+        event.yaw = RotationCore.currentYaw;
+    }
+
+    @EventTarget
+    //@HighestPriority
+    public void onLook(EventLook event) {
+        if (this.getBooleanValueFromSettingName("FixLook")) {
+            event.yaw = RotationCore.currentYaw;
+            event.pitch = RotationCore.currentPitch;
+        }
+    }
+
+    @EventTarget
+    //@HighestPriority
+    public void onStrafe(EventMoveFlying event) {
+        event.yaw = RotationCore.currentYaw;
+    }*/
 }

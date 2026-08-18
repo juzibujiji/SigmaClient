@@ -4,7 +4,7 @@ import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender3D;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
-import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
+import com.mentalfrostbyte.jello.managers.RotationManager;
 import com.mentalfrostbyte.jello.module.Module;
 import com.mentalfrostbyte.jello.module.data.ModuleCategory;
 import com.mentalfrostbyte.jello.module.impl.combat.bowaimbot.BowAngleSorter;
@@ -60,7 +60,7 @@ public class BowAimbot extends Module {
                 float[] rots = RotationUtil.method34146((LivingEntity) this.field23754.get(0));
                 //event.setYaw(rots[0]);
                 //event.setPitch(rots[1]);
-                RotationCore.setRotations(rots[0], rots[1]);
+                RotationManager.setRotations(rots[0], rots[1]);
             }
         }
     }
