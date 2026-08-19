@@ -1,0 +1,104 @@
+name: Development Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sigma-legacy-dev-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build client
+        shell: pwsh
+        run: >
+          mvn -B -DskipTests package
+          dependency:copy-dependencies
+          -DincludeScope=runtime
+          -DoutputDirectory=target/dependency
+
+      - name: Prepare launcher package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          $dist = "target/sigma-legacy-windows-x64-$shortSha"
+
+          New-Item -ItemType Directory -Force -Path "$dist/libs" | Out-Null
+
+          Copy-Item "target/sigma-jello-5.1.0.jar" "$dist/client.jar"
+          Copy-Item "target/dependency/*.jar" "$dist/libs/"
+
+          @"
+          channel=legacy
+          commit=$env:GITHUB_SHA
+          shortCommit=$shortSha
+          java=17
+          mainClass=Start
+          minecraft=1.16.4
+          platform=windows-x64
+          "@ | Set-Content -Encoding ASCII "$dist/launch.properties"
+
+          $zip = "target/sigma-legacy-windows-x64-$shortSha.zip"
+
+          Compress-Archive `
+            -Path "$dist" `
+            -DestinationPath $zip `
+            -Force
+
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+
+          "$hash  sigma-legacy-windows-x64-$shortSha.zip" |
+            Set-Content -Encoding ASCII "$zip.sha256"
+
+      - name: Publish development prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          $tag = "dev-$env:GITHUB_SHA"
+          $title = "Legacy development build $shortSha"
+
+          $body = @"
+          Automated Legacy development build from commit $env:GITHUB_SHA.
+
+          Commit: $env:GITHUB_SHA
+          Message: $env:COMMIT_MESSAGE
+          Platform: Windows x64
+          Java: 17
+
+          This is a development build and may be unstable.
+          Sigma Jello Bootstrap can select older successful builds from History.
+          "@
+
+          gh release create $tag `
+            "target/sigma-legacy-windows-x64-$shortSha.zip" `
+            "target/sigma-legacy-windows-x64-$shortSha.zip.sha256" `
+            --target $env:GITHUB_SHA `
+            --title $title `
+            --notes $body `
+            --prerelease
