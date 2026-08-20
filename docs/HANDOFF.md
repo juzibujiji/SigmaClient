@@ -304,14 +304,146 @@ git worktree 里对着 MCP-Reborn 官方源码写，主线只负责合并与注�
 关键事实（已调研，见 §9.x）：
 
 - `ExtendedBlockStateMapper` 是现代方块状态进入客户端的**唯一入口**
-  （`ChunkDataInterceptor` 与 `ExtendedHeightBlockUpdateHandler` 都走它），
-  它现在映射失败就 `fallback → Blocks.STONE`，这是「深板岩变石头」的直接原因
+  （`ChunkDataInterceptor` 与 `ExtendedHeightBlockUpdateHandler` 都走它）
 - Via 的 `MappingData` 能反查**物品和方块**的标识符（`getFullItemMappings()` /
   `getFullBlockMappings()`），但**方块状态只有 ID→ID，没有标识符**
 - 所以要自己打包一张「1.21.11 blockstate ID → 本地 blockstate ID」映射表，
   这也是为什么前面坚持让新方块的**状态数与官方一致**（见 §9.11）
 
-方块铺到 1032 应该够支撑映射表了，但先补完第二优先会更稳。
+### 认知修正：不是「映射失败兜底成石头」，是「成功地降级了」
+
+原来这份文档写的是「它现在映射失败就 fallback → Blocks.STONE，这是深板岩变石头的
+直接原因」。**这个判断是错的**，会把人引到错的地方去改。
+
+`slowMapToNativeId` 的实际行为是把 `rawStateId` 交给 Via 的 `MappingChain`，
+而 ViaBackwards 在 1.21→1.16.4 这条链上**本来就把深板岩降级成石头**——映射是成功的，
+`STONE_ID` 那个兜底根本没被走到。所以改兜底没有任何用，必须在**进 Via 链之前**截住。
+
+### 已确认的两个前提（动手前必读，键错了整张表都白做）
+
+**一、拦截点在 Via 解码器之前，拿到的是服务器原生 ID。**
+
+`de/florianmichael/viamcp/MCPVLBPipeline.java` 把拦截器装在
+`addBefore(VIA_DECODER_HANDLER_NAME, ChunkDataInterceptor.HANDLER_NAME, ...)`，
+所以 `ChunkDataInterceptor.convertSection` 里那个 `palette.idAt(x, y, z)` 读到的是
+**服务器那个版本原生的、未降级的** blockstate ID。这也能反过来印证：
+正因为是原生 ID，后面才需要 `chain.map()` 去降级。
+
+**二、所以映射表只对 1.21.11 服务器有效。**
+
+`loadMappings(target)` 是从服务器版本往下逐级组装降级链
+（1.21.11→1.21.9→…→1.17→1.16.4）。连 1.20 服务器时 `rawId` 在 1.20 的 ID 空间里，
+1.21.11 的表对不上；而且**指望不上让它先升到 1.21.11 再查表**——降级链只往一个方向走，
+比 1.21.11 老的服务器的 ID 永远不会经过 1.21.11 的空间。
+
+结论：要么按版本各生成一张表，要么先只支持 1.21.11。集成时**必须加版本门**，
+否则连 1.20 服务器会按错的键查表，出来的是随机方块 —— 比降级成石头糟得多，
+而且没有任何报错。
+
+生成其它版本的表是纯机械活：拿那个版本的 server.jar 跑 `--reports` 得到它的
+`blocks.json`，同一个生成器再跑一遍。
+
+### 已完成的部分（2 个 agent + 主线，回归全绿）
+
+| 层 | 做法 | 覆盖 |
+|---|---|---|
+| **区块方块** | `ChunkDataInterceptor` 无条件捕获区块包（Via 解码器之前），`ExtendedBlockStateMapper` 先查表再退 Via 链 | 26745/29671 = **90.1%** |
+| **单/多方块更新** | 改写 Via 解码出来的包（见下） | 同上 |
+| **物品** | 读 ViaBackwards 存在 NBT 里的 `VB|<协议>|id` 还原真实物品 | 467/533 已注册的全覆盖 |
+
+产物：`tools/crossversion/GenerateBlockStateMap.java`（生成器，自校验后才输出）、
+`src/main/resources/crossversion/blockstate-map-1.21.11.txt`（1166 行 / 72 KB，按方块分组）、
+`net/minecraft/crossversion/ModernBlockStateMap.java`（运行时展开，建表 43 ms / 常驻 231 KB）、
+`tools/crossversion/BlockStateMapCheck.java`（身份 + 撞名 + 抽样三重校验）、
+`com/mentalfrostbyte/jello/util/game/inventory/ExtendedItemMapper.java`。
+
+### 状态表的展开顺序：必须按属性名字典序，不是 JSON 键序
+
+`blocks.json` 里 `properties` 的**键顺序不是状态展开顺序**。官方
+`StateDefinition.propertiesByName` 是 `ImmutableSortedMap`（`StateDefinition.java:33-66`），
+按**属性名字典序**展开，且**最后一个属性变化最快**；本项目 `StateContainer.java:33-60` 同理。
+
+按 JSON 键序展开的话，有 **12 个方块整体错位**（箱子家族、`piston_head`、`moving_piston`
+把键按声明顺序列出）。按字典序展开：1166 个方块 / 29671 个状态**零错位**。
+生成器每次运行都重新验证（ID 连续 + 笛卡尔积大小 + 逐元组比对），不过就 `exit(1)`。
+
+### pipeline 顺序（改这条链之前必读，有行号支撑）
+
+```
+splitter → decompress → chunk-data-interceptor → via-decoder → extended-height-block-update → decoder
+```
+
+- `VLBPipeline.java:43` 先 `addBefore("decoder", via-decoder)`；开压缩后 `:52-64` 把它移到
+  `addAfter(decompress)`
+- `MCPVLBPipeline.java:31-41` 的 `userEventTriggered` 先 `super`、再
+  `moveChunkInterceptorAfterDecompression`（`:89` 是 `addAfter(decompress, ...)`），
+  所以拦截器正好落在 decompress 与 via-decoder **之间**
+- `MCPVLBPipeline.java:162` 用 `addAfter(VIA_DECODER_HANDLER_NAME, ...)`。全仓 grep 过
+  `addAfter/addBefore`，via-decoder 与 vanilla `decoder` 之间**只有这一个** handler
+
+关键时序事实：`VLBViaDecodeHandler` 是 `MessageToMessageDecoder`，每帧只 `out.add` 一次，
+netty 在 `decode()` 返回后才 fire。上游是 `ByteToMessageDecoder`，一帧走完整条链才发下一帧。
+所以「原始包 → Via 译码包」**必定在同一个同步调用栈里、原始包先到**。
+
+### 方块更新为什么不能用「注入第二个包」
+
+原来那套子系统只捕获 **Y 越界**的更新（`isTranslatedBlockYInBounds` 取反），因为它的职责是
+把 Via 因为 Y 超出 0-255 而**丢弃**的包重新注入 —— 没有竞争者，所以直接注入没问题。
+
+Y 在界内时 Via 会**正常投递降级版本**。这时若只放宽捕获条件去注入，同一位置会被设置两次，
+**谁最后到谁生效**；而 `drain()` 原本排在 `super.channelRead` 之前，正确方块会先到、
+石头后到覆盖掉 —— 等于没修。
+
+现在的做法是**改写 Via 解码出来的那个包**：界内的原始 stateId 按「线格式位置 long」寄存，
+handler 认出 1.16.4 的 CHANGE_BLOCK / MULTI_BLOCK_CHANGE 后用寄存值重建包、
+`release()` 掉 Via 那个。**出口永远只有一个包**，二选一，不存在重复。
+位置键 `remove()`-on-read，`channelReadComplete` 清掉没配上的寄存项。
+
+副作用是好的：石头那个包在到达 vanilla decoder 前就被释放，**玩家看不到闪一下**。
+挖掉方块（→空气）时 `nativeStateId == viaStateId`，不介入、零开销。
+
+**已知边界**：MULTI 那半只在 ViaBackwards 原样转发 section-position long 时生效
+（1.16.2 起该包格式与 1.17+ 相同，推断成立但未反编译验证）。配不上就不介入，
+维持现状不是回归 —— 但活塞、爆炸这类一次改一片的场景可能仍是降级的。
+
+### 调试开关
+
+| 开关 | 作用 |
+|---|---|
+| `-Dsigma.viamcp.debugBlockUpdateReinject=true` | 打出成对的 `PARKED_BLOCK_UPDATE` / `OVERRIDE_BLOCK_UPDATE`。只有 PARKED 没有 OVERRIDE = 该状态不在表里（那 9.9%）或 Via 的值本来就对 |
+| `-Dsigma.viamcp.reinject.modernState=false` | 单独关掉方块更新改写这条新路 |
+| `-Dsigma.viamcp.debugItemMapping=true` | 打出每次物品替换 |
+| `-Dsigma.viamcp.testBlockUpdateReinject=true` | 启动时跑 44 个 round-trip 自检 |
+
+### 还没做的
+
+- **物品名残留占位名**（「1.21 mace」）与**附魔被 Via 降级成字面文本**（`wind_burst` 显示英文）。
+  这两条是同一类问题：Via 把不认识的内容转成显示文本。**风险点是 Via 用两套不同的移除标记**
+  （NBT 时代 `nbtTagName("customName")` 在 `display` 里，1.20.5+ 结构化组件用
+  `added_custom_name`），弄错会破坏出站的 `restoreDisplayTag`
+- **只支持 1.21.11**（见前面的版本门说明）
+- 那 9.9% 未映射：2576 个状态属于 75 个未注册方块，350 个是 `note_block` 的 7 种新乐器
+  （后者按设计留给 Via，它能映射成真实的 1.16.4 音符盒）
+
+### 数据源是完整的，不用问 Via
+
+`1.21.11/reports/blocks.json`（在 `.gitignore` 里，但文件在磁盘上）每个方块都带：
+
+```json
+"minecraft:acacia_button": {
+  "properties": { "face": [...], "facing": [...], "powered": [...] },
+  "states": [ { "id": 10569, "properties": { "face":"floor", "facing":"north", "powered":"true" } }, ... ]
+}
+```
+
+`id` 就是 1.21.11 的 blockstate ID，`properties` 是完整属性取值。配上
+`ModernRegistry.blockByModernId(标识符)`（它已处理 `short_grass`→`grass` 这类改名）
+就能算出本地 `BlockState`，再 `Block.getStateId(...)`。
+
+**属性匹配是这活儿真正的难点**：属性名可能对不上（1.16.4 的 `SeaPickleBlock` 用
+`pickles`、官方蜡烛用 `candles`，为此专门自建过属性），本地属性集合可能比官方少或多。
+**匹配不到必须留空让调用方走兜底，绝不能猜一个** —— 静默映射错块比降级成石头更难排查。
+
 
 ---
 
@@ -388,7 +520,7 @@ mvn -o -q compile && bash tools/crossversion/run-registry-check.sh
 
 ---
 
-## 八、绝对不能碰的四条红线
+## 八、绝对不能碰的五条红线
 
 1. **物品 ID 0-975、方块 ID 0-762 必须逐一保持不变。** 只能在
    `Items.java:992` / `Blocks.java:889` 之后追加。中间插入会让连 1.8/1.12/1.16.4
@@ -406,6 +538,32 @@ mvn -o -q compile && bash tools/crossversion/run-registry-check.sh
    而 `register` 按声明顺序发号。官方按字母序插新类型，照抄会让后面每个类型都偏移，
    连原版服务器发来的实体都生成成错误类型。已踩过：`wind_charge` 一度插在
    `PLAYER` / `FISHING_BOBBER` 之前。文件末尾有专门的扩展区和注释。
+
+5. **绝对不要给原版方块增删属性。** 原版方块状态 id 0-17111 必须与真实 1.16.4
+   **逐一相同**，这是整个 Via 透传的地基。
+
+   `ExtendedBlockStateMapper.slowMapToNativeId` 里这一行是要害：
+
+   ```java
+   int nativeId = Block.BLOCK_STATE_IDS.getByValue(mappedId) != null ? mappedId : STONE_ID;
+   ```
+
+   `mappedId` 是 Via 降级链输出的**真实 1.16.4 状态 id**，这里**直接当本地 id 用**。
+   给任何原版方块加一个属性，它之后所有方块的状态 id 全部移位，于是**每个经 Via 来的
+   方块、以及连真实 1.16.4 服务器时的每个方块都会变成错的方块** —— 而且不抛任何异常。
+
+   **这条差点被踩。** 方块状态表的覆盖率报告建议「给 6 种树叶 + 4 种铁轨 + 屏障补
+   `waterlogged`、给 12 个头颅补 `powered`，代价只有 +299 状态，能把 90.1% 的覆盖率
+   往上推、并救回 251 个被折叠的状态」。状态总数确实装得下，但**这个改法是错的**。
+
+   ID 安全的做法是把含水变体注册成**独立的扩展方块**（追加在 762 之后），
+   §「并行铺开那一轮」里樱花树叶就是这么救回来的（`ModernWaterloggedBlock` 子类）。
+   丑，但不动原版 id。
+
+   `RegistryCheck` 已经在查一半：扩展方块的状态 id 若落进原版区间会报
+   「** 方块状态 id N 落在原版区间内」。但它**查不出**「原版方块自己的属性被改了」，
+   所以这条只能靠人守。
+
 
 ---
 

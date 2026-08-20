@@ -18,6 +18,29 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * Captures raw 1.18+ chunk data before ViaBackwards narrows it to 1.16.
+ *
+ * <h2>Two reasons a raw block change has to be captured</h2>
+ *
+ * <p>This handler was originally written for <b>extended world height</b>: Y
+ * outside the legacy 0..255 range makes ViaBackwards cancel the whole block
+ * change, so the raw packet is queued and
+ * {@link ExtendedHeightBlockUpdateHandler} re-injects a 1.16.4 equivalent.
+ * That is the {@code !isTranslatedBlockYInBounds} branch below.
+ *
+ * <p>Since the client gained real 1.21.11 blocks there is a second reason,
+ * and it applies to the ordinary Y range: Via delivers those updates, but with
+ * the state <b>downgraded</b> - deepslate arrives as stone even though this
+ * client has deepslate registered. Chunk data never had this problem because
+ * it is captured unconditionally and mapped by
+ * {@link ExtendedBlockStateMapper}; a block the player places, on the other
+ * hand, comes back as a BLOCK_UPDATE and used to be ignored here, which is
+ * exactly why chunks looked right and placements did not.
+ *
+ * <p>These in-bounds updates are <b>not</b> queued for re-injection - that
+ * would set the position twice and leave the outcome to whichever packet the
+ * client thread happened to process last. They are parked under their wire
+ * position in {@link ExtendedBlockUpdateStore} and patched into Via's own
+ * packet downstream, so exactly one block change reaches the world.
  */
 public class ChunkDataInterceptor extends ChannelInboundHandlerAdapter {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -55,6 +78,10 @@ public class ChunkDataInterceptor extends ChannelInboundHandlerAdapter {
                         int z = WorldHeightHelper.blockPosZ(pos);
                         ExtendedBlockUpdateStore.putSingle(x, y, z, stateId);
                         logCapturedBlockUpdate(packetId, x, y, z, stateId);
+                    } else if (ExtendedHeightBlockUpdateHandler.isModernStateOverrideActive()) {
+                        int stateId = readVarInt(buf);
+                        ExtendedBlockUpdateStore.putSingleOverride(pos, stateId);
+                        logParkedBlockUpdate(packetId, pos, stateId);
                     }
                 } else if (WorldHeightHelper.isRawSectionBlocksUpdatePacket(packetId)) {
                     long sectionPos = buf.readLong();
@@ -64,6 +91,11 @@ public class ChunkDataInterceptor extends ChannelInboundHandlerAdapter {
                         buf.readBytes(payload);
                         ExtendedBlockUpdateStore.putMulti(sectionPos, payload);
                         logCapturedSectionBlocksUpdate(packetId, sectionPos, sectionY, payload.length);
+                    } else if (ExtendedHeightBlockUpdateHandler.isModernStateOverrideActive()) {
+                        byte[] payload = new byte[buf.readableBytes()];
+                        buf.readBytes(payload);
+                        ExtendedBlockUpdateStore.putMultiOverride(sectionPos, payload);
+                        logParkedSectionBlocksUpdate(packetId, sectionPos, sectionY, payload.length);
                     }
                 } else if (WorldHeightHelper.isRawBlockDestructionPacket(packetId)) {
                     int entityId = readVarInt(buf);
@@ -130,6 +162,26 @@ public class ChunkDataInterceptor extends ChannelInboundHandlerAdapter {
     private static void logCapturedSectionBlocksUpdate(int packetId, long sectionPos, int sectionY, int payloadBytes) {
         if (isDebugEnabled()) {
             LOGGER.info("[ExtendedHeightProbe] RAW_SECTION_BLOCKS_UPDATE_CAPTURED packetId={} target={} sectionPos={} sectionY={} payloadBytes={}",
+                    packetId, WorldHeightHelper.getTargetVersionSafe(), sectionPos, sectionY, payloadBytes);
+        }
+    }
+
+    /**
+     * Logged under the re-injection debug flag rather than the chunk-capture one:
+     * the interesting half of an override is the state id the patch ends up
+     * writing, and that is decided (and logged) downstream.
+     */
+    private static void logParkedBlockUpdate(int packetId, long pos, int stateId) {
+        if (ExtendedHeightBlockUpdateHandler.isDebugEnabled()) {
+            LOGGER.info("[ModernBlockPassthrough] PARKED_BLOCK_UPDATE packetId={} target={} pos=({},{},{}) rawStateId={}",
+                    packetId, WorldHeightHelper.getTargetVersionSafe(), WorldHeightHelper.blockPosX(pos),
+                    WorldHeightHelper.blockPosY(pos), WorldHeightHelper.blockPosZ(pos), stateId);
+        }
+    }
+
+    private static void logParkedSectionBlocksUpdate(int packetId, long sectionPos, int sectionY, int payloadBytes) {
+        if (ExtendedHeightBlockUpdateHandler.isDebugEnabled()) {
+            LOGGER.info("[ModernBlockPassthrough] PARKED_SECTION_BLOCKS_UPDATE packetId={} target={} sectionPos={} sectionY={} payloadBytes={}",
                     packetId, WorldHeightHelper.getTargetVersionSafe(), sectionPos, sectionY, payloadBytes);
         }
     }
