@@ -892,6 +892,25 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         return this.handActive;
     }
 
+    /**
+     * 官方 {@code LocalPlayer.isSlowDueToUsingItem()}：
+     * {@code isUsingItem() && !useItem.getOrDefault(USE_EFFECTS, DEFAULT).canSprint()}。
+     *
+     * <p>「正在使用物品」不等于「该被拖慢」。1.16.4 把两者混为一谈，凡是
+     * {@code isHandActive()} 就既降速又禁疾跑；官方从 1.21 起由物品自己声明。
+     * 长矛就是反例：举着它既不减速也能疾跑。
+     */
+    private boolean isSlowDueToUsingItem() {
+        ItemStack active = this.getActiveItemStack();
+        return this.isHandActive() && !active.getItem().canSprintWhileUsing(active);
+    }
+
+    /** 官方 {@code LocalPlayer.itemUseSpeedMultiplier()}。 */
+    private float itemUseSpeedMultiplier() {
+        ItemStack active = this.getActiveItemStack();
+        return active.getItem().getUseSpeedMultiplier(active);
+    }
+
     public void resetActiveHand() {
         super.resetActiveHand();
         this.handActive = false;
@@ -1045,18 +1064,33 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         boolean vanillaMovement = ModernMovementPhysics.shouldUseGrimVanillaMovement();
 
         if (this.isHandActive() && !this.isPassenger()) {
+            // 官方 LocalPlayer.applyInput：缩放系数来自使用中物品的 UseEffects，不是固定 0.2。
+            // 长矛是 1.0F（举着不减速），其余物品仍是 UseEffects.DEFAULT 的 0.2F。
+            float useSpeedMultiplier = this.itemUseSpeedMultiplier();
+            // 官方 isSlowDueToUsingItem() = isUsingItem() && !canSprint()。1.16.4 用
+            // sprintToggleTimer = 0 来阻止起跑，所以只在官方判定「该被拖慢」时才清它。
+            boolean blocksSprint = this.isSlowDueToUsingItem();
+
             if (vanillaMovement) {
-                this.movementInput.moveStrafe *= 0.2F;
-                this.movementInput.moveForward *= 0.2F;
-                this.sprintToggleTimer = 0;
+                this.movementInput.moveStrafe *= useSpeedMultiplier;
+                this.movementInput.moveForward *= useSpeedMultiplier;
+
+                if (blocksSprint) {
+                    this.sprintToggleTimer = 0;
+                }
             } else {
-                EventSlowDown event = new EventSlowDown(0.2F);
+                // 事件里带的是本物品的实际倍率，这样 NoSlow 之类的模块仍然能覆盖它，
+                // 而长矛的 1.0F 会作为基准值传下去（而不是被写死的 0.2F 顶掉）。
+                EventSlowDown event = new EventSlowDown(useSpeedMultiplier);
                 EventBus.call(event);
 
                 if (!event.cancelled) {
                     this.movementInput.moveStrafe = this.movementInput.moveStrafe * event.getSlowDown();
                     this.movementInput.moveForward = this.movementInput.moveForward * event.getSlowDown();
-                    this.sprintToggleTimer = 0;
+
+                    if (blocksSprint) {
+                        this.sprintToggleTimer = 0;
+                    }
                 }
             }
         }
@@ -1104,7 +1138,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         }
 
         if ((this.onGround || this.canSwim()) && !flag1 && !flag2 && this.isUsingSwimmingAnimation()
-                && !this.isSprinting() && flag4 && !this.isHandActive() && !this.isPotionActive(Effects.BLINDNESS)
+                && !this.isSprinting() && flag4 && !this.isSlowDueToUsingItem() && !this.isPotionActive(Effects.BLINDNESS)
                 && !sprintStartRestricted && this.sprintSuppressionTicks <= 0) {
             if (this.sprintToggleTimer <= 0 && !this.mc.gameSettings.keyBindSprint.isKeyDown()) {
                 this.sprintToggleTimer = 7;
@@ -1121,7 +1155,7 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
                 || !this.isInWater() || this.canSwim();
 
         if (!this.isSprinting() && canWaterSprint && this.isUsingSwimmingAnimation() && flag4
-                && !this.isHandActive() && !this.isPotionActive(Effects.BLINDNESS)
+                && !this.isSlowDueToUsingItem() && !this.isPotionActive(Effects.BLINDNESS)
                 && !sprintStartRestricted
                 && this.mc.gameSettings.keyBindSprint.isKeyDown()
                 && this.sprintSuppressionTicks <= 0) {

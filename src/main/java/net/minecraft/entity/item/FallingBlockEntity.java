@@ -341,6 +341,18 @@ public class FallingBlockEntity extends Entity
     }
 
     /**
+     * 1.17+ {@code setHurtsEntities(float, int)}. Added for the pointed dripstone backport, which needs
+     * a per-stalactite damage amount ({@code 1.0F * height}, capped at 40) instead of the 1.16.4
+     * anvil defaults (2.0F / 40).
+     */
+    public void setHurtEntities(float fallHurtAmountIn, int fallHurtMaxIn)
+    {
+        this.hurtEntities = true;
+        this.fallHurtAmount = fallHurtAmountIn;
+        this.fallHurtMax = fallHurtMaxIn;
+    }
+
+    /**
      * Return whether this entity should be rendered as on fire.
      */
     public boolean canRenderOnFire()

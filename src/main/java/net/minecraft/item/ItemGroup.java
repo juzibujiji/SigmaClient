@@ -75,7 +75,12 @@ public abstract class ItemGroup
         {
             return new ItemStack(Items.GOLDEN_SWORD);
         }
-    }).setRelevantEnchantmentTypes(new EnchantmentType[] {EnchantmentType.VANISHABLE, EnchantmentType.ARMOR, EnchantmentType.ARMOR_FEET, EnchantmentType.ARMOR_HEAD, EnchantmentType.ARMOR_LEGS, EnchantmentType.ARMOR_CHEST, EnchantmentType.BOW, EnchantmentType.WEAPON, EnchantmentType.WEARABLE, EnchantmentType.BREAKABLE, EnchantmentType.TRIDENT, EnchantmentType.CROSSBOW});
+    }).setRelevantEnchantmentTypes(new EnchantmentType[] {EnchantmentType.VANISHABLE, EnchantmentType.ARMOR, EnchantmentType.ARMOR_FEET, EnchantmentType.ARMOR_HEAD, EnchantmentType.ARMOR_LEGS, EnchantmentType.ARMOR_CHEST, EnchantmentType.BOW, EnchantmentType.WEAPON, EnchantmentType.WEARABLE, EnchantmentType.BREAKABLE, EnchantmentType.TRIDENT, EnchantmentType.CROSSBOW,
+            // 跨版本扩展：重锤（致密/破甲/风爆）与长矛（突进）的附魔类型。
+            // 漏了这两个的后果是「附魔有了但附魔书没有」—— EnchantedBookItem.fillItemGroup
+            // 对非搜索栏是按 group.hasRelevantEnchantmentType(ench.type) 筛的，
+            // 不在这张表里就不会生成附魔书，只有搜索栏（遍历全注册表）能翻到。
+            EnchantmentType.MACE, EnchantmentType.SPEAR});
     public static final ItemGroup BREWING = new ItemGroup(10, "brewing")
     {
         public ItemStack createIcon()
@@ -254,7 +259,11 @@ public abstract class ItemGroup
      */
     public void fill(NonNullList<ItemStack> items)
     {
-        for (Item item : Registry.ITEM)
+        // 按 1.21.11 的注册顺序而不是本地 raw ID 顺序填充。扩展物品的 raw ID 必须追加在
+        // 原版之后（否则跨版本协议错位），若直接按 raw ID 填充，新物品会全部堆在创造栏
+        // 末尾。ModernRegistry.creativeOrder() 把显示顺序与 ID 顺序解耦，读不到顺序表时
+        // 自动退回原版行为。
+        for (Item item : net.minecraft.crossversion.ModernRegistry.creativeOrder())
         {
             item.fillItemGroup(this, items);
         }

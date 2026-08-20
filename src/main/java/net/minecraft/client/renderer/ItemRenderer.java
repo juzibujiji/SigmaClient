@@ -33,6 +33,7 @@ import net.minecraft.item.Items;
 import net.minecraft.resources.IResourceManager;
 import net.minecraft.resources.IResourceManagerReloadListener;
 import net.minecraft.util.Direction;
+import net.minecraft.item.SpearItem;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.registry.Registry;
@@ -118,6 +119,15 @@ public class ItemRenderer implements IResourceManagerReloadListener {
 
             if (itemStackIn.getItem() == Items.TRIDENT && flag) {
                 modelIn = this.itemModelMesher.getModelManager().getModel(new ModelResourceLocation("minecraft:trident#inventory"));
+            }
+
+            // 长矛（1.21.11）：官方一把长矛有两个模型，由 items/<id>.json 的
+            // minecraft:display_context 选择 —— gui / ground / fixed / on_shelf 用扁平的
+            // <id>.json，其余（所有手持语境）用 <id>_in_hand.json。1.16.4 没有 item definition
+            // 这一层，只能像原版处理三叉戟那样在渲染器里分流，逻辑等价。
+            // 这里是反向那一半：getItemModelWithOverrides 默认给 _in_hand，界面里换回扁平模型。
+            if (itemStackIn.getItem() instanceof SpearItem && flag) {
+                modelIn = this.itemModelMesher.getItemModel(itemStackIn);
             }
 
             if (Reflector.ForgeHooksClient_handleCameraTransforms.exists()) {
@@ -289,6 +299,14 @@ public class ItemRenderer implements IResourceManagerReloadListener {
 
         if (item == Items.TRIDENT) {
             ibakedmodel = this.itemModelMesher.getModelManager().getModel(new ModelResourceLocation("minecraft:trident_in_hand#inventory"));
+        } else if (item instanceof SpearItem) {
+            // 官方 items/<id>.json 的 fallback 分支：所有手持语境用 _in_hand 模型
+            // （32×32 的加长贴图 + spear_in_hand.json 里的手持变换矩阵）。
+            // 之前缺这一步，手上拿到的是背包里那个 16×16 图标配 item/generated 的通用变换，
+            // 这就是「第一人称和第三人称都不对」的根因。
+            ResourceLocation id = Registry.ITEM.getKey(item);
+            ibakedmodel = this.itemModelMesher.getModelManager()
+                    .getModel(new ModelResourceLocation("minecraft:" + id.getPath() + "_in_hand#inventory"));
         } else {
             ibakedmodel = this.itemModelMesher.getItemModel(stack);
         }
@@ -449,6 +467,25 @@ public class ItemRenderer implements IResourceManagerReloadListener {
 
                 this.draw(bufferbuilder, xPosition + 2, yPosition + 13, 13, 2, 0, 0, 0, 255);
                 this.draw(bufferbuilder, xPosition + 2, yPosition + 13, i, 1, j >> 16 & 255, j >> 8 & 255, j & 255, 255);
+                RenderSystem.enableBlend();
+                RenderSystem.enableAlphaTest();
+                RenderSystem.enableTexture();
+                RenderSystem.enableDepthTest();
+            }
+            // 1.21.11 parity: bundles reuse the item bar slot to show how full they are
+            // (official BundleItem.isBarVisible / getBarWidth / getBarColor, world/item/BundleItem.java:142-157).
+            // 1.16.4 has no generic Item#isBarVisible hook, so this is an explicit branch next to the damage bar.
+            else if (net.minecraft.item.BundleItem.isBarVisible(stack)) {
+                RenderSystem.disableDepthTest();
+                RenderSystem.disableTexture();
+                RenderSystem.disableAlphaTest();
+                RenderSystem.disableBlend();
+                Tessellator tessellator2 = Tessellator.getInstance();
+                BufferBuilder bufferbuilder2 = tessellator2.getBuffer();
+                int l = net.minecraft.item.BundleItem.getBarWidth(stack);
+                int i1 = net.minecraft.item.BundleItem.getBarColor(stack);
+                this.draw(bufferbuilder2, xPosition + 2, yPosition + 13, 13, 2, 0, 0, 0, 255);
+                this.draw(bufferbuilder2, xPosition + 2, yPosition + 13, l, 1, i1 >> 16 & 255, i1 >> 8 & 255, i1 & 255, 255);
                 RenderSystem.enableBlend();
                 RenderSystem.enableAlphaTest();
                 RenderSystem.enableTexture();

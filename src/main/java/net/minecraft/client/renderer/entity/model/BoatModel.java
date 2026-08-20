@@ -7,15 +7,60 @@ import net.minecraft.client.renderer.model.ModelRenderer;
 import net.minecraft.entity.item.BoatEntity;
 import net.minecraft.util.math.MathHelper;
 
+/**
+ * Boat model, and (since the 1.21.11 port) the base for the raft and chest variants.
+ *
+ * Geometry sources - official 1.21.11:
+ *   net/minecraft/client/model/object/boat/BoatModel#addCommonParts / createChestBoatModel /
+ *   createWaterPatch, and .../RaftModel#addCommonParts / createChestRaftModel.
+ * Texture sheet sizes come from the LayerDefinition.create calls there: 128x64 for the plain
+ * boat and raft, 128x128 for both chest variants.
+ */
 public class BoatModel extends SegmentedModel<BoatEntity>
 {
     private final ModelRenderer[] paddles = new ModelRenderer[2];
     private final ModelRenderer noWater;
     private final ImmutableList<ModelRenderer> field_228243_f_;
+    private final boolean raft;
+    private final int sheetHeight;
 
     public BoatModel()
     {
-        ModelRenderer[] amodelrenderer = new ModelRenderer[] {(new ModelRenderer(this, 0, 0)).setTextureSize(128, 64), (new ModelRenderer(this, 0, 19)).setTextureSize(128, 64), (new ModelRenderer(this, 0, 27)).setTextureSize(128, 64), (new ModelRenderer(this, 0, 35)).setTextureSize(128, 64), (new ModelRenderer(this, 0, 43)).setTextureSize(128, 64)};
+        this(false, false);
+    }
+
+    protected BoatModel(boolean raftIn, boolean chestIn)
+    {
+        this.raft = raftIn;
+        this.sheetHeight = chestIn ? 128 : 64;
+        Builder<ModelRenderer> builder = ImmutableList.builder();
+        builder.addAll(Arrays.asList(raftIn ? this.makeRaftHull() : this.makeBoatHull()));
+        this.makePaddles(raftIn);
+        builder.addAll(Arrays.asList(this.paddles));
+
+        if (chestIn)
+        {
+            builder.addAll(Arrays.asList(this.makeChest(raftIn)));
+        }
+
+        this.noWater = this.makeModelRenderer(0, 0);
+        this.noWater.addBox(-14.0F, -9.0F, -3.0F, 28.0F, 16.0F, 3.0F, 0.0F);
+        this.noWater.setRotationPoint(0.0F, -3.0F, 1.0F);
+        this.noWater.rotateAngleX = ((float)Math.PI / 2F);
+        this.field_228243_f_ = builder.build();
+    }
+
+    private ModelRenderer makeModelRenderer(int texX, int texY)
+    {
+        return (new ModelRenderer(this, texX, texY)).setTextureSize(128, this.sheetHeight);
+    }
+
+    /**
+     * bottom / back / front / right / left, from official BoatModel#addCommonParts.
+     */
+    private ModelRenderer[] makeBoatHull()
+    {
+        ModelRenderer[] amodelrenderer = new ModelRenderer[] {this.makeModelRenderer(0, 0), this.makeModelRenderer(0, 19), this.makeModelRenderer(0, 27), this.makeModelRenderer(0, 35), this.makeModelRenderer(0, 43)};
         int i = 32;
         int j = 6;
         int k = 20;
@@ -35,21 +80,56 @@ public class BoatModel extends SegmentedModel<BoatEntity>
         amodelrenderer[1].rotateAngleY = ((float)Math.PI * 1.5F);
         amodelrenderer[2].rotateAngleY = ((float)Math.PI / 2F);
         amodelrenderer[3].rotateAngleY = (float)Math.PI;
+        return amodelrenderer;
+    }
+
+    /**
+     * The raft has no separate walls: official RaftModel#addCommonParts builds its "bottom"
+     * from two flat slabs, which is what makes a raft look wider and flatter than a boat.
+     */
+    private ModelRenderer[] makeRaftHull()
+    {
+        ModelRenderer modelrenderer = this.makeModelRenderer(0, 0);
+        modelrenderer.addBox(-14.0F, -11.0F, -4.0F, 28.0F, 20.0F, 4.0F, 0.0F);
+        modelrenderer.setTextureOffset(0, 0);
+        modelrenderer.addBox(-14.0F, -9.0F, -8.0F, 28.0F, 16.0F, 4.0F, 0.0F);
+        modelrenderer.setRotationPoint(0.0F, -2.1F, 1.0F);
+        modelrenderer.rotateAngleX = 1.5708F;
+        return new ModelRenderer[] {modelrenderer};
+    }
+
+    private void makePaddles(boolean raftIn)
+    {
         this.paddles[0] = this.makePaddle(true);
-        this.paddles[0].setRotationPoint(3.0F, -5.0F, 9.0F);
         this.paddles[1] = this.makePaddle(false);
-        this.paddles[1].setRotationPoint(3.0F, -5.0F, -9.0F);
+        float f = raftIn ? -4.0F : -5.0F;
+        this.paddles[0].setRotationPoint(3.0F, f, 9.0F);
+        this.paddles[1].setRotationPoint(3.0F, f, -9.0F);
         this.paddles[1].rotateAngleY = (float)Math.PI;
         this.paddles[0].rotateAngleZ = 0.19634955F;
         this.paddles[1].rotateAngleZ = 0.19634955F;
-        this.noWater = (new ModelRenderer(this, 0, 0)).setTextureSize(128, 64);
-        this.noWater.addBox(-14.0F, -9.0F, -3.0F, 28.0F, 16.0F, 3.0F, 0.0F);
-        this.noWater.setRotationPoint(0.0F, -3.0F, 1.0F);
-        this.noWater.rotateAngleX = ((float)Math.PI / 2F);
-        Builder<ModelRenderer> builder = ImmutableList.builder();
-        builder.addAll(Arrays.asList(amodelrenderer));
-        builder.addAll(Arrays.asList(this.paddles));
-        this.field_228243_f_ = builder.build();
+    }
+
+    /**
+     * chest_bottom / chest_lid / chest_lock. The raft variant sits 5.1px higher because its
+     * deck is lower - see official RaftModel#createChestRaftModel.
+     */
+    private ModelRenderer[] makeChest(boolean raftIn)
+    {
+        float f = raftIn ? -5.1F : 0.0F;
+        ModelRenderer modelrenderer = this.makeModelRenderer(0, 76);
+        modelrenderer.addBox(0.0F, 0.0F, 0.0F, 12.0F, 8.0F, 12.0F, 0.0F);
+        modelrenderer.setRotationPoint(-2.0F, -5.0F + f, -6.0F);
+        modelrenderer.rotateAngleY = (-(float)Math.PI / 2F);
+        ModelRenderer modelrenderer1 = this.makeModelRenderer(0, 59);
+        modelrenderer1.addBox(0.0F, 0.0F, 0.0F, 12.0F, 4.0F, 12.0F, 0.0F);
+        modelrenderer1.setRotationPoint(-2.0F, -9.0F + f, -6.0F);
+        modelrenderer1.rotateAngleY = (-(float)Math.PI / 2F);
+        ModelRenderer modelrenderer2 = this.makeModelRenderer(0, 59);
+        modelrenderer2.addBox(0.0F, 0.0F, 0.0F, 2.0F, 4.0F, 1.0F, 0.0F);
+        modelrenderer2.setRotationPoint(-1.0F, -6.0F + f, -1.0F);
+        modelrenderer2.rotateAngleY = (-(float)Math.PI / 2F);
+        return new ModelRenderer[] {modelrenderer, modelrenderer1, modelrenderer2};
     }
 
     /**
@@ -71,9 +151,17 @@ public class BoatModel extends SegmentedModel<BoatEntity>
         return this.noWater;
     }
 
+    /**
+     * Official 1.21.11 RaftRenderer, unlike BoatRenderer, never submits the water patch model.
+     */
+    public boolean hasWaterPatch()
+    {
+        return !this.raft;
+    }
+
     protected ModelRenderer makePaddle(boolean p_187056_1_)
     {
-        ModelRenderer modelrenderer = (new ModelRenderer(this, 62, p_187056_1_ ? 0 : 20)).setTextureSize(128, 64);
+        ModelRenderer modelrenderer = this.raft ? this.makeModelRenderer(p_187056_1_ ? 0 : 40, 24) : this.makeModelRenderer(62, p_187056_1_ ? 0 : 20);
         int i = 20;
         int j = 7;
         int k = 6;

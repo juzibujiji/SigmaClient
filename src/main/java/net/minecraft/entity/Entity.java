@@ -3711,6 +3711,24 @@ private Vector3d getAllowedMovementModernStep(Vector3d vec, Vector3d adjusted, A
         return this.motion;
     }
 
+    /**
+     * 官方 {@code Entity.getKnownMovement()}（1.20.5 新增）：实体本 tick 的<b>真实位移</b>。
+     *
+     * <p>为什么不能直接用 {@link #getMotion()}：服务端的玩家实体只是被移动包传送到客户端
+     * 上报的坐标，{@code motion} 从不更新，所以服务端看一个疾跑玩家的 {@code getMotion()}
+     * 接近 0。任何「按移动速度判定」的机制（长矛突刺、动能武器）读 {@code motion} 都会失效。
+     *
+     * <p>非玩家实体的 motion 是服务端自己算的，所以默认实现就退回 {@code getMotion()}；
+     * 玩家由 {@code ServerPlayerEntity} 覆写成移动包算出来的位移。
+     * 官方还会在被玩家驾驶时转发给驾驶者，这里一并照做。
+     */
+    public Vector3d getKnownMovement() {
+        Entity controller = this.getControllingPassenger();
+        return controller instanceof PlayerEntity && this.isAlive()
+                ? controller.getKnownMovement()
+                : this.getMotion();
+    }
+
     public void setMotion(Vector3d motionIn) {
         this.motion = motionIn;
     }

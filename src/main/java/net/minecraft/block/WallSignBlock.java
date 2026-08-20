@@ -31,6 +31,18 @@ public class WallSignBlock extends AbstractSignBlock
     }
 
     /**
+     * 木种由注册名反推的构造（见 {@link WoodType#fromSignBlockName}）。
+     *
+     * <p>给 1.17+ 新木种（cherry / pale_oak / mangrove / bamboo）的壁挂告示牌用，
+     * 理由同 {@link StandingSignBlock#StandingSignBlock(AbstractBlock.Properties)}。
+     */
+    public WallSignBlock(AbstractBlock.Properties properties)
+    {
+        super(properties);
+        this.setDefaultState(this.stateContainer.getBaseState().with(FACING, Direction.NORTH).with(WATERLOGGED, Boolean.valueOf(false)));
+    }
+
+    /**
      * Returns the unlocalized name of the block with "tile." appended to the front.
      */
     public String getTranslationKey()

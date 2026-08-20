@@ -155,6 +155,16 @@ public class SignTileEntityRenderer extends TileEntityRenderer<SignTileEntity>
         textRenderDistanceSq = d1 * d1;
     }
 
+    /**
+     * 文本剔除距离的平方。悬挂告示牌渲染器
+     * （{@link ModernHangingSignTileEntityRenderer}）复用同一个值，
+     * 免得把这段 OptiFine 的 FOV 换算抄第二遍。
+     */
+    public static double getTextRenderDistanceSq()
+    {
+        return textRenderDistanceSq;
+    }
+
     public static final class SignModel extends Model
     {
         public final ModelRenderer signBoard = new ModelRenderer(64, 32, 0, 0);

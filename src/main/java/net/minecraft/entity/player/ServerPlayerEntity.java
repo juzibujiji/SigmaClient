@@ -79,6 +79,8 @@ import net.minecraft.network.play.server.SUpdateHealthPacket;
 import net.minecraft.network.play.server.SUpdateTileEntityPacket;
 import net.minecraft.network.play.server.SWindowItemsPacket;
 import net.minecraft.network.play.server.SWindowPropertyPacket;
+import net.minecraft.particles.BlockParticleData;
+import net.minecraft.particles.ParticleTypes;
 import net.minecraft.potion.EffectInstance;
 import net.minecraft.potion.Effects;
 import net.minecraft.scoreboard.Score;
@@ -135,6 +137,15 @@ public class ServerPlayerEntity extends PlayerEntity implements IContainerListen
 {
     private static final Logger LOGGER = LogManager.getLogger();
     public ServerPlayNetHandler connection;
+
+    /**
+     * 玩家本 tick 的真实位移，由 {@code ServerPlayNetHandler} 从移动包的前后坐标差算出。
+     * 对应官方 {@code ServerPlayer.lastKnownClientMovement}。
+     *
+     * <p>存在的理由见 {@link net.minecraft.entity.Entity#getKnownMovement()}：服务端玩家的
+     * {@code motion} 不可用。
+     */
+    private Vector3d lastKnownClientMovement = Vector3d.ZERO;
     public final MinecraftServer server;
     public final PlayerInteractionManager interactionManager;
     private final List<Integer> entityRemoveQueue = Lists.newLinkedList();
@@ -185,6 +196,15 @@ public class ServerPlayerEntity extends PlayerEntity implements IContainerListen
     public boolean isChangingQuantityOnly;
     public int ping;
     public boolean queuedEndExit;
+    /**
+     * 官方 {@code ServerPlayer.spawnExtraParticlesOnFall}（1.20.5 随重锤加入）。
+     * 重锤砸中站在地面的目标时置 true，玩家下一次落地会多喷一圈方块碎屑，
+     * 见 {@link #handleFalling(double, boolean)}。
+     *
+     * <p>官方会把这个标记存进玩家 NBT（{@code spawn_extra_particles_on_fall}）；
+     * 这里没有持久化——它只在一次「砸落 → 落地」之间有效，跨存档保存没有实际意义。
+     */
+    private boolean spawnExtraParticlesOnFall;
 
     public ServerPlayerEntity(MinecraftServer server, ServerWorld worldIn, GameProfile profile, PlayerInteractionManager interactionManagerIn)
     {
@@ -414,6 +434,24 @@ public class ServerPlayerEntity extends PlayerEntity implements IContainerListen
     protected CooldownTracker createCooldownTracker()
     {
         return new ServerCooldownTracker(this);
+    }
+
+    /**
+     * 官方 {@code ServerPlayer.getKnownMovement()}：坐在别人驾驶的载具上时取载具的位移，
+     * 否则取移动包算出来的自身位移。
+     */
+    public Vector3d getKnownMovement()
+    {
+        Entity vehicle = this.getRidingEntity();
+        return vehicle != null && vehicle.getControllingPassenger() != this
+                ? vehicle.getKnownMovement()
+                : this.lastKnownClientMovement;
+    }
+
+    /** 官方 {@code ServerPlayer.setKnownMovement(Vec3)}，由移动包处理逻辑调用。 */
+    public void setKnownMovement(Vector3d movement)
+    {
+        this.lastKnownClientMovement = movement;
     }
 
     /**
@@ -1110,8 +1148,33 @@ public class ServerPlayerEntity extends PlayerEntity implements IContainerListen
 
         if (this.world.isBlockLoaded(blockpos))
         {
-            super.updateFallState(y, onGroundIn, this.world.getBlockState(blockpos), blockpos);
+            BlockState blockstate = this.world.getBlockState(blockpos);
+
+            // 官方 ServerPlayer#checkFallDamage 的 spawnExtraParticlesOnFall 分支
+            // （1.20.5 随重锤加入）：重锤砸落之后落地会多喷一圈落地方块的碎屑，
+            // 数量 = clamp(50 * fallDistance, 0, 200)，散布 0.3/0.3/0.3，速度 0.15。
+            // 1.16.4 的 ServerPlayerEntity#updateFallState 是空实现，真正的落地判定走
+            // 这里的 handleFalling，所以钩子挂在这个位置。
+            if (this.spawnExtraParticlesOnFall && onGroundIn && this.fallDistance > 0.0F)
+            {
+                Vector3d center = Vector3d.copyCentered(blockpos).add(0.0D, 0.5D, 0.0D);
+                int count = (int) MathHelper.clamp(50.0D * (double) this.fallDistance, 0.0D, 200.0D);
+                ((ServerWorld) this.world).spawnParticle(new BlockParticleData(ParticleTypes.BLOCK, blockstate),
+                        center.x, center.y, center.z, count, 0.3D, 0.3D, 0.3D, 0.15D);
+                this.spawnExtraParticlesOnFall = false;
+            }
+
+            super.updateFallState(y, onGroundIn, blockstate, blockpos);
         }
+    }
+
+    /**
+     * 官方 {@code ServerPlayer#setSpawnExtraParticlesOnFall(boolean)}，由
+     * {@link net.minecraft.item.MaceItem} 在砸中地面目标时调用。
+     */
+    public void setSpawnExtraParticlesOnFall(boolean spawnExtraParticlesOnFallIn)
+    {
+        this.spawnExtraParticlesOnFall = spawnExtraParticlesOnFallIn;
     }
 
     public void openSignEditor(SignTileEntity signTile)

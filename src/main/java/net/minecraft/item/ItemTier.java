@@ -24,6 +24,17 @@ public enum ItemTier implements IItemTier
     }),
     NETHERITE(4, 2031, 9.0F, 4.0F, 15, () -> {
         return Ingredient.fromItems(Items.NETHERITE_INGOT);
+    }),
+    /**
+     * 跨版本扩展（1.21.9+ 铜工具）。参数取自官方 1.21.11 的 items.json：
+     * 耐久 190、挖掘速度 5.0、附魔能力 13，均精确介于石头与铁之间。
+     * harvestLevel 为 1（与石头同级）：官方 incorrect_for_copper_tool 与
+     * incorrect_for_stone_tool 内容相同，都是 [needs_iron_tool, needs_diamond_tool]，
+     * 所以铜的优势在速度与耐久，而不是能挖更硬的方块。
+     * attackDamage 1.0 由 copper_pickaxe 官方攻击力 2.0 反推（镐 = 1 + tier）。
+     */
+    COPPER(1, 190, 5.0F, 1.0F, 13, () -> {
+        return Ingredient.fromItems(ModernItems.COPPER_INGOT);
     });
 
     private final int harvestLevel;

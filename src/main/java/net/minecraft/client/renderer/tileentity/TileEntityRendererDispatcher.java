@@ -38,6 +38,9 @@ public class TileEntityRendererDispatcher
     private TileEntityRendererDispatcher()
     {
         this.register(TileEntityType.SIGN, new SignTileEntityRenderer(this));
+        // 悬挂告示牌（1.19 加入）。官方也是独立渲染器
+        // （HangingSignRenderer），模型和文本缩放都与普通告示牌不同。
+        this.register(TileEntityType.HANGING_SIGN, new ModernHangingSignTileEntityRenderer(this));
         this.register(TileEntityType.MOB_SPAWNER, new MobSpawnerTileEntityRenderer(this));
         this.register(TileEntityType.PISTON, new PistonTileEntityRenderer(this));
         this.register(TileEntityType.CHEST, new ChestTileEntityRenderer<>(this));

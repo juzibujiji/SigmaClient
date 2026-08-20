@@ -38,6 +38,8 @@ import net.minecraft.crash.CrashReportCategory;
 import net.minecraft.crash.ReportedException;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.item.SpearItem;
+import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.entity.item.ItemFrameEntity;
 import net.minecraft.entity.monster.CreeperEntity;
 import net.minecraft.entity.monster.EndermanEntity;
@@ -395,10 +397,30 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
                 d0 = d0;
             }
 
+            // 长矛（1.21.11）：官方 AttackRange(2.0F, 4.5F, 2.0F, 6.5F, 0.125F, 0.5F)
+            // ——生存 4.5 格 / 创造 6.5 格，另有 2.0 格「下限」。这里只放大<b>实体</b>射线，
+            // 方块交互距离仍走 getBlockReachDistance，免得拿着长矛能隔老远挖方块。
+            SpearItem heldSpear = entity instanceof LivingEntity ? SpearItem.getHeldSpear((LivingEntity) entity) : null;
+            double spearReach = heldSpear != null
+                    ? SpearItem.effectiveMaxRange(entity) + SpearItem.HITBOX_MARGIN
+                    : -1.0D;
+
+            if (spearReach > 0.0D) {
+                d0 = spearReach;
+                // 关掉原版「实体超过 3 格就算 miss」的限制，否则长矛的射程无从体现。
+                flag = false;
+            }
+
             d1 = d1 * d1;
 
             if (this.mc.objectMouseOver != null) {
                 d1 = this.mc.objectMouseOver.getHitVec().squareDistanceTo(vector3d);
+            }
+
+            if (spearReach > 0.0D && (this.mc.objectMouseOver == null
+                    || this.mc.objectMouseOver.getType() == RayTraceResult.Type.MISS)) {
+                // 准星没落在方块上时，别用方块射程去剪实体射程。
+                d1 = spearReach * spearReach;
             }
 
             Vector3d vector3d1 = ka ? entity.getLookCustom(1.0F,RotationCore.currentYaw,RotationCore.currentPitch) : entity.getLook(1.0F);
@@ -435,7 +457,17 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
                 Vector3d vector3d3 = entityraytraceresult.getHitVec();
                 double d2 = vector3d.squareDistanceTo(vector3d3);
 
-                if (flag && d2 > 9.0D) {
+                // 长矛的最近距离限制：官方 AttackRange.effectiveMinRange - hitboxMargin，
+                // 也就是贴脸（生存 <1.875 格）根本瞄不上。
+                boolean spearTooClose = false;
+                if (spearReach > 0.0D) {
+                    double spearMin = SpearItem.effectiveMinRange(entity) - SpearItem.HITBOX_MARGIN;
+                    spearTooClose = spearMin > 0.0D && d2 < spearMin * spearMin;
+                }
+
+                if (spearTooClose) {
+                    // 目标太近：保留原有的方块/miss 结果，不把它当成准星目标。
+                } else if (flag && d2 > 9.0D) {
                     this.mc.objectMouseOver = BlockRayTraceResult.createMiss(vector3d3, Direction.getFacingFromVector(vector3d1.x, vector3d1.y, vector3d1.z), new BlockPos(vector3d3));
                 } else if (d2 < d1 || this.mc.objectMouseOver == null) {
                     this.mc.objectMouseOver = entityraytraceresult;
@@ -473,6 +505,17 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
         }
     }
 
+    /**
+     * spyglass backport helper: true when the local player is looking through a spyglass in first person.
+     * Mirrors the {@code p_361176_ && this.isScoping()} condition in the official
+     * net/minecraft/client/player/AbstractClientPlayer#getFieldOfViewModifier.
+     */
+    private boolean isScopingFirstPerson() {
+        return this.mc.player != null
+                && this.mc.player.isScoping()
+                && this.mc.gameSettings.getPointOfView().func_243192_a();
+    }
+
     private double getFOVModifier(ActiveRenderInfo activeRenderInfoIn, float partialTicks, boolean useFOVSetting) {
         if (this.debugView) {
             return 90.0D;
@@ -482,7 +525,11 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
             if (useFOVSetting) {
                 d0 = this.mc.gameSettings.fov;
 
-                if (Config.isDynamicFov()) {
+                // spyglass backport: vanilla 1.17+ applies the spyglass zoom unconditionally (it is an early
+                // return inside AbstractClientPlayer#getFieldOfViewModifier and therefore not subject to the
+                // "FOV Effects" slider). OptiFine's dynamic-FOV toggle gates this multiply, so scoping has to
+                // be allowed through explicitly or the spyglass would do nothing with Dynamic FOV off.
+                if (Config.isDynamicFov() || this.isScopingFirstPerson()) {
                     d0 *= (double) MathHelper.lerp(partialTicks, this.fovModifierHandPrev, this.fovModifierHand);
                 }
             }

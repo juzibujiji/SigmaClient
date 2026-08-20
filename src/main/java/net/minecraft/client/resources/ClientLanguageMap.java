@@ -60,6 +60,8 @@ public class ClientLanguageMap extends LanguageMap
 
         // mmdskin：从 classpath 直接合入 mmdskin 翻译（绕开 ResourceIndex 资源体系）。
         com.shiroha.mmdskin.util.MmdSkinLangInjector.inject(p_239497_1_, map);
+        // 跨版本扩展：同理从 classpath 合入 1.17+ 新物品与方块的翻译。只补不覆盖。
+        net.minecraft.crossversion.CrossVersionLang.inject(p_239497_1_, map);
         return new ClientLanguageMap(ImmutableMap.copyOf(map), flag);
     }
 

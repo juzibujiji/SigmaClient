@@ -161,6 +161,7 @@ public class KillAura extends Module {
                         return !getBooleanValueFromSettingName("ESP");
                     }
                 });
+        //这里修过了根据killauraOG修的原本的alpha有问题 OG的没问题 现在的这个ESP的Alpha拉1为原版sigma正常esp ring
         this.registerSetting(
                 new NumberSetting<>("ESP Alpha", "Opacity multiplier for the target ESP", 1.0F, 0.05F, 1.0F, 0.05F) {
                     @Override

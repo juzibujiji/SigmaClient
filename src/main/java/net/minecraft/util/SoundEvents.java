@@ -997,6 +997,24 @@ public class SoundEvents
     public static final SoundEvent ENTITY_ZOMBIE_VILLAGER_HURT = register("entity.zombie_villager.hurt");
     public static final SoundEvent ENTITY_ZOMBIE_VILLAGER_STEP = register("entity.zombie_villager.step");
 
+    // ------------------------------------------------------------------------------------------------
+    // 1.21.11 backport: bundle sound events.
+    //
+    // Official names (1.21.11 sounds/SoundEvents.java:251-254):
+    //   BUNDLE_DROP_CONTENTS = "item.bundle.drop_contents"
+    //   BUNDLE_INSERT        = "item.bundle.insert"
+    //   BUNDLE_INSERT_FAIL   = "item.bundle.insert_fail"
+    //   BUNDLE_REMOVE_ONE    = "item.bundle.remove_one"
+    //
+    // These are appended at the very END of the class on purpose: SoundEvent registry ids are assigned in
+    // field-initialisation order and are wire-visible (SPlaySoundEffectPacket sends the raw id). Appending keeps
+    // every vanilla 1.16.4 id unchanged, so playing on a vanilla server still resolves sounds correctly.
+    // ------------------------------------------------------------------------------------------------
+    public static final SoundEvent ITEM_BUNDLE_DROP_CONTENTS = register("item.bundle.drop_contents");
+    public static final SoundEvent ITEM_BUNDLE_INSERT = register("item.bundle.insert");
+    public static final SoundEvent ITEM_BUNDLE_INSERT_FAIL = register("item.bundle.insert_fail");
+    public static final SoundEvent ITEM_BUNDLE_REMOVE_ONE = register("item.bundle.remove_one");
+
     private static SoundEvent register(String key)
     {
         return Registry.register(Registry.SOUND_EVENT, key, new SoundEvent(new ResourceLocation(key)));

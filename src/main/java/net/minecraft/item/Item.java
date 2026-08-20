@@ -298,6 +298,34 @@ public class Item implements IItemProvider
     }
 
     /**
+     * 官方 {@code UseEffects.speedMultiplier}：使用物品期间移动输入的缩放系数。
+     *
+     * <p>1.21.11 把这个值挪进了数据组件 {@code DataComponents.USE_EFFECTS}，读取处是
+     * {@code LocalPlayer.itemUseSpeedMultiplier()}。1.16.4 没有数据组件，所以做成可覆写的
+     * 方法，默认值取官方 {@code UseEffects.DEFAULT}（{@code (false, true, 0.2F)}）的第三项 ——
+     * 也就是吃东西、拉弓、举盾时那个熟悉的降速到 20%。
+     *
+     * <p>覆写它的意义：官方并非所有可使用物品都降速。长矛写的是
+     * {@code new UseEffects(true, false, 1.0F)}，举着长矛<b>完全不减速</b>。
+     */
+    public float getUseSpeedMultiplier(ItemStack stack)
+    {
+        return 0.2F;
+    }
+
+    /**
+     * 官方 {@code UseEffects.canSprint}：使用物品期间是否还能起步疾跑。
+     *
+     * <p>读取处是 {@code LocalPlayer.isSlowDueToUsingItem()}
+     * （{@code isUsingItem() && !canSprint()}）。默认 {@code false}，与官方
+     * {@code UseEffects.DEFAULT} 一致。长矛覆写成 {@code true}。
+     */
+    public boolean canSprintWhileUsing(ItemStack stack)
+    {
+        return false;
+    }
+
+    /**
      * How long it takes to use or consume an item
      */
     public int getUseDuration(ItemStack stack)

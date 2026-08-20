@@ -62,6 +62,7 @@ import net.minecraft.item.ArmorItem;
 import net.minecraft.item.ElytraItem;
 import net.minecraft.item.Food;
 import net.minecraft.item.Item;
+import net.minecraft.item.SpearItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.item.UseAction;
@@ -218,6 +219,17 @@ public abstract class LivingEntity extends Entity {
      * {@link #livingTick} for diagnostics and phase selection. Debug-only state.
      */
     private boolean travelSwimHopCandidate;
+
+    /**
+     * 重锤砸落攻击命中后置位，下一次落地时免除坠落伤害并自动清除。
+     * 对应官方 {@code ServerPlayer#ignoreFallDamageFromCurrentImpulse}。
+     */
+    private boolean ignoreFallDamageFromSmash;
+
+    /** 见 {@link #ignoreFallDamageFromSmash}。由 {@code MaceItem#hitEntity} 调用。 */
+    public void setIgnoreFallDamageFromSmash(boolean ignore) {
+        this.ignoreFallDamageFromSmash = ignore;
+    }
     protected Brain<?> brain;
 
     protected LivingEntity(EntityType<? extends LivingEntity> type, World worldIn) {
@@ -1510,6 +1522,17 @@ public abstract class LivingEntity extends Entity {
     }
 
     public boolean onLivingFall(float distance, float damageMultiplier) {
+        // 重锤砸落后免除本次坠落伤害。对应官方
+        // ServerPlayer#setIgnoreFallDamageFromCurrentImpulse(true)（MaceItem#hurtEnemy 里设置）。
+        //
+        // 官方是靠 postHurtEnemy 里的 resetFallDistance() 顺带实现免伤的，本项目刻意不重置
+        // 下落距离（见 MaceItem#hitEntity 的说明：那条规则和 fly 冲突），所以免伤必须单独做。
+        // 标记用一次即清，避免变成永久免摔。
+        if (this.ignoreFallDamageFromSmash) {
+            this.ignoreFallDamageFromSmash = false;
+            return false;
+        }
+
         boolean flag = super.onLivingFall(distance, damageMultiplier);
         int i = this.calculateFallDamage(distance, damageMultiplier);
 
@@ -1574,7 +1597,7 @@ public abstract class LivingEntity extends Entity {
     protected float applyArmorCalculations(DamageSource source, float damage) {
         if (!source.isUnblockable()) {
             this.damageArmor(source, damage);
-            damage = CombatRules.getDamageAfterAbsorb(damage, (float) this.getTotalArmorValue(), (float) this.getAttributeValue(Attributes.ARMOR_TOUGHNESS));
+            damage = CombatRules.getDamageAfterAbsorb(damage, (float) this.getTotalArmorValue(), (float) this.getAttributeValue(Attributes.ARMOR_TOUGHNESS), source);
         }
 
         return damage;
@@ -1695,10 +1718,20 @@ public abstract class LivingEntity extends Entity {
      * progress indicator. Takes dig speed enchantments into account.
      */
     private int getArmSwingAnimationEnd() {
+        // 官方 getCurrentSwingDuration（LivingEntity.java:1897）的基准时长来自主手物品的
+        // SwingAnimation 组件：原版武器是 WHACK / 6 tick，长矛是 STAB / (int)(swingSeconds*20)
+        // ——木矛 13 tick 到下界合金矛 23 tick。急迫/挖掘疲劳的修正沿用原版公式。
+        int base = 6;
+        Item swingItem = this.getHeldItemMainhand().getItem();
+
+        if (swingItem instanceof SpearItem) {
+            base = ((SpearItem) swingItem).getSwingTicks();
+        }
+
         if (EffectUtils.hasMiningSpeedup(this)) {
-            return 6 - (1 + EffectUtils.getMiningSpeedup(this));
+            return base - (1 + EffectUtils.getMiningSpeedup(this));
         } else {
-            return this.isPotionActive(Effects.MINING_FATIGUE) ? 6 + (1 + this.getActivePotionEffect(Effects.MINING_FATIGUE).getAmplifier()) * 2 : 6;
+            return this.isPotionActive(Effects.MINING_FATIGUE) ? base + (1 + this.getActivePotionEffect(Effects.MINING_FATIGUE).getAmplifier()) * 2 : base;
         }
     }
 

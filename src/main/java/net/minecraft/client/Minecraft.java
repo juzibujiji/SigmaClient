@@ -176,6 +176,7 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.SpearItem;
 import net.minecraft.item.Items;
 import net.minecraft.item.SkullItem;
 import net.minecraft.item.SpawnEggItem;
@@ -1397,6 +1398,12 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
         }
 
         if (this.leftClickCounter <= 0 && !this.player.isHandActive()) {
+            // 长矛：官方 Minecraft.continueAttack 在物品带 PIERCING_WEAPON 时整段跳过，
+            // 也就是「按住左键拿着长矛不会挖方块」。
+            if (this.player.getHeldItemMainhand().getItem() instanceof SpearItem) {
+                return;
+            }
+
             if (leftClick && this.objectMouseOver != null
                     && this.objectMouseOver.getType() == RayTraceResult.Type.BLOCK) {
                 BlockRayTraceResult blockraytraceresult = (BlockRayTraceResult) this.objectMouseOver;
@@ -1425,6 +1432,35 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
         }
 
         if (this.leftClickCounter <= 0) {
+            // 长矛（1.21.11）：官方 Minecraft.startAttack 在物品带 PIERCING_WEAPON 时
+            // 完全绕开准星命中类型 —— 不挖方块、不判 miss 冷却，直接做一次穿透攻击。
+            ItemStack spearStack = this.player.getHeldItemMainhand();
+            if (spearStack.getItem() instanceof SpearItem && !this.player.isSpectator()) {
+                SpearItem spear = (SpearItem) spearStack.getItem();
+                // 官方 MINIMUM_ATTACK_CHARGE = 1.0F：冷却没满时左键完全不生效。
+                if (SpearItem.canAttackWith(this.player)) {
+                    java.util.List<EntityRayTraceResult> spearHits =
+                            SpearItem.getHitEntitiesAlong(this.player, (candidate) -> SpearItem.canHitEntity(this.player, candidate));
+
+                    if (!spearHits.isEmpty()) {
+                        // 1.16.4 协议没有 Action.STAB：挑视线上最近的实体发一个普通攻击包，
+                        // 服务端 PlayerEntity.attackTargetEntityWithCurrentItem 会展开成穿透攻击。
+                        // attackEntity 内部还会本地跑一次同样的逻辑（音效 + 挥手）作为预测。
+                        this.playerController.attackEntity(this.player, spearHits.get(0).getEntity());
+                    } else {
+                        // 挥空：官方也会播 attack 音效并挥手，只是服务端结算不到任何目标。
+                        spear.piercingAttack(this.player, spearStack);
+                        this.player.resetCooldown();
+                        // 必须用 swingArm 而不是 piercingAttack 里的 swing —— 只有 swingArm
+                        // 会发 CAnimateHandPacket。挥空时客户端不发攻击包，那个挥手包是服务端
+                        // 唯一能知道「你挥了但没中」的信号，「突进」附魔靠它才能在挥空时触发
+                        // （见 ServerPlayNetHandler.handleAnimation）。
+                        this.player.swingArm(Hand.MAIN_HAND);
+                    }
+                }
+                return;
+            }
+
             if (this.objectMouseOver == null) {
                 LOGGER.error("Null returned as 'hitResult', this shouldn't happen!");
 

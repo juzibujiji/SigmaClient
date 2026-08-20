@@ -95,6 +95,8 @@ public class IngameGui extends AbstractGui
     private static final ResourceLocation VIGNETTE_TEX_PATH = new ResourceLocation("textures/misc/vignette.png");
     private static final ResourceLocation WIDGETS_TEX_PATH = new ResourceLocation("textures/gui/widgets.png");
     private static final ResourceLocation PUMPKIN_BLUR_TEX_PATH = new ResourceLocation("textures/misc/pumpkinblur.png");
+    /** spyglass backport - official Gui.SPYGLASS_SCOPE_LOCATION ("textures/misc/spyglass_scope.png"). */
+    private static final ResourceLocation SPYGLASS_SCOPE_LOCATION = new ResourceLocation("textures/misc/spyglass_scope.png");
     private static final ITextComponent field_243249_e = new TranslationTextComponent("demo.demoExpired");
     private final Random rand = new Random();
     private final Minecraft mc;
@@ -145,6 +147,11 @@ public class IngameGui extends AbstractGui
     private long healthUpdateCounter;
     private int scaledWidth;
     private int scaledHeight;
+    /**
+     * spyglass backport - official Gui.scopeScale. Lerped towards 1.125F while scoping and reset to 0.5F
+     * as soon as the player stops scoping, which produces the "scope opening up" animation.
+     */
+    private float scopeScale;
     private final Map<ChatType, List<IChatListener>> chatListeners = Maps.newHashMap();
 
     public IngameGui(Minecraft mcIn)
@@ -243,9 +250,28 @@ public class IngameGui extends AbstractGui
 
         ItemStack itemstack = this.mc.player.inventory.armorItemInSlot(3);
 
-        if (this.mc.gameSettings.getPointOfView().func_243192_a() && itemstack.getItem() == Blocks.CARVED_PUMPKIN.asItem())
+        // spyglass backport - official Gui#render:
+        //     this.scopeScale = Mth.lerp(0.5F * f, this.scopeScale, 1.125F);
+        //     if (options.getCameraType().isFirstPerson()) {
+        //         if (localplayer.isScoping()) { this.renderSpyglassOverlay(gui, this.scopeScale); }
+        //         else { this.scopeScale = 0.5F; ... pumpkin/other camera overlays ... }
+        //     }
+        // 1.21 feeds getGameTimeDeltaTicks() into the lerp; 1.16.4's overlay pass has no delta-ticks value
+        // here, so partialTicks (the same 0..1 frame fraction) is used.
+        this.scopeScale = MathHelper.lerp(0.5F * partialTicks, this.scopeScale, 1.125F);
+
+        if (this.mc.gameSettings.getPointOfView().func_243192_a() && this.mc.player.isScoping())
         {
-            this.renderPumpkinOverlay();
+            this.renderSpyglassOverlay(matrixStack, this.scopeScale);
+        }
+        else
+        {
+            this.scopeScale = 0.5F;
+
+            if (this.mc.gameSettings.getPointOfView().func_243192_a() && itemstack.getItem() == Blocks.CARVED_PUMPKIN.asItem())
+            {
+                this.renderPumpkinOverlay();
+            }
         }
 
         float f = MathHelper.lerp(partialTicks, this.mc.player.prevTimeInPortal, this.mc.player.timeInPortal);
@@ -1284,6 +1310,40 @@ public class IngameGui extends AbstractGui
                 }
             }
         }
+    }
+
+    /**
+     * spyglass backport - direct port of official net/minecraft/client/gui/Gui#renderSpyglassOverlay.
+     * The scope texture is blitted as a centred square of side {@code min(width, height) * scale} and the
+     * four remaining regions are filled with opaque black (0xFF000000 == -16777216).
+     */
+    private void renderSpyglassOverlay(MatrixStack matrixStack, float scale)
+    {
+        RenderSystem.disableDepthTest();
+        RenderSystem.depthMask(false);
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.enableBlend();
+        RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.disableAlphaTest();
+        float f = (float)Math.min(this.scaledWidth, this.scaledHeight);
+        float f1 = Math.min((float)this.scaledWidth / f, (float)this.scaledHeight / f) * scale;
+        int i = MathHelper.floor(f * f1);
+        int j = MathHelper.floor(f * f1);
+        int k = (this.scaledWidth - i) / 2;
+        int l = (this.scaledHeight - j) / 2;
+        int i1 = k + i;
+        int j1 = l + j;
+        this.mc.getTextureManager().bindTexture(SPYGLASS_SCOPE_LOCATION);
+        // blit(matrixStack, x, y, blitOffset, uOffset, vOffset, width, height, textureHeight, textureWidth)
+        blit(matrixStack, k, l, -90, 0.0F, 0.0F, i, j, j, i);
+        fill(matrixStack, 0, j1, this.scaledWidth, this.scaledHeight, -16777216);
+        fill(matrixStack, 0, 0, this.scaledWidth, l, -16777216);
+        fill(matrixStack, 0, l, k, j1, -16777216);
+        fill(matrixStack, i1, l, this.scaledWidth, j1, -16777216);
+        RenderSystem.depthMask(true);
+        RenderSystem.enableDepthTest();
+        RenderSystem.enableAlphaTest();
+        RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private void renderPumpkinOverlay()

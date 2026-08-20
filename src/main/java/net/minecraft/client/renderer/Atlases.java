@@ -44,6 +44,11 @@ public class Atlases
         return new RenderMaterial(SHULKER_BOX_ATLAS, new ResourceLocation("entity/shulker/shulker_" + shulkerColor));
     }).collect(ImmutableList.toImmutableList());
     public static final Map<WoodType, RenderMaterial> SIGN_MATERIALS = WoodType.getValues().collect(Collectors.toMap(Function.identity(), Atlases::getSignMaterial));
+    /**
+     * 悬挂告示牌材质（1.19 加入）。与 {@link #SIGN_MATERIALS} 共用 signs 图集，
+     * 对应官方 {@code client/renderer/Sheets.HANGING_SIGN_MATERIALS}。
+     */
+    public static final Map<WoodType, RenderMaterial> HANGING_SIGN_MATERIALS = WoodType.getValues().collect(Collectors.toMap(Function.identity(), Atlases::getHangingSignMaterial));
     public static final RenderMaterial[] BED_TEXTURES = Arrays.stream(DyeColor.values()).sorted(Comparator.comparingInt(DyeColor::getId)).map((color) ->
     {
         return new RenderMaterial(BED_ATLAS, new ResourceLocation("entity/bed/" + color.getTranslationKey()));
@@ -124,6 +129,7 @@ public class Atlases
         }
 
         SIGN_MATERIALS.values().forEach(materialConsumer);
+        HANGING_SIGN_MATERIALS.values().forEach(materialConsumer);
 
         for (RenderMaterial rendermaterial : BED_TEXTURES)
         {
@@ -145,6 +151,15 @@ public class Atlases
     public static RenderMaterial getSignMaterial(WoodType woodType)
     {
         return new RenderMaterial(SIGN_ATLAS, new ResourceLocation("entity/signs/" + woodType.getName()));
+    }
+
+    /**
+     * 悬挂告示牌材质路径，取自官方 {@code Sheets.getHangingSignMaterial}：
+     * {@code entity/signs/hanging/<木种名>}。
+     */
+    public static RenderMaterial getHangingSignMaterial(WoodType woodType)
+    {
+        return new RenderMaterial(SIGN_ATLAS, new ResourceLocation("entity/signs/hanging/" + woodType.getName()));
     }
 
     private static RenderMaterial getChestMaterial(String chestName)

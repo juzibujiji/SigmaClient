@@ -18,6 +18,7 @@ import net.minecraft.entity.ai.attributes.Attributes;
 import net.minecraft.entity.passive.ShoulderRidingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BowItem;
+import net.minecraft.item.SpyglassItem;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.StringUtils;
 import net.minecraft.util.math.vector.Vector3d;
@@ -240,6 +241,19 @@ public abstract class AbstractClientPlayerEntity extends PlayerEntity
 
             f *= 1.0F - f1 * 0.15F;
         }
+
+        // spyglass backport - official net/minecraft/client/player/AbstractClientPlayer#getFieldOfViewModifier:
+        //     } else if (p_361176_ && this.isScoping()) {
+        //         return 0.1F;
+        //     }
+        // Officially this is an early return, so the spyglass zoom is NOT scaled by the "FOV Effects"
+        // option - it always zooms to exactly ZOOM_FOV_MODIFIER (0.1F). Only applies in first person
+        // (p_361176_ == options.getCameraType().isFirstPerson()).
+        if (this.isScoping() && Minecraft.getInstance().gameSettings.getPointOfView().func_243192_a())
+        {
+            f = SpyglassItem.ZOOM_FOV_MODIFIER;
+        }
+
         float fov = Reflector.ForgeHooksClient_getOffsetFOV.exists() ? Reflector.callFloat(Reflector.ForgeHooksClient_getOffsetFOV, this, f) : f;
         EventGetFovModifier eventFovModifier = new EventGetFovModifier(fov);
         EventBus.call(eventFovModifier);

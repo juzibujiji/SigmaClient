@@ -7,6 +7,7 @@ import java.util.function.Function;
 import net.minecraft.block.Block;
 import net.minecraft.block.ComposterBlock;
 import net.minecraft.block.FireBlock;
+import net.minecraft.block.ModernBlocks;
 import net.minecraft.command.Commands;
 import net.minecraft.command.arguments.ArgumentTypes;
 import net.minecraft.command.arguments.EntityOptions;
@@ -16,6 +17,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ai.attributes.Attribute;
 import net.minecraft.entity.ai.attributes.GlobalEntityTypeAttributes;
 import net.minecraft.item.Item;
+import net.minecraft.item.ModernItems;
 import net.minecraft.potion.Effect;
 import net.minecraft.potion.PotionBrewing;
 import net.minecraft.server.DebugLoggingPrintStream;
@@ -52,6 +54,13 @@ public class Bootstrap
             {
                 FireBlock.init();
                 ComposterBlock.init();
+
+                // 跨版本注册表扩展（1.17-1.21.11）。必须在此处、且在原版 Items/Blocks
+                // 完全初始化之后：上面的 FireBlock.init() 已经访问过 Blocks，因此原版
+                // 763 个方块与 17112 个方块状态、976 个物品都已就位，扩展内容会拿到
+                // 紧随其后的 ID，不会让任何原版 ID 移位。
+                ModernItems.init();
+                ModernBlocks.registerBlockStates();
 
                 if (EntityType.getKey(EntityType.PLAYER) == null)
                 {

@@ -198,9 +198,17 @@ public abstract class ContainerScreen<T extends Container> extends Screen implem
 
     protected void renderHoveredTooltip(MatrixStack matrixStack, int x, int y)
     {
-        if (this.minecraft.player.inventory.getItemStack().isEmpty() && this.hoveredSlot != null && this.hoveredSlot.getHasStack())
+        if (this.hoveredSlot != null && this.hoveredSlot.getHasStack())
         {
-            this.renderTooltip(matrixStack, this.hoveredSlot.getStack(), x, y);
+            // 1.21.11 parity: AbstractContainerScreen.renderTooltip (client/gui/screens/inventory/
+            // AbstractContainerScreen.java:195) also shows the tooltip while an item is on the cursor when the
+            // hovered item's tooltip image says so - ClientBundleTooltip.showTooltipWithItemInHand() returns true,
+            // which is what lets you see a bundle's contents while dragging an item onto it.
+            if (this.minecraft.player.inventory.getItemStack().isEmpty()
+                    || net.minecraft.item.BundleItem.isBundle(this.hoveredSlot.getStack()))
+            {
+                this.renderTooltip(matrixStack, this.hoveredSlot.getStack(), x, y);
+            }
         }
     }
 

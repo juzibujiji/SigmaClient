@@ -5,10 +5,13 @@ import com.mentalfrostbyte.jello.managers.ViaManager;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import java.util.function.Function;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SpearAnimations;
 import net.minecraft.client.renderer.model.ModelHelper;
 import net.minecraft.client.renderer.model.ModelRenderer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.item.Item;
+import net.minecraft.item.SpearItem;
 import net.minecraft.util.Hand;
 import net.minecraft.util.HandSide;
 import net.minecraft.util.ResourceLocation;
@@ -210,14 +213,33 @@ public class BipedModel<T extends LivingEntity> extends AgeableModel<T> implemen
             this.bipedRightArm.rotationPointY = 2.0F;
         }
 
-        ModelHelper.func_239101_a_(this.bipedRightArm, this.bipedLeftArm, ageInTicks);
+        // 官方 client/model/HumanoidModel#setupAnim 分别摆动两条手臂，好把举着望远镜的那条排除掉：
+        //     if (rightArmPose != ArmPose.SPYGLASS) AnimationUtils.bobModelPart(this.rightArm, ageInTicks,  1.0F);
+        //     if (leftArmPose  != ArmPose.SPYGLASS) AnimationUtils.bobModelPart(this.leftArm,  ageInTicks, -1.0F);
+        // 1.16.4 的 ModelHelper.func_239101_a_ 是一次摆动两条、符号恰好就是这两个，
+        // 所以在这里拆开写，而不去改那个被别处共用的 helper。
+        if (this.rightArmPose != BipedModel.ArmPose.SPYGLASS)
+        {
+            this.bipedRightArm.rotateAngleZ += MathHelper.cos(ageInTicks * 0.09F) * 0.05F + 0.05F;
+            this.bipedRightArm.rotateAngleX += MathHelper.sin(ageInTicks * 0.067F) * 0.05F;
+        }
+
+        if (this.leftArmPose != BipedModel.ArmPose.SPYGLASS)
+        {
+            this.bipedLeftArm.rotateAngleZ -= MathHelper.cos(ageInTicks * 0.09F) * 0.05F + 0.05F;
+            this.bipedLeftArm.rotateAngleX -= MathHelper.sin(ageInTicks * 0.067F) * 0.05F;
+        }
 
         if (this.swimAnimation > 0.0F)
         {
             float f1 = limbSwing % 26.0F;
             HandSide handside = this.getMainHand(entityIn);
-            float f2 = handside == HandSide.RIGHT && this.swingProgress > 0.0F ? 0.0F : this.swimAnimation;
-            float f3 = handside == HandSide.LEFT && this.swingProgress > 0.0F ? 0.0F : this.swimAnimation;
+            // 官方 HumanoidModel.java:227-228 在混合系数里多一项 `armPose != ArmPose.SPEAR`：
+            // 举着长矛时游泳/爬行的手臂混合要完全关掉，否则举起来的矛会被插值拉回体侧。
+            float f2 = this.rightArmPose != BipedModel.ArmPose.SPEAR
+                    && !(handside == HandSide.RIGHT && this.swingProgress > 0.0F) ? this.swimAnimation : 0.0F;
+            float f3 = this.leftArmPose != BipedModel.ArmPose.SPEAR
+                    && !(handside == HandSide.LEFT && this.swingProgress > 0.0F) ? this.swimAnimation : 0.0F;
 
             if (f1 < 14.0F)
             {
@@ -286,6 +308,12 @@ public class BipedModel<T extends LivingEntity> extends AgeableModel<T> implemen
                 this.bipedRightArm.rotateAngleY = 0.0F;
                 break;
 
+            case SPEAR:
+                // 官方 HumanoidModel.poseRightArm 的 case SPEAR（HumanoidModel.java:309）
+                SpearAnimations.thirdPersonHandUse(this.bipedRightArm, this.bipedHead, true,
+                        getHeldSpear(p_241654_1_), p_241654_1_, this.swimAnimation);
+                break;
+
             case BOW_AND_ARROW:
                 this.bipedRightArm.rotateAngleY = -0.1F + this.bipedHead.rotateAngleY;
                 this.bipedLeftArm.rotateAngleY = 0.1F + this.bipedHead.rotateAngleY + 0.4F;
@@ -299,6 +327,22 @@ public class BipedModel<T extends LivingEntity> extends AgeableModel<T> implemen
 
             case CROSSBOW_HOLD:
                 ModelHelper.func_239104_a_(this.bipedRightArm, this.bipedLeftArm, this.bipedHead, true);
+                break;
+
+            // ---- 1.17+ 物品移植，取自官方 client/model/HumanoidModel#poseRightArm ----
+            case SPYGLASS:
+                this.bipedRightArm.rotateAngleX = MathHelper.clamp(this.bipedHead.rotateAngleX - 1.9198622F - (p_241654_1_.isSneaking() ? ((float)Math.PI / 12F) : 0.0F), -2.4F, 3.3F);
+                this.bipedRightArm.rotateAngleY = this.bipedHead.rotateAngleY - ((float)Math.PI / 12F);
+                break;
+
+            case TOOT_HORN:
+                this.bipedRightArm.rotateAngleX = MathHelper.clamp(this.bipedHead.rotateAngleX, -1.2F, 1.2F) - 1.4835298F;
+                this.bipedRightArm.rotateAngleY = this.bipedHead.rotateAngleY - ((float)Math.PI / 6F);
+                break;
+
+            case BRUSH:
+                this.bipedRightArm.rotateAngleX = this.bipedRightArm.rotateAngleX * 0.5F - ((float)Math.PI / 5F);
+                this.bipedRightArm.rotateAngleY = 0.0F;
         }
     }
 
@@ -325,6 +369,12 @@ public class BipedModel<T extends LivingEntity> extends AgeableModel<T> implemen
                 this.bipedLeftArm.rotateAngleY = 0.0F;
                 break;
 
+            case SPEAR:
+                // 官方 HumanoidModel.poseLeftArm 的 case SPEAR（HumanoidModel.java:356）
+                SpearAnimations.thirdPersonHandUse(this.bipedLeftArm, this.bipedHead, false,
+                        getHeldSpear(p_241655_1_), p_241655_1_, this.swimAnimation);
+                break;
+
             case BOW_AND_ARROW:
                 this.bipedRightArm.rotateAngleY = -0.1F + this.bipedHead.rotateAngleY - 0.4F;
                 this.bipedLeftArm.rotateAngleY = 0.1F + this.bipedHead.rotateAngleY;
@@ -338,6 +388,22 @@ public class BipedModel<T extends LivingEntity> extends AgeableModel<T> implemen
 
             case CROSSBOW_HOLD:
                 ModelHelper.func_239104_a_(this.bipedRightArm, this.bipedLeftArm, this.bipedHead, false);
+                break;
+
+            // ---- 1.17+ 物品移植，取自官方 client/model/HumanoidModel#poseLeftArm ----
+            case SPYGLASS:
+                this.bipedLeftArm.rotateAngleX = MathHelper.clamp(this.bipedHead.rotateAngleX - 1.9198622F - (p_241655_1_.isSneaking() ? ((float)Math.PI / 12F) : 0.0F), -2.4F, 3.3F);
+                this.bipedLeftArm.rotateAngleY = this.bipedHead.rotateAngleY + ((float)Math.PI / 12F);
+                break;
+
+            case TOOT_HORN:
+                this.bipedLeftArm.rotateAngleX = MathHelper.clamp(this.bipedHead.rotateAngleX, -1.2F, 1.2F) - 1.4835298F;
+                this.bipedLeftArm.rotateAngleY = this.bipedHead.rotateAngleY + ((float)Math.PI / 6F);
+                break;
+
+            case BRUSH:
+                this.bipedLeftArm.rotateAngleX = this.bipedLeftArm.rotateAngleX * 0.5F - ((float)Math.PI / 5F);
+                this.bipedLeftArm.rotateAngleY = 0.0F;
         }
     }
 
@@ -362,6 +428,17 @@ public class BipedModel<T extends LivingEntity> extends AgeableModel<T> implemen
             this.bipedRightArm.rotateAngleY += this.bipedBody.rotateAngleY;
             this.bipedLeftArm.rotateAngleY += this.bipedBody.rotateAngleY;
             this.bipedLeftArm.rotateAngleX += this.bipedBody.rotateAngleY;
+
+            // 长矛用 STAB 挥击曲线，不是原版的 WHACK —— 官方
+            // HumanoidModel.setupAttackAnimation 里 switch (swingAnimationType) 的 case STAB
+            // （client/model/HumanoidModel.java:395）。躯干旋转与手臂锚点的部分官方也是
+            // 共用的，所以分支只从这里开始。
+            if (getHeldSpear(p_230486_1_) != null)
+            {
+                SpearAnimations.thirdPersonAttackHand(this, this.swingProgress, handside);
+                return;
+            }
+
             f = 1.0F - this.swingProgress;
             f = f * f;
             f = f * f;
@@ -437,6 +514,23 @@ public class BipedModel<T extends LivingEntity> extends AgeableModel<T> implemen
         return this.bipedHead;
     }
 
+    /**
+     * 拿着长矛就返回它，否则 null。官方靠 {@code SWING_ANIMATION} / {@code ATTACK_RANGE}
+     * 数据组件判断，1.16.4 只能看物品类型。
+     */
+    private static SpearItem getHeldSpear(LivingEntity entityIn)
+    {
+        Item item = entityIn.getHeldItemMainhand().getItem();
+
+        if (item instanceof SpearItem)
+        {
+            return (SpearItem)item;
+        }
+
+        item = entityIn.getHeldItemOffhand().getItem();
+        return item instanceof SpearItem ? (SpearItem)item : null;
+    }
+
     protected HandSide getMainHand(T entityIn)
     {
         HandSide handside = entityIn.getPrimaryHand();
@@ -450,6 +544,18 @@ public class BipedModel<T extends LivingEntity> extends AgeableModel<T> implemen
         BLOCK(false),
         BOW_AND_ARROW(true),
         THROW_SPEAR(false),
+        /**
+         * 1.21.11 长矛。官方是 {@code HumanoidModel.ArmPose.SPEAR(false, true)}
+         * ——不占双手，但有「使用中」动画。与上面的 {@code THROW_SPEAR}（三叉戟待投）无关。
+         */
+        SPEAR(false),
+        // ---- 1.17+ item backports, official HumanoidModel.ArmPose:438-440 ----
+        // 官方是 SPYGLASS(false, false) / TOOT_HORN(false, false) / BRUSH(false, false)，
+        // 1.16.4 的 ArmPose 只有一个布尔（是否占双手），所以都取 false。
+        // 注：PlayerRenderer#func_241741_a_ 已经在引用这三个常量了，这里补上定义。
+        SPYGLASS(false),
+        TOOT_HORN(false),
+        BRUSH(false),
         CROSSBOW_CHARGE(true),
         CROSSBOW_HOLD(true);
 

@@ -107,11 +107,23 @@ public abstract class DamagingProjectileEntity extends ProjectileEntity
                     this.world.addParticle(ParticleTypes.BUBBLE, d0 - vector3d.x * 0.25D, d1 - vector3d.y * 0.25D, d2 - vector3d.z * 0.25D, vector3d.x, vector3d.y, vector3d.z);
                 }
 
-                f = 0.8F;
+                // wind charge backport: the official AbstractHurtingProjectile#tick uses the overridable
+                // getLiquidInertia() here instead of a hard-coded 0.8F. The default below preserves 1.16.4
+                // behaviour for every existing subclass; AbstractWindChargeEntity returns 1.0F so a wind
+                // charge is not slowed by water (official AbstractWindCharge#getLiquidInertia).
+                f = this.getLiquidInertia();
             }
 
             this.setMotion(vector3d.add(this.accelerationX, this.accelerationY, this.accelerationZ).scale((double)f));
-            this.world.addParticle(this.getParticle(), d0, d1 + 0.5D, d2, 0.0D, 0.0D, 0.0D);
+            // wind charge backport: official AbstractHurtingProjectile#tick skips this when
+            // getTrailParticle() returns null. AbstractWindCharge returns null (no trail at all).
+            IParticleData iparticledata = this.getParticle();
+
+            if (iparticledata != null)
+            {
+                this.world.addParticle(iparticledata, d0, d1 + 0.5D, d2, 0.0D, 0.0D, 0.0D);
+            }
+
             this.setPosition(d0, d1, d2);
         }
         else
@@ -141,6 +153,15 @@ public abstract class DamagingProjectileEntity extends ProjectileEntity
     protected float getMotionFactor()
     {
         return 0.95F;
+    }
+
+    /**
+     * wind charge backport - official AbstractHurtingProjectile#getLiquidInertia(). Vanilla 1.16.4 hard-coded
+     * 0.8F inside tick(); the default here keeps that exact behaviour.
+     */
+    protected float getLiquidInertia()
+    {
+        return 0.8F;
     }
 
     public void writeAdditional(CompoundNBT compound)
