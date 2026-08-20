@@ -1,6 +1,7 @@
 package net.minecraft.block;
 
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.pathfinding.PathType;
 import net.minecraft.state.IntegerProperty;
@@ -10,6 +11,8 @@ import net.minecraft.stats.Stats;
 import net.minecraft.util.ActionResultType;
 import net.minecraft.util.Direction;
 import net.minecraft.util.Hand;
+import net.minecraft.util.SoundCategory;
+import net.minecraft.util.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.BlockRayTraceResult;
 import net.minecraft.util.math.shapes.ISelectionContext;
@@ -37,9 +40,37 @@ public class CakeBlock extends Block
 
     public ActionResultType onBlockActivated(BlockState state, World worldIn, BlockPos pos, PlayerEntity player, Hand handIn, BlockRayTraceResult hit)
     {
+        ItemStack held = player.getHeldItem(handIn);
+
+        // 手持蜡烛右键完整的蛋糕 -> 变成插了蜡烛的蛋糕（1.17 行为）。
+        // 必须在吃蛋糕之前判断，否则蛋糕先被吃掉一口就插不上了。
+        // 官方在 CakeBlock 里做同样的拦截，见 MCP-Reborn 的 CakeBlock.useItemOn。
+        if (state.get(BITES) == 0 && held.getItem() instanceof BlockItem)
+        {
+            Block heldBlock = ((BlockItem)held.getItem()).getBlock();
+            BlockState candleCake = ModernCandleCakeBlock.byCandle(heldBlock);
+
+            if (candleCake != null)
+            {
+                if (!worldIn.isRemote)
+                {
+                    if (!player.abilities.isCreativeMode)
+                    {
+                        held.shrink(1);
+                    }
+
+                    // 1.16.4 没有 1.17 的 BLOCK_CAKE_ADD_CANDLE，用羊毛放置音近似。
+                    worldIn.playSound(null, pos, SoundEvents.BLOCK_WOOL_PLACE, SoundCategory.BLOCKS, 1.0F, 1.0F);
+                    worldIn.setBlockState(pos, candleCake, 3);
+                }
+
+                return ActionResultType.func_233537_a_(worldIn.isRemote);
+            }
+        }
+
         if (worldIn.isRemote)
         {
-            ItemStack itemstack = player.getHeldItem(handIn);
+            ItemStack itemstack = held;
 
             if (this.eatSlice(worldIn, pos, state, player).isSuccessOrConsume())
             {

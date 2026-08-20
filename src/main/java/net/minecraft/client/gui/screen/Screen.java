@@ -128,6 +128,14 @@ public abstract class Screen extends FocusableGui implements IScreen, IRenderabl
 
     protected void renderTooltip(MatrixStack matrixStack, ItemStack itemStack, int mouseX, int mouseY)
     {
+        // 1.21.11 parity: BundleItem.getTooltipImage returns a BundleTooltip that the tooltip renderer draws as an
+        // item grid plus a fullness bar (1.21.11 world/item/BundleItem.java:237). 1.16.4 has no tooltip-component
+        // system, so the bundle draws its own frame.
+        if (net.minecraft.client.gui.screen.inventory.BundleTooltipRenderer.renderBundleTooltip(this, matrixStack, itemStack, mouseX, mouseY))
+        {
+            return;
+        }
+
         this.func_243308_b(matrixStack, this.getTooltipFromItem(itemStack), mouseX, mouseY);
     }
 

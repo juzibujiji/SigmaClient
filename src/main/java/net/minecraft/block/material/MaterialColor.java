@@ -65,6 +65,11 @@ public class MaterialColor
     public static final MaterialColor WARPED_STEM = new MaterialColor(56, 3837580);
     public static final MaterialColor WARPED_HYPHAE = new MaterialColor(57, 5647422);
     public static final MaterialColor WARPED_WART = new MaterialColor(58, 1356933);
+    // 跨版本扩展（1.17+）。取自官方 1.21.11 的 MapColor，索引与颜色值与原版一致，
+    // 地图渲染与地图数据包依赖这些索引，不能改动。上限 63，当前最大 61。
+    public static final MaterialColor DEEPSLATE = new MaterialColor(59, 6579300);
+    public static final MaterialColor RAW_IRON = new MaterialColor(60, 14200723);
+    public static final MaterialColor GLOW_LICHEN = new MaterialColor(61, 8365974);
     public int colorValue;
     public final int colorIndex;
 

@@ -561,8 +561,10 @@ public abstract class AbstractBlock {
 
         public float getBlockHardness(IBlockReader worldIn, BlockPos pos) {
             Block block = this.getBlock();
+            // 用 safe 版本：本方法会在 Via 初始化之前被调到（例如离线的注册表检查），
+            // 此时回退到原生 1.16.4，即不做任何跨版本修正。
             com.viaversion.viaversion.api.protocol.version.ProtocolVersion targetVersion =
-                    com.mentalfrostbyte.jello.gui.base.JelloPortal.getVersion();
+                    com.mentalfrostbyte.jello.gui.base.JelloPortal.getVersionSafe();
 
             if (block == Blocks.END_STONE_BRICKS || block == Blocks.END_STONE_BRICK_SLAB
                     || block == Blocks.END_STONE_BRICK_STAIRS || block == Blocks.END_STONE_BRICK_WALL) {

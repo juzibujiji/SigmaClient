@@ -26,6 +26,21 @@ public class BoatItem extends Item
         this.type = typeIn;
     }
 
+    public BoatEntity.Type getBoatType()
+    {
+        return this.type;
+    }
+
+    /**
+     * Spawns the vehicle this item places. Official 1.21.11 instead stores the concrete
+     * EntityType on BoatItem and calls entityType.create(...) - this project only has the
+     * single EntityType.BOAT plus EntityType.CHEST_BOAT, so the subclass picks the entity.
+     */
+    protected BoatEntity createBoat(World worldIn, double x, double y, double z)
+    {
+        return new BoatEntity(worldIn, x, y, z);
+    }
+
     public ActionResult<ItemStack> onItemRightClick(World worldIn, PlayerEntity playerIn, Hand handIn)
     {
         ItemStack itemstack = playerIn.getHeldItem(handIn);
@@ -58,7 +73,7 @@ public class BoatItem extends Item
 
             if (raytraceresult.getType() == RayTraceResult.Type.BLOCK)
             {
-                BoatEntity boatentity = new BoatEntity(worldIn, raytraceresult.getHitVec().x, raytraceresult.getHitVec().y, raytraceresult.getHitVec().z);
+                BoatEntity boatentity = this.createBoat(worldIn, raytraceresult.getHitVec().x, raytraceresult.getHitVec().y, raytraceresult.getHitVec().z);
                 boatentity.setBoatType(this.type);
                 boatentity.rotationYaw = playerIn.rotationYaw;
 

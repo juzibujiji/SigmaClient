@@ -1161,6 +1161,24 @@ public abstract class PlayerEntity extends LivingEntity {
      * called on it. Args: targetEntity
      */
     public void attackTargetEntityWithCurrentItem(Entity targetEntity) {
+        // 长矛（1.21.11）不走普通攻击：官方左键长矛发的是 ServerboundPlayerActionPacket
+        // Action.STAB，服务端收到后调 PiercingWeapon.attack 一次打穿视线上的所有实体。
+        // 1.16.4 协议没有 STAB 动作，所以在这里把普通攻击展开成穿透攻击 ——
+        // 客户端照旧只发一个攻击包，多目标结算由收到包的这一侧完成。
+        // 官方 MINIMUM_ATTACK_CHARGE = 1.0F：攻击冷却没走满时长矛完全不生效。
+        ItemStack mainHand = this.getHeldItemMainhand();
+        if (mainHand.getItem() instanceof SpearItem) {
+            // 官方服务端收 STAB 包时用 cannotAttackWithItem(stack, 5)，比客户端的 0 宽 5 tick。
+            if (SpearItem.canAttackWith(this, 5)) {
+                // targetEntity 是客户端准星选中的那个实体，作为「保证命中」传下去 ——
+                // 只信服务端自己那次射线会出现「对着打却没伤害」，原因见 SpearItem#piercingAttack。
+                ((SpearItem) mainHand.getItem()).piercingAttack(this, mainHand, targetEntity);
+                this.resetCooldown();
+                this.addExhaustion(0.1F);
+            }
+            return;
+        }
+
         if (targetEntity.canBeAttackedWithItem()) {
             if (!targetEntity.hitByEntity(this)) {
                 float f = (float) this.getAttributeValue(Attributes.ATTACK_DAMAGE);
@@ -1191,6 +1209,26 @@ public abstract class PlayerEntity extends LivingEntity {
 
                     boolean flag2 = flag && this.fallDistance > 0.0F && !this.onGround && !this.isOnLadder() && !this.isInWater() && !this.isPotionActive(Effects.BLINDNESS) && !this.isPassenger() && targetEntity instanceof LivingEntity;
                     flag2 = flag2 && !this.isSprinting();
+
+                    // 重锤砸落攻击（1.20.5+）。官方 Player#attack 的运算顺序是：
+                    //     f *= baseDamageScaleFactor();              // 攻击冷却缩放
+                    //     f += item.getAttackDamageBonus(...);       // 砸落加成，不吃冷却缩放
+                    //     if (canCriticalAttack) f *= 1.5F;          // 暴击乘在「基础 + 砸落」上
+                    //     f3 = f + f2;                               // 附魔加成最后加
+                    // 官方 Player#canCriticalAttack 并没有排除砸落攻击，所以砸落与暴击是
+                    // 叠加的（只要不是疾跑状态），不是二选一。
+                    // 多人游戏下真实伤害由服务器计算，这里影响客户端预测；单人游戏由内置
+                    // 服务端跑这段，因此直接生效。
+                    float smashBonus = 0.0F;
+                    boolean smashAttack = false;
+
+                    if (this.getHeldItemMainhand().getItem() instanceof MaceItem
+                            && targetEntity instanceof LivingEntity) {
+                        smashBonus = MaceItem.getAttackDamageBonus(this);
+                        smashAttack = smashBonus > 0.0F;
+                    }
+
+                    f += smashBonus;
 
                     if (flag2) {
                         f *= 1.5F;
@@ -1274,6 +1312,19 @@ public abstract class PlayerEntity extends LivingEntity {
                         if (flag2) {
                             this.world.playSound((PlayerEntity) null, this.getPosX(), this.getPosY(), this.getPosZ(), SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, this.getSoundCategory(), 1.0F, 1.0F);
                             this.onCriticalHit(targetEntity);
+                        }
+
+                        if (smashAttack && this.world.isRemote) {
+                            // 官方是在 Item#postHurtEnemy 里 resetFallDistance()，且只跑服务端
+                            // （本项目对应 MaceItem#hitEntity，在下面 itemstack1.hitEntity 里调）。
+                            // 客户端没有 ServerPlayer#setIgnoreFallDamageFromCurrentImpulse
+                            // 那套 impulse 状态，所以本地预测这边自己清零，避免砸完落地时
+                            // 客户端预测出一次不该有的摔伤。
+                            //
+                            // 音效与冲击波粒子同样由服务端在 MaceItem#hitEntity 里播放/广播
+                            // （对应官方 MaceItem#hurtEnemy），这里不再本地补一份，
+                            // 否则单人游戏会响两次。
+                            this.fallDistance = 0.0F;
                         }
 
                         if (!flag2 && !flag3) {
@@ -2021,6 +2072,16 @@ public abstract class PlayerEntity extends LivingEntity {
 
     public boolean isSwimming() {
         return !this.abilities.isFlying && !this.isSpectator() && super.isSwimming();
+    }
+
+    /**
+     * spyglass backport - official net/minecraft/world/entity/player/Player#isScoping():
+     *   return this.isUsingItem() && this.getUseItem().is(Items.SPYGLASS);
+     * The instanceof form is used instead of an Items.SPYGLASS constant so this does not depend on how
+     * the spyglass ends up being registered.
+     */
+    public boolean isScoping() {
+        return this.isHandActive() && this.getActiveItemStack().getItem() instanceof SpyglassItem;
     }
 
     public abstract boolean isCreative();

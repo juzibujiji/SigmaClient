@@ -52,8 +52,22 @@ public class TileEntityType<T extends TileEntity>
     public static final TileEntityType<JigsawTileEntity> JIGSAW = register("jigsaw", TileEntityType.Builder.create(JigsawTileEntity::new, Blocks.JIGSAW));
     public static final TileEntityType<CampfireTileEntity> CAMPFIRE = register("campfire", TileEntityType.Builder.create(CampfireTileEntity::new, Blocks.CAMPFIRE, Blocks.SOUL_CAMPFIRE));
     public static final TileEntityType<BeehiveTileEntity> BEEHIVE = register("beehive", TileEntityType.Builder.create(BeehiveTileEntity::new, Blocks.BEE_NEST, Blocks.BEEHIVE));
+    /**
+     * 悬挂告示牌方块实体类型（1.19 加入，官方 id {@code minecraft:hanging_sign}）。
+     *
+     * <p>官方是独立类型而非复用 {@code sign}，跨版本透传时服务器发来的就是
+     * {@code minecraft:hanging_sign}，所以必须单独注册。
+     *
+     * <p><b>合法方块列表暂时为空。</b>24 个悬挂告示牌方块在 {@code ModernBlocks} 里注册，
+     * 而 {@code ModernBlocks} 依赖本类完成静态初始化，直接引用会成环。
+     * 本项目里 {@link #isValidBlock(Block)} 没有任何调用点（已全量搜索确认），
+     * 所以空列表不影响行为，只是无法做校验。若日后要补，用
+     * {@link #registerValidBlocks(TileEntityType, Block...)} 在 ModernBlocks 初始化完成后追加。
+     */
+    public static final TileEntityType<ModernHangingSignTileEntity> HANGING_SIGN = registerWithoutBlocks("hanging_sign", ModernHangingSignTileEntity::new);
     private final Supplier <? extends T > factory;
-    private final Set<Block> validBlocks;
+    /** 非 final：{@link #registerValidBlocks} 需要在注册后追加（见 HANGING_SIGN 的注释）。 */
+    private Set<Block> validBlocks;
     private final Type<?> datafixerType;
 
     @Nullable
@@ -71,6 +85,27 @@ public class TileEntityType<T extends TileEntity>
 
         Type<?> type = Util.attemptDataFix(TypeReferences.BLOCK_ENTITY, key);
         return Registry.register(Registry.BLOCK_ENTITY_TYPE, key, builder.build(type));
+    }
+
+    /**
+     * 注册一个暂时没有合法方块列表的类型，且不打「requires at least one valid block」警告。
+     *
+     * <p>仅供承载方块定义在 {@code ModernBlocks} 里的移植类型使用 —— 那些方块的静态初始化
+     * 依赖本类，在这里引用它们会成环。
+     */
+    private static <T extends TileEntity> TileEntityType<T> registerWithoutBlocks(String key, Supplier <? extends T > factory)
+    {
+        Type<?> type = Util.attemptDataFix(TypeReferences.BLOCK_ENTITY, key);
+        return Registry.register(Registry.BLOCK_ENTITY_TYPE, key, new TileEntityType<>(factory, ImmutableSet.of(), type));
+    }
+
+    /**
+     * 在类型注册之后补充合法方块列表。给 {@link #registerWithoutBlocks} 注册的类型收尾用，
+     * 需要在承载方块（如 {@code ModernBlocks}）完成静态初始化之后调用。
+     */
+    public static void registerValidBlocks(TileEntityType<?> typeIn, Block... blocksIn)
+    {
+        typeIn.validBlocks = ImmutableSet.<Block>builder().addAll(typeIn.validBlocks).add(blocksIn).build();
     }
 
     public TileEntityType(Supplier <? extends T > factoryIn, Set<Block> validBlocksIn, Type<?> dataFixerType)

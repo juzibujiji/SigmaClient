@@ -49,6 +49,8 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.BucketItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.enchantment.LungeEnchantment;
+import net.minecraft.item.SpearItem;
 import net.minecraft.item.Items;
 import net.minecraft.item.WritableBookItem;
 import net.minecraft.nbt.CompoundNBT;
@@ -196,6 +198,27 @@ public class ServerPlayNetHandler implements IServerPlayNetHandler
     private int vehicleFloatingTickCount;
     private int movePacketCounter;
     private int lastMovePacketCounter;
+    /**
+     * 官方 {@code ServerGamePacketListenerImpl.receivedMovementThisTick}：本 tick 有没有
+     * 收到过移动包（玩家的或载具的）。
+     *
+     * <p>官方在 {@code handleClientTickEnd} 里检查它，没收到就把玩家的已知位移清零。
+     * 1.16.4 的协议没有 {@code ServerboundClientTickEndPacket}，所以改在 {@link #tick()}
+     * 开头做同样的事。
+     *
+     * <p>不清零的后果：1.16.4 客户端站着不动时只发旋转包，而旋转包走的是
+     * {@code processPlayer} 里的另一条分支，不会更新已知位移 —— 于是那个值会一直停在
+     * 上次移动的数值。长矛突刺按速度门槛判定，站着不动也会持续判定成「正在冲刺」。
+     */
+    private boolean receivedMovementThisTick;
+    /**
+     * 本 tick 是否已经处理过一次长矛的攻击包。
+     *
+     * <p>客户端命中时先发攻击包、再发挥手包（{@code PlayerController.attackEntity} 的顺序），
+     * 所以挥手包到达时看这个标志就能分辨「刚才是命中」还是「挥空」。
+     * 挥空才在 {@link #handleAnimation} 里补突进，否则命中会突进两次。
+     */
+    private boolean spearAttackedThisTick;
 
     public ServerPlayNetHandler(MinecraftServer server, NetworkManager networkManagerIn, ServerPlayerEntity playerIn)
     {
@@ -214,6 +237,15 @@ public class ServerPlayNetHandler implements IServerPlayNetHandler
 
     public void tick()
     {
+        // 官方 handleClientTickEnd 的等价物（见 receivedMovementThisTick 的说明）。
+        // 必须在 playerTick() 之前 —— 物品使用的每 tick 回调（长矛突刺的速度判定）在它里面，
+        // 放到后面等于让突刺读到一个还没校正的旧速度。
+        if (!this.receivedMovementThisTick)
+        {
+            this.player.setKnownMovement(Vector3d.ZERO);
+        }
+        this.receivedMovementThisTick = false;
+
         this.captureCurrentPosition();
         this.player.prevPosX = this.player.getPosX();
         this.player.prevPosY = this.player.getPosY();
@@ -482,6 +514,17 @@ public class ServerPlayNetHandler implements IServerPlayNetHandler
 
                 this.player.getServerWorld().getChunkProvider().updatePlayerPosition(this.player);
                 this.player.addMovementStat(this.player.getPosX() - d0, this.player.getPosY() - d1, this.player.getPosZ() - d2);
+                // 官方 ServerGamePacketListenerImpl.handleMoveVehicle 同样调
+                // handlePlayerKnownMovement，传的是<b>载具</b>应用移动前后的坐标差。
+                //
+                // 骑乘时客户端发的是 CMoveVehiclePacket，不再发 CPlayerPacket，所以少了这一处
+                // 玩家的 lastKnownClientMovement 就一直是上马那一刻的旧值。长矛掀坐骑要求
+                // 自身速度 14 格/秒，只有马匹冲刺够得到 —— 漏这里等于骑矛冲刺整个失效。
+                this.player.setKnownMovement(new Vector3d(
+                        entity.getPosX() - d0,
+                        entity.getPosY() - d1,
+                        entity.getPosZ() - d2));
+                this.receivedMovementThisTick = true;
                 this.vehicleFloating = d7 >= -0.03125D && !this.server.isFlightAllowed() && this.func_241162_a_(entity);
                 this.lowestRiddenX1 = entity.getPosX();
                 this.lowestRiddenY1 = entity.getPosY();
@@ -1085,6 +1128,18 @@ public class ServerPlayNetHandler implements IServerPlayNetHandler
                                 }
 
                                 this.player.addMovementStat(this.player.getPosX() - d0, this.player.getPosY() - d1, this.player.getPosZ() - d2);
+                                // 官方 ServerGamePacketListenerImpl.handlePlayerKnownMovement：把「应用移动包
+                                // 前后的坐标差」记为玩家本 tick 的真实位移。
+                                //
+                                // 服务端玩家的 getMotion() 不能用 —— 服务端只是把玩家传送到客户端上报的
+                                // 坐标，从不维护 motion，所以疾跑时它接近 0。官方正是为此在 1.20.5 引入
+                                // getKnownMovement()。长矛突刺的速度门槛读的就是这个值，用 motion 会让
+                                // 突刺永远打不出伤害。
+                                this.player.setKnownMovement(new Vector3d(
+                                        this.player.getPosX() - d0,
+                                        this.player.getPosY() - d1,
+                                        this.player.getPosZ() - d2));
+                                this.receivedMovementThisTick = true;
                                 this.lastGoodX = this.player.getPosX();
                                 this.lastGoodY = this.player.getPosY();
                                 this.lastGoodZ = this.player.getPosZ();
@@ -1456,6 +1511,25 @@ public class ServerPlayNetHandler implements IServerPlayNetHandler
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.player.getServerWorld());
         this.player.markPlayerActive();
         this.player.swingArm(packetIn.getHand());
+
+        // 长矛挥空时的「突进」附魔。
+        //
+        // 官方左键长矛发的是 Action.STAB，服务端收到就跑 PiercingWeapon.attack，里面的
+        // lungeForwardMaybe() 在 if (命中) 之外 —— 也就是<b>挥空也会突进</b>。
+        // 1.16.4 协议没有 STAB 动作，命中时借的是普通攻击包，可挥空时客户端<b>什么都不发</b>，
+        // 服务端根本不知道你挥了，突进就只在命中时出现。
+        //
+        // 挥手包是 1.16.4 唯一会在挥空时也发出去的信号，所以拿它当 STAB 用。
+        // 这里只跑突进、不跑攻击结算：攻击包已经覆盖了命中的情况，
+        // 在这儿再打一次会造成双倍伤害。
+        if (packetIn.getHand() == Hand.MAIN_HAND
+                && this.player.getHeldItemMainhand().getItem() instanceof SpearItem
+                && !this.spearAttackedThisTick)
+        {
+            LungeEnchantment.lungeForwardMaybe(this.player, this.player.getHeldItemMainhand());
+        }
+
+        this.spearAttackedThisTick = false;
     }
 
     /**
@@ -1551,9 +1625,27 @@ public class ServerPlayNetHandler implements IServerPlayNetHandler
 
         if (entity != null)
         {
-            double d0 = 36.0D;
+            // 1.16.4 把攻击距离写死成 6 格（36 = 6²），因为原版最远的攻击距离是 3 格，
+            // 剩下 3 格是留给「脚底坐标 vs 眼睛坐标 + 目标碰撞箱半径」的余量。
+            //
+            // 长矛的攻击距离比原版远（生存 4.5 格、创造 6.5 格，见 SpearItem.AttackRange 常量），
+            // 照 6 格卡会把创造模式的远距离突刺整包丢掉，表现为「明明打到了却没伤害」。
+            // 官方 1.21 这里已经改成数据驱动的 Player.canInteractWithEntity（读 ATTACK_RANGE
+            // 组件），这里按同样思路放宽，并沿用原版「攻击距离 + 3 格余量」的比例。
+            double maxDistSq = 36.0D;
+            SpearItem spear = this.player.getHeldItemMainhand().getItem() instanceof SpearItem
+                    ? (SpearItem) this.player.getHeldItemMainhand().getItem()
+                    : null;
 
-            if (this.player.getDistanceSq(entity) < 36.0D)
+            if (spear != null)
+            {
+                double reach = SpearItem.effectiveMaxRange(this.player) + 3.0D;
+                maxDistSq = reach * reach;
+                // 告诉紧随其后的挥手包「这一次是命中，不用补突进」，见 spearAttackedThisTick。
+                this.spearAttackedThisTick = true;
+            }
+
+            if (this.player.getDistanceSq(entity) < maxDistSq)
             {
                 Hand hand = packetIn.getHand();
                 ItemStack itemstack = hand != null ? this.player.getHeldItem(hand).copy() : ItemStack.EMPTY;

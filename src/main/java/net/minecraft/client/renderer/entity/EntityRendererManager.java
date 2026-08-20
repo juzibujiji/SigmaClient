@@ -100,6 +100,7 @@ public class EntityRendererManager {
         this.register(EntityType.BOAT, new BoatRenderer(this));
         this.register(EntityType.CAT, new CatRenderer(this));
         this.register(EntityType.CAVE_SPIDER, new CaveSpiderRenderer(this));
+        this.register(EntityType.CHEST_BOAT, new ChestBoatRenderer(this));
         this.register(EntityType.CHEST_MINECART, new MinecartRenderer<>(this));
         this.register(EntityType.CHICKEN, new ChickenRenderer(this));
         this.register(EntityType.COD, new CodRenderer(this));
@@ -191,6 +192,8 @@ public class EntityRendererManager {
         this.register(EntityType.WITHER, new WitherRenderer(this));
         this.register(EntityType.WITHER_SKELETON, new WitherSkeletonRenderer(this));
         this.register(EntityType.WITHER_SKULL, new WitherSkullRenderer(this));
+        // wind charge backport - official EntityRenderers registers WindChargeRenderer for WIND_CHARGE.
+        this.register(EntityType.WIND_CHARGE, new WindChargeRenderer(this));
         this.register(EntityType.WOLF, new WolfRenderer(this));
         this.register(EntityType.ZOGLIN, new ZoglinRenderer(this));
         this.register(EntityType.ZOMBIE_HORSE, new UndeadHorseRenderer(this));

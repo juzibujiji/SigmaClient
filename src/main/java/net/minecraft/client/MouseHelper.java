@@ -301,7 +301,12 @@ public class MouseHelper {
 
         if (this.isMouseGrabbed() && this.minecraft.isGameFocused()) {
             double d4 = this.minecraft.gameSettings.mouseSensitivity * (double) 0.6F + (double) 0.2F;
-            double d5 = d4 * d4 * d4 * 8.0D;
+            // spyglass backport - official MouseHandler#turnPlayer keeps two factors:
+            //     double d3 = d2 * d2 * d2;   // used while scoping
+            //     double d4 = d3 * 8.0;       // used normally
+            // i.e. looking through a spyglass turns the player at exactly 1/8 of the normal speed.
+            double d8 = d4 * d4 * d4;
+            double d5 = d8 * 8.0D;
             double d2;
             double d3;
 
@@ -310,6 +315,13 @@ public class MouseHelper {
                 double d7 = this.ySmoother.smooth(this.yVelocity * d5, d1 * d5);
                 d2 = d6;
                 d3 = d7;
+            } else if (this.minecraft.gameSettings.getPointOfView().func_243192_a()
+                    && this.minecraft.player != null
+                    && this.minecraft.player.isScoping()) {
+                this.xSmoother.reset();
+                this.ySmoother.reset();
+                d2 = this.xVelocity * d8;
+                d3 = this.yVelocity * d8;
             } else {
                 this.xSmoother.reset();
                 this.ySmoother.reset();

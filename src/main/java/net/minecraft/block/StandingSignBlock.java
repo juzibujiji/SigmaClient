@@ -24,6 +24,19 @@ public class StandingSignBlock extends AbstractSignBlock
         this.setDefaultState(this.stateContainer.getBaseState().with(ROTATION, Integer.valueOf(0)).with(WATERLOGGED, Boolean.valueOf(false)));
     }
 
+    /**
+     * 木种由注册名反推的构造（见 {@link WoodType#fromSignBlockName}）。
+     *
+     * <p>给 1.17+ 新木种（cherry / pale_oak / mangrove / bamboo）的告示牌用：
+     * 跨版本注册生成器只能按类附加固定构造参数，没法给每个木种传不同的值。
+     * 方块行为与状态属性和原有构造完全相同，只有木种的取得时机不同。
+     */
+    public StandingSignBlock(AbstractBlock.Properties properties)
+    {
+        super(properties);
+        this.setDefaultState(this.stateContainer.getBaseState().with(ROTATION, Integer.valueOf(0)).with(WATERLOGGED, Boolean.valueOf(false)));
+    }
+
     public boolean isValidPosition(BlockState state, IWorldReader worldIn, BlockPos pos)
     {
         return worldIn.getBlockState(pos.down()).getMaterial().isSolid();

@@ -7,6 +7,8 @@ import net.minecraft.item.BowItem;
 import net.minecraft.item.CrossbowItem;
 import net.minecraft.item.FishingRodItem;
 import net.minecraft.item.Item;
+import net.minecraft.item.MaceItem;
+import net.minecraft.item.SpearItem;
 import net.minecraft.item.SwordItem;
 import net.minecraft.item.ToolItem;
 import net.minecraft.item.TridentItem;
@@ -95,6 +97,29 @@ public enum EnchantmentType
         public boolean canEnchantItem(Item itemIn)
         {
             return itemIn instanceof IVanishable || Block.getBlockFromItem(itemIn) instanceof IVanishable || BREAKABLE.canEnchantItem(itemIn);
+        }
+    },
+    /**
+     * 官方 {@code ItemTags.MACE_ENCHANTABLE}（{@code data/tags/VanillaItemTagsProvider.java:336}）
+     * = {@code {minecraft:mace}}，只有重锤一件。
+     *
+     * <p>1.16.4 没有物品标签体系，附魔适用范围走 {@code EnchantmentType}，所以新增一个常量。
+     * 追加在枚举末尾，不影响已有常量的 ordinal。
+     */
+    MACE {
+        public boolean canEnchantItem(Item itemIn)
+        {
+            return itemIn instanceof MaceItem;
+        }
+    },
+    /**
+     * 官方 {@code ItemTags.LUNGE_ENCHANTABLE}（{@code VanillaItemTagsProvider.java:350}）
+     * = {@code ItemTags.SPEARS}，即所有长矛。
+     */
+    SPEAR {
+        public boolean canEnchantItem(Item itemIn)
+        {
+            return itemIn instanceof SpearItem;
         }
     };
 

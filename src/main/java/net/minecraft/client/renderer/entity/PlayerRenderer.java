@@ -26,6 +26,7 @@ import net.minecraft.entity.player.PlayerModelPart;
 import net.minecraft.item.CrossbowItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.item.SpearItem;
 import net.minecraft.item.UseAction;
 import net.minecraft.scoreboard.Score;
 import net.minecraft.scoreboard.ScoreObjective;
@@ -186,6 +187,15 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
         }
         else
         {
+            // 1.21.11 长矛：官方 HumanoidMobRenderer.getArmPose / AvatarRenderer 只要物品带
+            // STAB 挥击动画或在 SPEARS 标签里就用 ArmPose.SPEAR，不区分是否正在使用
+            // ——「举矛蓄势」与「静态持矛」都由 SpearAnimations.thirdPersonHandUse 内部按
+            // ticksUsingItem 区分。
+            if (itemstack.getItem() instanceof SpearItem)
+            {
+                return BipedModel.ArmPose.SPEAR;
+            }
+
             if (p_241741_0_.getActiveHand() == p_241741_1_ && p_241741_0_.getItemInUseCount() > 0)
             {
                 UseAction useaction = itemstack.getUseAction();
@@ -208,6 +218,22 @@ public class PlayerRenderer extends LivingRenderer<AbstractClientPlayerEntity, P
                 if (useaction == UseAction.CROSSBOW && p_241741_1_ == p_241741_0_.getActiveHand())
                 {
                     return BipedModel.ArmPose.CROSSBOW_CHARGE;
+                }
+
+                // ---- 1.17+ item backports, official client/renderer/entity/player/AvatarRenderer#getArmPose ----
+                if (useaction == UseAction.SPYGLASS)
+                {
+                    return BipedModel.ArmPose.SPYGLASS;
+                }
+
+                if (useaction == UseAction.TOOT_HORN)
+                {
+                    return BipedModel.ArmPose.TOOT_HORN;
+                }
+
+                if (useaction == UseAction.BRUSH)
+                {
+                    return BipedModel.ArmPose.BRUSH;
                 }
             }
             else if (!p_241741_0_.isSwingInProgress && itemstack.getItem() == Items.CROSSBOW && CrossbowItem.isCharged(itemstack))

@@ -284,6 +284,13 @@ public class FirstPersonRenderer {
     }
 
     private void renderItemInFirstPerson(AbstractClientPlayerEntity player, float partialTicks, float pitch, Hand handIn, float swingProgress, ItemStack stack, float equippedProgress, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int combinedLightIn) {
+        // spyglass backport - official ItemInHandRenderer#renderArmWithItem wraps its whole body in
+        //     if (!p_109372_.isScoping()) { ... }
+        // so both hands disappear behind the scope overlay while looking through a spyglass.
+        if (player.isScoping()) {
+            return;
+        }
+
         if (!Config.isShaders() || !Shaders.isSkipRenderHand(handIn)) {
             boolean flag = handIn == Hand.MAIN_HAND;
             HandSide handside = flag ? player.getPrimaryHand() : player.getPrimaryHand().opposite();
@@ -349,6 +356,17 @@ public class FirstPersonRenderer {
                 if (player.isHandActive() && player.getItemInUseCount() > 0 && player.getActiveHand() == handIn) {
                     int k = flag3 ? 1 : -1;
 
+                    if (stack.getItem() instanceof SpearItem) {
+                        // 长矛突刺蓄势 —— 官方 ItemInHandRenderer 的 case SPEAR
+                        // （client/renderer/ItemInHandRenderer.java:524）。官方在这里是写死的
+                        // translate(j*0.56F, -0.52F, -0.72F)，也就是不带 equippedProgress 的
+                        // applyItemArmTransform，所以这里不能复用 transformSideFirstPerson。
+                        matrixStackIn.translate((double) ((float) k * 0.56F), -0.52D, -0.72D);
+                        float spearUseTicks = (float) stack.getUseDuration() - ((float) this.mc.player.getItemInUseCount() - partialTicks + 1.0F);
+                        // 第一个参数官方是 getTicksSinceLastKineticHitFeedback，1.16.4 没有这个
+                        // 同步状态（见 SpearItem 类注释），传 0 等于关掉命中回弹。
+                        SpearAnimations.firstPersonUse(0.0F, matrixStackIn, spearUseTicks, handside, (SpearItem) stack.getItem());
+                    } else {
                     switch (stack.getUseAction()) {
                         case NONE:
                             this.transformSideFirstPerson(matrixStackIn, handside, equippedProgress);
@@ -427,6 +445,7 @@ public class FirstPersonRenderer {
                             matrixStackIn.scale(1.0F, 1.0F, 1.0F + f16 * 0.2F);
                             matrixStackIn.rotate(Vector3f.YN.rotationDegrees((float) k * 45.0F));
                     }
+                    }
                 } else if (player.isSpinAttacking()) {
                     this.transformSideFirstPerson(matrixStackIn, handside, equippedProgress);
                     int j = flag3 ? 1 : -1;
@@ -436,6 +455,14 @@ public class FirstPersonRenderer {
                 } else {
                     EventBus.call(eventHandAnimation);
                     if (!eventHandAnimation.cancelled) {
+                        if (stack.getItem() instanceof SpearItem) {
+                            // 长矛的 STAB 挥击 —— 官方 ItemInHandRenderer 里
+                            // switch (stack.getSwingAnimation().type()) 的 case STAB
+                            // （client/renderer/ItemInHandRenderer.java:542）：先套标准手臂位移，
+                            // 再叠突刺曲线，不走原版 WHACK 的 transformFirstPerson。
+                            this.transformSideFirstPerson(matrixStackIn, handside, equippedProgress);
+                            SpearAnimations.firstPersonAttack(swingProgress, matrixStackIn, flag3 ? 1 : -1, handside);
+                        } else {
                         float f6 = -0.4F * MathHelper.sin(MathHelper.sqrt(swingProgress) * (float) Math.PI);
                         float f7 = 0.2F * MathHelper.sin(MathHelper.sqrt(swingProgress) * ((float) Math.PI * 2F));
                         float f10 = -0.2F * MathHelper.sin(swingProgress * (float) Math.PI);
@@ -443,6 +470,7 @@ public class FirstPersonRenderer {
                         matrixStackIn.translate((double) ((float) l * f6), (double) f7, (double) f10);
                         this.transformSideFirstPerson(matrixStackIn, handside, equippedProgress);
                         this.transformFirstPerson(matrixStackIn, handside, swingProgress);
+                        }
                     }
                 }
                 if (eventHandAnimation.isBlocking()) {

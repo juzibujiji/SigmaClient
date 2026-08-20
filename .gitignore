@@ -79,3 +79,8 @@ realms_persistence.json
 build_status.txt
 build_verify.log
 compile_output.txt
+
+# 跨版本适配用的官方 1.21.11 数据（jar 与 --reports 产物，可随时重新生成）
+/1.21.11/
+# Claude Code 的 agent worktree（每个都是独立 git 工作树，不能当内容提交）
+/.claude/worktrees/

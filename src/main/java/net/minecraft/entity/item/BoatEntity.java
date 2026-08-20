@@ -39,6 +39,7 @@ import net.minecraft.util.SoundEvent;
 import net.minecraft.util.SoundEvents;
 import net.minecraft.util.TeleportationRepositioner;
 import net.minecraft.util.TransportationHelper;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
@@ -46,6 +47,7 @@ import net.minecraft.util.math.shapes.IBooleanFunction;
 import net.minecraft.util.math.shapes.VoxelShape;
 import net.minecraft.util.math.shapes.VoxelShapes;
 import net.minecraft.util.math.vector.Vector3d;
+import net.minecraft.util.registry.Registry;
 import net.minecraft.world.GameRules;
 import net.minecraft.world.World;
 
@@ -154,7 +156,32 @@ public class BoatEntity extends Entity
      */
     public double getMountedYOffset()
     {
-        return -0.1D;
+        return -0.1D + this.getRideHeightOffset();
+    }
+
+    /**
+     * Extra seat height on top of the -0.1 that 1.16.4 uses for every boat.
+     *
+     * Official 1.21.11 expresses the seat height as AbstractBoat#rideHeight(EntityDimensions):
+     * Boat/ChestBoat return height / 3.0F and Raft/ChestRaft return height * 0.8888889F. With
+     * the shared 1.375 x 0.5625 hitbox (EntityType.java: sized(1.375F, 0.5625F)) that is
+     * 0.1875 for a boat and 0.5 for a raft, i.e. a raft seats its rider 0.3125 blocks higher.
+     * The absolute values cannot be copied because 1.16.4 and 1.21 anchor the passenger
+     * differently, so only the boat -> raft delta is carried over.
+     */
+    protected double getRideHeightOffset()
+    {
+        return this.getBoatType() == BoatEntity.Type.BAMBOO ? 0.3125D : 0.0D;
+    }
+
+    /**
+     * Sideways seat offset used when this boat carries a single passenger.
+     * Official 1.21.11: AbstractBoat#getSinglePassengerXOffset returns 0.0F,
+     * AbstractChestBoat overrides it with 0.15F.
+     */
+    protected float getSinglePassengerXOffset()
+    {
+        return 0.0F;
     }
 
     /**
@@ -236,7 +263,6 @@ public class BoatEntity extends Entity
         switch (this.getBoatType())
         {
             case OAK:
-            default:
                 return Items.OAK_BOAT;
 
             case SPRUCE:
@@ -253,6 +279,11 @@ public class BoatEntity extends Entity
 
             case DARK_OAK:
                 return Items.DARK_OAK_BOAT;
+
+            default:
+                // Woods ported from 1.21.11 (cherry / pale_oak / mangrove / bamboo). Their
+                // items live in ModernItems, so they are resolved through the item registry.
+                return this.getBoatType().asBoatItem();
         }
     }
 
@@ -405,7 +436,7 @@ public class BoatEntity extends Entity
 
                 if (!entity.isPassenger(this))
                 {
-                    if (flag && this.getPassengers().size() < 2 && !entity.isPassenger() && entity.getWidth() < this.getWidth() && entity instanceof LivingEntity && !(entity instanceof WaterMobEntity) && !(entity instanceof PlayerEntity))
+                    if (flag && this.getPassengers().size() < this.getMaxPassengers() && !entity.isPassenger() && entity.getWidth() < this.getWidth() && entity instanceof LivingEntity && !(entity instanceof WaterMobEntity) && !(entity instanceof PlayerEntity))
                     {
                         entity.startRiding(this);
                     }
@@ -951,7 +982,7 @@ public class BoatEntity extends Entity
     {
         if (this.isPassenger(passenger))
         {
-            float f = 0.0F;
+            float f = this.getSinglePassengerXOffset();
             float f1 = (float)((this.removed ? (double)0.01F : this.getMountedYOffset()) + passenger.getYOffset());
 
             if (this.getPassengers().size() > 1)
@@ -1210,7 +1241,16 @@ public class BoatEntity extends Entity
 
     protected boolean canFitPassenger(Entity passenger)
     {
-        return this.getPassengers().size() < 2 && !this.areEyesInFluid(FluidTags.WATER);
+        return this.getPassengers().size() < this.getMaxPassengers() && !this.areEyesInFluid(FluidTags.WATER);
+    }
+
+    /**
+     * Official 1.21.11: AbstractBoat#getMaxPassengers returns 2,
+     * AbstractChestBoat overrides it with 1.
+     */
+    protected int getMaxPassengers()
+    {
+        return 2;
     }
 
     @Nullable
@@ -1254,20 +1294,65 @@ public class BoatEntity extends Entity
 
     public static enum Type
     {
-        OAK(Blocks.OAK_PLANKS, "oak"),
-        SPRUCE(Blocks.SPRUCE_PLANKS, "spruce"),
-        BIRCH(Blocks.BIRCH_PLANKS, "birch"),
-        JUNGLE(Blocks.JUNGLE_PLANKS, "jungle"),
-        ACACIA(Blocks.ACACIA_PLANKS, "acacia"),
-        DARK_OAK(Blocks.DARK_OAK_PLANKS, "dark_oak");
+        OAK(Blocks.OAK_PLANKS, "oak", "oak_boat", "oak_chest_boat"),
+        SPRUCE(Blocks.SPRUCE_PLANKS, "spruce", "spruce_boat", "spruce_chest_boat"),
+        BIRCH(Blocks.BIRCH_PLANKS, "birch", "birch_boat", "birch_chest_boat"),
+        JUNGLE(Blocks.JUNGLE_PLANKS, "jungle", "jungle_boat", "jungle_chest_boat"),
+        ACACIA(Blocks.ACACIA_PLANKS, "acacia", "acacia_boat", "acacia_chest_boat"),
+        DARK_OAK(Blocks.DARK_OAK_PLANKS, "dark_oak", "dark_oak_boat", "dark_oak_chest_boat"),
+
+        /*
+         * Ported from 1.21.11. In official 1.21 every wood type is its own EntityType
+         * (EntityType.CHERRY_BOAT, EntityType.PALE_OAK_BOAT, ...); this project still has
+         * the single EntityType.BOAT + Type enum layout that vanilla used up to 1.21.1,
+         * so the new woods are added here instead.
+         *
+         * These MUST stay at the end of the enum: Type.byId(int) is ordinal based and the
+         * ordinal is what EntityDataManager syncs (BOAT_TYPE) and what BoatRenderer uses to
+         * index its texture array. Inserting in the middle would turn boats in existing
+         * saves into a different wood.
+         *
+         * The plank/item are looked up lazily from the registries by name instead of being
+         * hard references, because the new blocks/items are registered by ModernBlocks /
+         * ModernItems, which are outside this class' ownership.
+         */
+        CHERRY("cherry_planks", "cherry", "cherry_boat", "cherry_chest_boat"),
+        PALE_OAK("pale_oak_planks", "pale_oak", "pale_oak_boat", "pale_oak_chest_boat"),
+        MANGROVE("mangrove_planks", "mangrove", "mangrove_boat", "mangrove_chest_boat"),
+
+        /*
+         * The bamboo variant is a raft, not a boat: the item ids are bamboo_raft /
+         * bamboo_chest_raft, and official 1.21.11 gives it its own model (RaftModel) and its
+         * own seat height (Raft#rideHeight). The saved/synced "Type" name is still "bamboo",
+         * matching vanilla 1.19-1.21.1's Boat.Type.BAMBOO.
+         */
+        BAMBOO("bamboo_planks", "bamboo", "bamboo_raft", "bamboo_chest_raft");
 
         private final String name;
         private final Block block;
+        private final String plankName;
+        private final String boatItemName;
+        private final String chestBoatItemName;
+        private Block resolvedPlank;
+        private Item resolvedBoatItem;
+        private Item resolvedChestBoatItem;
 
-        private Type(Block block, String name)
+        private Type(Block block, String name, String boatItemName, String chestBoatItemName)
         {
             this.name = name;
             this.block = block;
+            this.plankName = null;
+            this.boatItemName = boatItemName;
+            this.chestBoatItemName = chestBoatItemName;
+        }
+
+        private Type(String plankName, String name, String boatItemName, String chestBoatItemName)
+        {
+            this.name = name;
+            this.block = null;
+            this.plankName = plankName;
+            this.boatItemName = boatItemName;
+            this.chestBoatItemName = chestBoatItemName;
         }
 
         public String getName()
@@ -1277,7 +1362,46 @@ public class BoatEntity extends Entity
 
         public Block asPlank()
         {
-            return this.block;
+            if (this.block != null)
+            {
+                return this.block;
+            }
+
+            if (this.resolvedPlank == null)
+            {
+                Block block1 = Registry.BLOCK.getOrDefault(new ResourceLocation(this.plankName));
+                this.resolvedPlank = block1 == Blocks.AIR ? Blocks.OAK_PLANKS : block1;
+            }
+
+            return this.resolvedPlank;
+        }
+
+        /**
+         * The item this wood's plain boat (or raft, for bamboo) drops as.
+         */
+        public Item asBoatItem()
+        {
+            if (this.resolvedBoatItem == null)
+            {
+                Item item = Registry.ITEM.getOrDefault(new ResourceLocation(this.boatItemName));
+                this.resolvedBoatItem = item == Items.AIR ? Items.OAK_BOAT : item;
+            }
+
+            return this.resolvedBoatItem;
+        }
+
+        /**
+         * The item this wood's chest boat (or chest raft, for bamboo) drops as.
+         */
+        public Item asChestBoatItem()
+        {
+            if (this.resolvedChestBoatItem == null)
+            {
+                Item item = Registry.ITEM.getOrDefault(new ResourceLocation(this.chestBoatItemName));
+                this.resolvedChestBoatItem = item == Items.AIR ? this.asBoatItem() : item;
+            }
+
+            return this.resolvedChestBoatItem;
         }
 
         public String toString()

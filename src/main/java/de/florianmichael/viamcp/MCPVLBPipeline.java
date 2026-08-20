@@ -132,7 +132,26 @@ public class MCPVLBPipeline extends VLBPipeline {
     /**
      * Re-injects captured 1.18+ block changes (Y &lt; 0 / Y &gt; 255) as 1.16.4
      * packets after the Via decoder translated (and ViaBackwards cancelled) the
-     * originals. Must stay between via-decoder and the vanilla packet decoder.
+     * originals, and patches the downgraded block state out of the changes Via
+     * <i>did</i> forward. Must stay between via-decoder and the vanilla packet
+     * decoder.
+     *
+     * <p>{@code addAfter(via-decoder, ...)} is what makes the patch possible at
+     * all, and the resulting order is the whole design:
+     *
+     * <pre>
+     *   splitter -&gt; decompress -&gt; chunk-data-interceptor -&gt; via-decoder
+     *            -&gt; extended-height-block-update -&gt; decoder
+     * </pre>
+     *
+     * <p>{@code chunk-data-interceptor} therefore sees the raw server-version
+     * packet and this handler sees Via's finished translation of that same
+     * packet - and it sees it before anything downstream does, so it can hand
+     * the vanilla decoder a corrected packet instead of racing a second one
+     * against it. {@code VLBViaDecodeHandler} is a
+     * {@code MessageToMessageDecoder}, whose output is fired after
+     * {@code decode()} returns, so the pair always arrives in that order within
+     * the same read.
      */
     private void installExtendedHeightBlockUpdateHandler(ChannelHandlerContext ctx) {
         if (ctx.pipeline().get(ExtendedHeightBlockUpdateHandler.HANDLER_NAME) != null) {

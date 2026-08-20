@@ -594,7 +594,26 @@ public class ClientPlayNetHandler implements IClientPlayNetHandler {
         } else if (entitytype == EntityType.LIGHTNING_BOLT) {
             entity = new LightningBoltEntity(EntityType.LIGHTNING_BOLT, this.world);
         } else {
-            entity = null;
+            // 跨版本扩展的实体走这里。1.16.4 这条 if-else 链是硬编码的，没列到的类型原本直接
+            // 变成 null，客户端悄悄丢掉生成包 —— 服务端实体照样存在、照样生效，但玩家看不见。
+            // 风弹和运输船都踩过这个坑：风弹能把人吹飞、能炸，就是没有实体可看。
+            //
+            // 官方在 1.17 之后把整条链删了，ClientPacketListener.handleAddEntity 一律走
+            // createEntityFromPacket -> entityType.create(level)。这里照官方做法兜底，
+            // 以后再加现代实体就不用逐个补分支。
+            //
+            // 对原版是无害的：链上已经覆盖了 1.16.4 全部会用 SSpawnObjectPacket 的类型，
+            // 生物走 SSpawnMobPacket、玩家走 SSpawnPlayerPacket、经验球和画各有自己的包。
+            // 而没有工厂的类型（PLAYER / FISHING_BOBBER 用 Builder.create(classification) 建的）
+            // create() 本来就返回 null，行为与改动前一致。
+            entity = entitytype.create(this.world);
+
+            if (entity != null) {
+                // 上面那些显式分支是把速度传进构造器的（火球那几个的 func_218693_g 等），
+                // 通用路径没有构造器可传，所以在这里补上，否则实体会在两次位置同步之间
+                // 静止不动 —— 风弹的 updateInterval 是 10 tick，缺速度会明显一跳一跳。
+                entity.setVelocity(packetIn.func_218693_g(), packetIn.func_218695_h(), packetIn.func_218692_i());
+            }
         }
 
         if (entity != null) {

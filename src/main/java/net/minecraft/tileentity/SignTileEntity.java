@@ -35,6 +35,23 @@ public class SignTileEntity extends TileEntity
         super(TileEntityType.SIGN);
     }
 
+    /**
+     * 供子类指定别的 {@link TileEntityType}。
+     *
+     * <p>悬挂告示牌（1.19 加入）在官方注册表里是独立的
+     * {@code minecraft:hanging_sign} 方块实体类型，而不是 {@code minecraft:sign}，
+     * 但它的官方类 {@code HangingSignBlockEntity} 就是 {@code SignBlockEntity} 的子类。
+     * 1.16.4 的构造把类型硬编码成 {@code SIGN}，所以这里补一个受保护构造。
+     *
+     * <p>必须复用 {@code SignTileEntity} 而不是另写一个 —— 编辑界面的入口
+     * （{@code PlayerEntity.openSignEditor}、{@code ClientPlayNetHandler} 的强制转换）
+     * 签名要求的就是 {@code SignTileEntity}。
+     */
+    protected SignTileEntity(TileEntityType<?> typeIn)
+    {
+        super(typeIn);
+    }
+
     public CompoundNBT write(CompoundNBT compound)
     {
         super.write(compound);

@@ -365,6 +365,15 @@ public abstract class Container
                         itemstack = itemstack9.copy();
                     }
 
+                    // 1.21.11 parity: AbstractContainerMenu.doClick calls tryItemClickBehaviourOverride here
+                    // (world/inventory/AbstractContainerMenu.java:441) so container items such as bundles can
+                    // swallow the click. dragType 0 == ClickAction.PRIMARY, dragType 1 == ClickAction.SECONDARY.
+                    if (net.minecraft.item.BundleItem.tryItemClickBehaviourOverride(this, p_241440_4_, p_241440_2_ == 0, slot6, itemstack9, itemstack11))
+                    {
+                        slot6.onSlotChanged();
+                        return itemstack;
+                    }
+
                     if (itemstack9.isEmpty())
                     {
                         if (!itemstack11.isEmpty() && slot6.isItemValid(itemstack11))

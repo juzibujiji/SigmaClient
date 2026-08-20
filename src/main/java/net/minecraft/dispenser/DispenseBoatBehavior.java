@@ -2,6 +2,7 @@ package net.minecraft.dispenser;
 
 import net.minecraft.block.DispenserBlock;
 import net.minecraft.entity.item.BoatEntity;
+import net.minecraft.entity.item.ChestBoatEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Direction;
@@ -12,10 +13,23 @@ public class DispenseBoatBehavior extends DefaultDispenseItemBehavior
 {
     private final DefaultDispenseItemBehavior dispenseItemBehaviour = new DefaultDispenseItemBehavior();
     private final BoatEntity.Type type;
+    private final boolean chest;
 
     public DispenseBoatBehavior(BoatEntity.Type typeIn)
     {
+        this(typeIn, false);
+    }
+
+    /**
+     * Official 1.21.11 passes the concrete EntityType to BoatDispenseItemBehavior
+     * (see DispenseItemBehavior: new BoatDispenseItemBehavior(EntityType.OAK_CHEST_BOAT)).
+     * This project only has EntityType.BOAT / EntityType.CHEST_BOAT, so the chest variant is
+     * selected by this flag instead.
+     */
+    public DispenseBoatBehavior(BoatEntity.Type typeIn, boolean chestIn)
+    {
         this.type = typeIn;
+        this.chest = chestIn;
     }
 
     /**
@@ -45,7 +59,7 @@ public class DispenseBoatBehavior extends DefaultDispenseItemBehavior
             d3 = 0.0D;
         }
 
-        BoatEntity boatentity = new BoatEntity(world, d0, d1 + d3, d2);
+        BoatEntity boatentity = this.chest ? new ChestBoatEntity(world, d0, d1 + d3, d2) : new BoatEntity(world, d0, d1 + d3, d2);
         boatentity.setBoatType(this.type);
         boatentity.rotationYaw = direction.getHorizontalAngle();
         world.addEntity(boatentity);

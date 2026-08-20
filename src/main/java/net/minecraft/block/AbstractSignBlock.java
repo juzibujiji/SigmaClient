@@ -26,12 +26,29 @@ public abstract class AbstractSignBlock extends ContainerBlock implements IWater
 {
     public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
     protected static final VoxelShape SHAPE = Block.makeCuboidShape(4.0D, 0.0D, 4.0D, 12.0D, 16.0D, 12.0D);
-    private final WoodType woodType;
+    /**
+     * 非 final：允许用 {@link #AbstractSignBlock(AbstractBlock.Properties)} 构造时延迟解析
+     * （构造期方块还没进注册表，查不到名字）。
+     */
+    private WoodType woodType;
 
     protected AbstractSignBlock(AbstractBlock.Properties propertiesIn, WoodType woodTypeIn)
     {
         super(propertiesIn);
         this.woodType = woodTypeIn;
+    }
+
+    /**
+     * 木种留空、首次取用时按注册名解析的构造。
+     *
+     * <p>供跨版本移植的告示牌用：注册生成器只能按类附加固定构造参数，
+     * 没法给 32 个告示牌方块各传一个木种，所以让方块自己从注册名反推
+     * （见 {@link WoodType#fromSignBlockName}）。
+     */
+    protected AbstractSignBlock(AbstractBlock.Properties propertiesIn)
+    {
+        super(propertiesIn);
+        this.woodType = null;
     }
 
     /**
@@ -116,6 +133,11 @@ public abstract class AbstractSignBlock extends ContainerBlock implements IWater
 
     public WoodType getWoodType()
     {
+        if (this.woodType == null)
+        {
+            this.woodType = WoodType.fromSignBlockName(this);
+        }
+
         return this.woodType;
     }
 }

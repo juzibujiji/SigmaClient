@@ -60,6 +60,7 @@ import net.minecraft.resources.IResourceManager;
 import net.minecraft.state.BooleanProperty;
 import net.minecraft.state.Property;
 import net.minecraft.state.StateContainer;
+import net.minecraft.item.SpearItem;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.vector.TransformationMatrix;
@@ -213,6 +214,17 @@ public class ModelBakery
 
         p_processLoading_1_.endStartSection("special");
         this.loadTopModel(new ModelResourceLocation("minecraft:trident_in_hand#inventory"));
+
+        // 长矛的 _in_hand 模型不是任何物品的默认模型，上面按 Registry.ITEM 遍历那一轮
+        // 覆盖不到它，不在这里强制加载就永远不会被烘焙，取模型时拿到的是缺失模型。
+        // 与三叉戟同理，官方那边由 items/<id>.json 的 select 保证两个模型都进烘焙集合。
+        for (ResourceLocation spearId : Registry.ITEM.keySet())
+        {
+            if (Registry.ITEM.getOrDefault(spearId) instanceof SpearItem)
+            {
+                this.loadTopModel(new ModelResourceLocation("minecraft:" + spearId.getPath() + "_in_hand#inventory"));
+            }
+        }
 
         for (ResourceLocation resourcelocation1 : this.getSpecialModels())
         {

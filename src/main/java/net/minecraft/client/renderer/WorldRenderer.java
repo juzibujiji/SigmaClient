@@ -46,6 +46,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.CampfireBlock;
 import net.minecraft.block.ComposterBlock;
+import net.minecraft.block.ModernLightningRodBlock;
 import net.minecraft.block.SoundType;
 import net.minecraft.client.AbstractOption;
 import net.minecraft.client.Minecraft;
@@ -85,6 +86,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.item.MusicDiscItem;
+import net.minecraft.particles.BlockParticleData;
 import net.minecraft.particles.IParticleData;
 import net.minecraft.particles.ItemParticleData;
 import net.minecraft.particles.ParticleTypes;
@@ -3912,6 +3914,43 @@ public class WorldRenderer implements IResourceManagerReloadListener, AutoClosea
 
                 break;
 
+            // 重锤砸落的冲击波粒子。官方 LevelEvent.PARTICLES_SMASH_ATTACK = 2013，
+            // 由 MaceItem#knockback 以 data = 750 触发，客户端还原逻辑照抄官方
+            // ParticleUtils#spawnSmashAttackParticles：
+            //   中心 = 方块中心 + (0, 0.5, 0)
+            //   第一圈 data/3 个粒子堆在中心，位置抖动 gaussian/2，速度 gaussian*0.2
+            //   第二圈 data/1.5 个粒子沿半径 3.5 的圆铺开（角度直接用循环下标 j 当弧度，
+            //           官方就是这么写的），速度 gaussian*0.05
+            // 官方用 DUST_PILLAR 粒子（1.20.5 新增），1.16.4 没有，用最接近的
+            // ParticleTypes.BLOCK（方块碎屑，同样带 BlockState）替代。
+            case 2013: {
+                Vector3d smashCenter = Vector3d.copyCentered(blockPosIn).add(0.0D, 0.5D, 0.0D);
+                BlockParticleData smashParticle = new BlockParticleData(ParticleTypes.BLOCK,
+                        this.world.getBlockState(blockPosIn));
+
+                for (int i1 = 0; (float) i1 < (float) data / 3.0F; ++i1) {
+                    this.world.addParticle(smashParticle,
+                            smashCenter.x + random.nextGaussian() / 2.0D,
+                            smashCenter.y,
+                            smashCenter.z + random.nextGaussian() / 2.0D,
+                            random.nextGaussian() * (double) 0.2F,
+                            random.nextGaussian() * (double) 0.2F,
+                            random.nextGaussian() * (double) 0.2F);
+                }
+
+                for (int j1 = 0; (float) j1 < (float) data / 1.5F; ++j1) {
+                    this.world.addParticle(smashParticle,
+                            smashCenter.x + 3.5D * Math.cos((double) j1) + random.nextGaussian() / 2.0D,
+                            smashCenter.y,
+                            smashCenter.z + 3.5D * Math.sin((double) j1) + random.nextGaussian() / 2.0D,
+                            random.nextGaussian() * (double) 0.05F,
+                            random.nextGaussian() * (double) 0.05F,
+                            random.nextGaussian() * (double) 0.05F);
+                }
+
+                break;
+            }
+
             case 3000:
                 this.world.addParticle(ParticleTypes.EXPLOSION_EMITTER, true, (double) blockPosIn.getX() + 0.5D,
                         (double) blockPosIn.getY() + 0.5D, (double) blockPosIn.getZ() + 0.5D, 0.0D, 0.0D, 0.0D);
@@ -3922,6 +3961,26 @@ public class WorldRenderer implements IResourceManagerReloadListener, AutoClosea
             case 3001:
                 this.world.playSound(blockPosIn, SoundEvents.ENTITY_ENDER_DRAGON_GROWL, SoundCategory.HOSTILE, 64.0F,
                         0.8F + this.world.rand.nextFloat() * 0.3F, false);
+                break;
+
+            // 避雷针被雷击时的放电火花（1.17 加入的世界事件）。
+            // 官方 LevelEventHandler 的 case 3002：data 是 Direction.Axis 的 ordinal，
+            // 沿该轴放 10-19 颗 ELECTRIC_SPARK（偏移 0.125）；data 越界时退化成绕方块六面放 3-5 颗。
+            // 1.16.4 原本没有这个 case，服务端/ViaVersion 发来 3002 会被静默丢弃，
+            // 避雷针挨雷时看不到任何表现。
+            case 3002:
+                if (data >= 0 && data < Direction.Axis.values().length) {
+                    ModernLightningRodBlock.spawnParticlesAlongAxis(Direction.Axis.values()[data], this.world,
+                            blockPosIn, 0.125D, ModernLightningRodBlock.ELECTRIC_SPARK_SUBSTITUTE, 10, 19);
+                } else {
+                    // 官方这里是 ParticleUtils.spawnParticlesOnBlockFaces(..., UniformInt.of(3, 5))，
+                    // 1.16.4 没有该工具方法，用三轴各放一轮近似出「绕整块散开」的效果。
+                    for (Direction.Axis axis : Direction.Axis.values()) {
+                        ModernLightningRodBlock.spawnParticlesAlongAxis(axis, this.world, blockPosIn, 0.125D,
+                                ModernLightningRodBlock.ELECTRIC_SPARK_SUBSTITUTE, 3, 5);
+                    }
+                }
+                break;
         }
     }
 

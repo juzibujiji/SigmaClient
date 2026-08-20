@@ -353,7 +353,12 @@ public final class WorldEntitySpawner
         int i = chunkpos.getXStart() + worldIn.rand.nextInt(16);
         int j = chunkpos.getZStart() + worldIn.rand.nextInt(16);
         int k = p_222262_1_.getTopBlockY(Heightmap.Type.WORLD_SURFACE, i, j) + 1;
-        int l = worldIn.rand.nextInt(k + 1);
+        // 原版这里假设高度图不会返回小于 -1 的值，于是 nextInt(k + 1) 的上界必为正。
+        // 但跨版本连接 1.18+ 服务器时世界底部会到 y=-64，高度图可能出现负值，
+        // 一旦 k + 1 <= 0 就会抛 IllegalArgumentException: bound must be positive，
+        // 表现为进入旧存档后 "Exception ticking world" 崩服。夹住上界即可：
+        // 空列退化成在 y=0 尝试生成，后续的可生成性检查会把它过滤掉。
+        int l = worldIn.rand.nextInt(Math.max(k + 1, 1));
         return new BlockPos(i, l, j);
     }
 

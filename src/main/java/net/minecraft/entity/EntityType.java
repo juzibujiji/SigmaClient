@@ -15,6 +15,7 @@ import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.entity.effect.LightningBoltEntity;
 import net.minecraft.entity.item.ArmorStandEntity;
 import net.minecraft.entity.item.BoatEntity;
+import net.minecraft.entity.item.ChestBoatEntity;
 import net.minecraft.entity.item.EnderCrystalEntity;
 import net.minecraft.entity.item.EnderPearlEntity;
 import net.minecraft.entity.item.ExperienceBottleEntity;
@@ -116,6 +117,7 @@ import net.minecraft.entity.projectile.SmallFireballEntity;
 import net.minecraft.entity.projectile.SnowballEntity;
 import net.minecraft.entity.projectile.SpectralArrowEntity;
 import net.minecraft.entity.projectile.TridentEntity;
+import net.minecraft.entity.projectile.WindChargeEntity;
 import net.minecraft.entity.projectile.WitherSkullEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.CompoundNBT;
@@ -252,6 +254,48 @@ public class EntityType<T extends Entity>
     public static final EntityType<ZombifiedPiglinEntity> ZOMBIFIED_PIGLIN = register("zombified_piglin", EntityType.Builder.<ZombifiedPiglinEntity>create(ZombifiedPiglinEntity::new, EntityClassification.MONSTER).immuneToFire().size(0.6F, 1.95F).trackingRange(8));
     public static final EntityType<PlayerEntity> PLAYER = register("player", EntityType.Builder.<PlayerEntity>create(EntityClassification.MISC).disableSerialization().disableSummoning().size(0.6F, 1.8F).trackingRange(32).func_233608_b_(2));
     public static final EntityType<FishingBobberEntity> FISHING_BOBBER = register("fishing_bobber", EntityType.Builder.<FishingBobberEntity>create(EntityClassification.MISC).disableSerialization().disableSummoning().size(0.25F, 0.25F).trackingRange(4).func_233608_b_(5));
+
+    /*
+     * ============================ 跨版本扩展的实体类型 ============================
+     *
+     * 必须全部注册在上面所有原版 1.16.4 类型之后，只能往这里追加。
+     *
+     * register(...) 按声明顺序发连续的数字 id，而这个 id 是<b>协议可见</b>的 ——
+     * SSpawnObjectPacket 写的就是 Registry.ENTITY_TYPE.getId(type)。官方 Minecraft 按字母序
+     * 插入新类型，照抄那个顺序会让它后面每一个类型的 id 都偏移，连原版 1.16.4 服务器发来的
+     * 实体都会生成成错误类型。
+     *
+     * 这条和物品 raw ID 0-975、方块 raw ID 0-762 不能移位是同一类硬约束。
+     *
+     * 曾经踩过：wind_charge 一度被插在 PLAYER / FISHING_BOBBER 之前，
+     * 把这两个原版类型的 id 各挤后了一位。
+     */
+
+    /**
+     * 风弹（1.20.5+）。官方 {@code net/minecraft/world/entity/EntityType.java}：
+     * <pre>
+     * EntityType.Builder.&lt;WindCharge&gt;of(WindCharge::new, MobCategory.MISC)
+     *     .noLootTable().sized(0.3125F, 0.3125F).eyeHeight(0.0F).clientTrackingRange(4).updateInterval(10)
+     * </pre>
+     * 1.16.4 的 Builder 没有 {@code noLootTable()} / {@code eyeHeight()}（对一个没有掉落物、
+     * 碰撞箱是 0.3125 立方的投射物都无所谓）；size / trackingRange / updateInterval 与上面的
+     * {@code WITHER_SKULL} 完全相同 —— 那也是 0.3125F 的投射物。
+     */
+    public static final EntityType<WindChargeEntity> WIND_CHARGE = register("wind_charge", EntityType.Builder.<WindChargeEntity>create(WindChargeEntity::new, EntityClassification.MISC).size(0.3125F, 0.3125F).trackingRange(4).func_233608_b_(10));
+
+    /**
+     * 运输船（1.19+）。尺寸与 tracking range 取自官方 {@code EntityType.java}，
+     * 那里每一种运输船与运输竹筏都是
+     * {@code .noLootTable().sized(1.375F, 0.5625F).eyeHeight(0.5625F).clientTrackingRange(10)}
+     * —— 与 {@code EntityType.BOAT} 完全相同。
+     *
+     * <p>官方 1.21 把它拆成十个按木种独立的 {@code EntityType}
+     * （{@code OAK_CHEST_BOAT}、{@code CHERRY_CHEST_BOAT}…）；这里用<b>单个</b>
+     * {@code chest_boat} 携带 {@code BoatEntity.Type} 字段，那正是原版自己从 1.19 一直用到
+     * 1.21.2 拆分之前的结构，与 1.16.4 现有的 {@code BOAT} 一致。将来要对齐 1.21 的注册表
+     * 结构需要重做这里。
+     */
+    public static final EntityType<ChestBoatEntity> CHEST_BOAT = register("chest_boat", EntityType.Builder.<ChestBoatEntity>create(ChestBoatEntity::new, EntityClassification.MISC).size(1.375F, 0.5625F).trackingRange(10));
     private final EntityType.IFactory<T> factory;
     private final EntityClassification classification;
     private final ImmutableSet<Block> field_233593_bg_;

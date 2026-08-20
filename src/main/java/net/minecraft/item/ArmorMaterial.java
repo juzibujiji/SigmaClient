@@ -29,6 +29,25 @@ public enum ArmorMaterial implements IArmorMaterial
     }),
     NETHERITE("netherite", 37, new int[]{3, 6, 8, 3}, 15, SoundEvents.ITEM_ARMOR_EQUIP_NETHERITE, 3.0F, 0.1F, () -> {
         return Ingredient.fromItems(Items.NETHERITE_INGOT);
+    }),
+    /**
+     * 跨版本扩展（1.21.9+ 铜盔甲）。数值照抄官方 {@code ArmorMaterials.COPPER}：
+     * {@code new ArmorMaterial(11, makeDefense(1, 3, 4, 2, 4), 8, ARMOR_EQUIP_COPPER, 0.0F, 0.0F, ...)}。
+     *
+     * <p>官方 {@code makeDefense} 的参数顺序是 (靴子, 护腿, 胸甲, 头盔, 身体)，
+     * 1.16.4 的 {@code damageReductionAmountArray} 索引顺序由 {@code EquipmentSlotType.getIndex()}
+     * 决定，恰好也是 (靴子, 护腿, 胸甲, 头盔)，所以前四个参数可以直接搬。
+     * 第五个「身体」槽 1.16.4 没有，它在官方是马铠的护甲值，已用在
+     * {@code ModernItems.COPPER_HORSE_ARMOR} 上。
+     *
+     * <p>耐久倍率 11 配 {@code MAX_DAMAGE_ARRAY {13,15,16,11}} 得出靴 143 / 腿 165 /
+     * 胸 176 / 头 121，与官方 {@code ArmorType.getDurability(11)} 一致。
+     *
+     * <p>装备音效官方是 {@code ARMOR_EQUIP_COPPER}，1.16.4 没有这个 SoundEvent，
+     * 退回同为金属的 {@code ITEM_ARMOR_EQUIP_IRON}。
+     */
+    COPPER("copper", 11, new int[]{1, 3, 4, 2}, 8, SoundEvents.ITEM_ARMOR_EQUIP_IRON, 0.0F, 0.0F, () -> {
+        return Ingredient.fromItems(ModernItems.COPPER_INGOT);
     });
 
     private static final int[] MAX_DAMAGE_ARRAY = new int[]{13, 15, 16, 11};

@@ -1,5 +1,6 @@
 package com.mentalfrostbyte.jello.util.game.world;
 
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -9,6 +10,7 @@ import java.util.List;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.crossversion.ModernBlockStateMap;
 import net.minecraft.network.IPacket;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.network.PacketDirection;
@@ -52,6 +54,34 @@ import org.apache.logging.log4j.Logger;
  *   <li>BLOCK_DESTRUCTION: identical layout (varint entity id + packed pos long
  *       + byte stage).</li>
  * </ul>
+ *
+ * <h2>Second job: patching Via's own block changes</h2>
+ *
+ * <p>Re-injection only works because Via <b>cancelled</b> the original - there
+ * is nothing to collide with. For a block change inside Y 0..255 that is no
+ * longer true: Via delivers it, just with the state downgraded (deepslate
+ * arrives as stone). Adding a second packet there would set the position twice
+ * and leave the result to whichever the client thread applied last, so instead
+ * this handler rewrites <b>Via's</b> packet on its way past, using the raw
+ * state {@link ChunkDataInterceptor} parked under the same wire position.
+ *
+ * <p>Why that is safe to do here and nowhere else:
+ * <ul>
+ *   <li>The handler sits directly behind {@code via-decoder}
+ *       ({@code MCPVLBPipeline#installExtendedHeightBlockUpdateHandler}), so
+ *       the buffer seen here is Via's finished output and nothing downstream
+ *       has looked at it yet.</li>
+ *   <li>Dropping that buffer is not the same as cancelling inside Via: the
+ *       translation already ran and Via's trackers are already updated. All
+ *       that is discarded is the wire bytes on their way to the vanilla
+ *       decoder.</li>
+ *   <li>Exactly one packet comes out - patched or original, never both.</li>
+ * </ul>
+ *
+ * <p>The patch is applied only where {@link ModernBlockStateMap} has a real
+ * answer for the raw state. Where it does not (roughly a tenth of 1.21.11's
+ * states), Via's downgrade is the best result available and is left completely
+ * alone.
  */
 public final class ExtendedHeightBlockUpdateHandler extends ChannelInboundHandlerAdapter {
     private static final Logger LOGGER = LogManager.getLogger("ExtendedHeightBlockUpdates");
@@ -69,6 +99,18 @@ public final class ExtendedHeightBlockUpdateHandler extends ChannelInboundHandle
     private static final String DESTRUCTION_PROPERTY = "sigma.viamcp.reinject.destruction";
 
     /**
+     * Kill switch for the in-bounds state patch only. Turning it off leaves the
+     * extended-height re-injection above completely untouched, which is what
+     * makes it useful for bisecting: if blocks misbehave with
+     * {@code -Dsigma.viamcp.reinject.modernState=false} as well, the patch is
+     * not the cause.
+     */
+    private static final String MODERN_STATE_PROPERTY = "sigma.viamcp.reinject.modernState";
+
+    /** No local block state for this raw id; the caller must keep Via's value. */
+    private static final int NO_NATIVE_STATE = -1;
+
+    /**
      * 1.16.4 clientbound PLAY packet ids, resolved from the live
      * {@link ProtocolType#PLAY} registry instead of hardcoded ordinals.
      */
@@ -80,18 +122,39 @@ public final class ExtendedHeightBlockUpdateHandler extends ChannelInboundHandle
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
         ExtendedBlockUpdateReinjectSelfTest.runOnce();
+
+        /*
+         * Build the state table off the event loop while the connection is
+         * still handshaking. A lookup on a table that has not been built yet
+         * builds it inline, and the first place that would happen is the first
+         * block change - i.e. on the netty thread, mid-game. Only started for
+         * the version the table describes, so nothing is parsed on a 1.8 or
+         * 1.12 connection.
+         */
+        if (isModernStateOverrideActive()) {
+            ModernBlockStateMap.warmupAsync();
+        }
+
         super.handlerAdded(ctx);
     }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         drain(ctx);
-        super.channelRead(ctx, msg);
+        super.channelRead(ctx, applyModernStateOverride(msg));
     }
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
         drain(ctx);
+        /*
+         * A parked override is only meaningful while its translated packet is
+         * still in flight, and the Via decoder emits synchronously, so anything
+         * still parked at the end of the read burst was cancelled or reshaped
+         * by Via. Dropping it here keeps it from being applied later to an
+         * unrelated packet that happens to hit the same position.
+         */
+        ExtendedBlockUpdateStore.clearOverrides();
         super.channelReadComplete(ctx);
     }
 
@@ -139,6 +202,217 @@ public final class ExtendedHeightBlockUpdateHandler extends ChannelInboundHandle
         } finally {
             this.draining = false;
         }
+    }
+
+    /**
+     * Replaces Via's block-change packet with one carrying the state the server
+     * actually sent, when {@link ChunkDataInterceptor} parked a raw state for
+     * the same wire position and {@link ModernBlockStateMap} can name a local
+     * block for it. Returns {@code msg} untouched in every other case,
+     * including every failure - a wrong block is bad, a dropped packet is
+     * worse.
+     *
+     * <p>Called for every inbound packet, so the exits are ordered cheapest
+     * first: an empty override map costs two field reads and is the permanent
+     * state of every connection that is not to the one server version the
+     * state table was built for.
+     */
+    private static Object applyModernStateOverride(Object msg) {
+        if (!ExtendedBlockUpdateStore.hasOverrides() || !(msg instanceof ByteBuf)
+                || !isModernStateOverrideActive()) {
+            return msg;
+        }
+
+        ByteBuf buf = (ByteBuf) msg;
+        int savedReaderIndex = buf.readerIndex();
+        ByteBuf patched = null;
+
+        try {
+            int packetId = readVarInt(buf);
+
+            if (packetId == packetId(PacketSlot.CHANGE_BLOCK)) {
+                patched = patchSingle(buf);
+            } else if (packetId == packetId(PacketSlot.MULTI_BLOCK_CHANGE)) {
+                patched = patchMulti(buf);
+            }
+        } catch (Throwable t) {
+            patched = null;
+
+            if (isDebugEnabled() || ChunkDataInterceptor.isDebugEnabled()) {
+                LOGGER.warn("[ModernBlockPassthrough] Could not patch a translated block change, keeping Via's: {}",
+                        t.toString());
+            } else {
+                LOGGER.debug("[ModernBlockPassthrough] Could not patch a translated block change: {}", t.getMessage());
+            }
+        } finally {
+            buf.readerIndex(savedReaderIndex);
+        }
+
+        if (patched == null) {
+            return msg;
+        }
+
+        // Via's output is ours to dispose of; the replacement takes its place
+        // one-for-one, so the position is still only written once.
+        if (buf.refCnt() > 0) {
+            buf.release();
+        }
+
+        return patched;
+    }
+
+    /**
+     * 1.16.4 BLOCK_UPDATE is {@code [pos long][VarInt state]}. The position long
+     * is copied straight out of Via's packet instead of being rebuilt from x/y/z
+     * so the patched packet cannot possibly land somewhere else.
+     *
+     * <p>Expects {@code buf} positioned just after the packet id varint.
+     * Package-private for {@link ExtendedBlockUpdateReinjectSelfTest}.
+     *
+     * @return the replacement packet, or {@code null} to keep Via's
+     */
+    static ByteBuf patchSingle(ByteBuf buf) {
+        long packedPos = buf.readLong();
+        int viaStateId = readVarInt(buf);
+
+        if (buf.isReadable()) {
+            // Not the layout we assumed - leave it alone rather than guess.
+            return null;
+        }
+
+        int rawStateId = ExtendedBlockUpdateStore.takeSingleOverride(packedPos);
+        if (rawStateId == ExtendedBlockUpdateStore.NO_OVERRIDE) {
+            return null;
+        }
+
+        int nativeStateId = resolveModernStateId(rawStateId);
+        if (nativeStateId == NO_NATIVE_STATE || nativeStateId == viaStateId) {
+            return null;
+        }
+
+        logSingleOverride(packedPos, rawStateId, viaStateId, nativeStateId);
+        return encodeSingleRaw(packedPos, nativeStateId);
+    }
+
+    /**
+     * {@code [id][pos long][VarInt state]}, the same bytes
+     * {@link #encodeSingle(int, int, int, int)} produces, but from an already
+     * packed position - there is no {@link BlockPos} round trip that could move
+     * the block.
+     */
+    static ByteBuf encodeSingleRaw(long packedPos, int nativeStateId) {
+        ByteBuf buf = Unpooled.buffer();
+        PacketBuffer out = new PacketBuffer(buf);
+        out.writeVarInt(packetId(PacketSlot.CHANGE_BLOCK));
+        out.writeLong(packedPos);
+        out.writeVarInt(nativeStateId);
+        return buf;
+    }
+
+    /**
+     * 1.16.4 SECTION_BLOCKS_UPDATE is
+     * {@code [section long][boolean][VarInt count][count * VarLong]}. Records
+     * are matched to the raw ones by their 12-bit in-section position, so
+     * reordered or partially dropped records patch what they can and leave the
+     * rest as Via translated it. Via's own suppress-light flag and record order
+     * are preserved.
+     *
+     * <p>Expects {@code buf} positioned just after the packet id varint.
+     * Package-private for {@link ExtendedBlockUpdateReinjectSelfTest}.
+     *
+     * @return the replacement packet, or {@code null} to keep Via's
+     */
+    static ByteBuf patchMulti(ByteBuf buf) {
+        long sectionPos = buf.readLong();
+        boolean suppressLightUpdates = buf.readBoolean();
+        int count = readVarInt(buf);
+
+        if (count < 0 || count > buf.readableBytes()) {
+            return null;
+        }
+
+        long[] records = new long[count];
+        for (int i = 0; i < count; ++i) {
+            records[i] = readVarLong(buf);
+        }
+
+        if (buf.isReadable()) {
+            return null;
+        }
+
+        byte[] rawPayload = ExtendedBlockUpdateStore.takeMultiOverride(sectionPos);
+        if (rawPayload == null) {
+            return null;
+        }
+
+        long[] rawRecords = parseSectionBlocksPayload(rawPayload).records;
+        int patchedRecords = 0;
+
+        for (int i = 0; i < records.length; ++i) {
+            long packedPos = records[i] & 0xFFFL;
+            int rawStateId = findRawState(rawRecords, packedPos);
+            if (rawStateId < 0) {
+                continue;
+            }
+
+            int nativeStateId = resolveModernStateId(rawStateId);
+            if (nativeStateId == NO_NATIVE_STATE || nativeStateId == (int) (records[i] >>> 12)) {
+                continue;
+            }
+
+            records[i] = ((long) nativeStateId << 12) | packedPos;
+            ++patchedRecords;
+        }
+
+        if (patchedRecords == 0) {
+            return null;
+        }
+
+        logMultiOverride(sectionPos, count, patchedRecords);
+        return encodeMulti(sectionPos, suppressLightUpdates, records);
+    }
+
+    /** Raw state for an in-section position, or -1 when that record was not captured. */
+    private static int findRawState(long[] rawRecords, long packedPos) {
+        for (long rawRecord : rawRecords) {
+            if ((rawRecord & 0xFFFL) == packedPos) {
+                return (int) (rawRecord >>> 12);
+            }
+        }
+
+        return -1;
+    }
+
+    /**
+     * The whole gate for the patch, in one place.
+     *
+     * <p>{@link ModernBlockStateMap} is indexed by <b>1.21.11</b> state ids and
+     * {@link ChunkDataInterceptor} reads ids straight off the wire, i.e. in the
+     * server's own version. On a 1.21.9 server the id spaces differ - that is
+     * precisely why {@code Protocol1_21_11To1_21_9} ships a block-state mapping
+     * at all - and looking up a foreign id would return an unrelated block:
+     * silent, and far worse than the stone the downgrade produces. Supporting
+     * another server version means generating another table, not widening this
+     * check.
+     */
+    public static boolean isModernStateOverrideActive() {
+        return ProtocolVersion.v1_21_11.equals(WorldHeightHelper.getTargetVersionSafe())
+                && isEnabled(MODERN_STATE_PROPERTY);
+    }
+
+    /**
+     * Raw (1.21.11) state id -> local state id, or {@link #NO_NATIVE_STATE} when
+     * there is no direct match. Deliberately does <b>not</b> fall back to
+     * {@link ExtendedBlockStateMapper}: that fallback is Via's downgrade chain,
+     * which is what the untouched packet already carries.
+     */
+    private static int resolveModernStateId(int rawStateId) {
+        int nativeStateId = ModernBlockStateMap.toNativeId(rawStateId);
+        if (nativeStateId == ModernBlockStateMap.NO_MAPPING) {
+            return NO_NATIVE_STATE;
+        }
+
+        return Block.BLOCK_STATE_IDS.getByValue(nativeStateId) != null ? nativeStateId : NO_NATIVE_STATE;
     }
 
     private static ByteBuf encode(ExtendedBlockUpdateStore.CapturedUpdate update) throws Exception {
@@ -367,6 +641,38 @@ public final class ExtendedHeightBlockUpdateHandler extends ChannelInboundHandle
         List<String> names = ctx.pipeline().names();
         int index = names.indexOf(HANDLER_NAME) + offset;
         return index >= 0 && index < names.size() ? names.get(index) : "<none>";
+    }
+
+    /**
+     * The line that answers "did the passthrough fire and what did it change":
+     * {@code via=} is what the downgrade produced, {@code native=} is what the
+     * client will actually place. Enabled by
+     * {@code -Dsigma.viamcp.debugBlockUpdateReinject=true}.
+     */
+    private static void logSingleOverride(long packedPos, int rawStateId, int viaStateId, int nativeStateId) {
+        if (!isDebugEnabled()) {
+            return;
+        }
+
+        LOGGER.info(
+                "[ModernBlockPassthrough] OVERRIDE_BLOCK_UPDATE pos=({},{},{}) rawStateId={} via={} native={}",
+                WorldHeightHelper.blockPosX(packedPos), WorldHeightHelper.blockPosY(packedPos),
+                WorldHeightHelper.blockPosZ(packedPos), rawStateId, describeState(viaStateId),
+                describeState(nativeStateId));
+    }
+
+    private static void logMultiOverride(long sectionPos, int records, int patchedRecords) {
+        if (!isDebugEnabled()) {
+            return;
+        }
+
+        LOGGER.info("[ModernBlockPassthrough] OVERRIDE_SECTION_BLOCKS_UPDATE sectionPos={} sectionY={} records={} patched={}",
+                sectionPos, WorldHeightHelper.sectionPosY(sectionPos), records, patchedRecords);
+    }
+
+    private static String describeState(int stateId) {
+        BlockState state = Block.BLOCK_STATE_IDS.getByValue(stateId);
+        return stateId + (state != null ? "/" + state.getBlock() : "/<unknown>");
     }
 
     private static int readVarInt(ByteBuf buf) {

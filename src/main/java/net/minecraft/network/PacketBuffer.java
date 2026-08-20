@@ -1,5 +1,6 @@
 package net.minecraft.network;
 
+import com.mentalfrostbyte.jello.util.game.inventory.ExtendedItemMapper;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import io.netty.buffer.ByteBuf;
@@ -424,7 +425,12 @@ public class PacketBuffer extends ByteBuf implements IForgePacketBuffer
         {
             this.writeBoolean(true);
             Item item = p_writeItemStack_1_.getItem();
-            this.writeVarInt(Item.getIdFromItem(item));
+            /*
+             * 走 ExtendedItemMapper 而不是直接 getIdFromItem：被 ViaBackwards 降级过、
+             * 又被客户端换回本地现代物品的那些 stack，出站时必须写回 Via 原本给的降级 id
+             * （本地扩展 id >= 976 服务器不认识）。其余情况恒等于 Item.getIdFromItem。
+             */
+            this.writeVarInt(ExtendedItemMapper.wireId(p_writeItemStack_1_));
             this.writeByte(p_writeItemStack_1_.getCount());
             CompoundNBT compoundnbt = null;
 
@@ -470,7 +476,12 @@ public class PacketBuffer extends ByteBuf implements IForgePacketBuffer
                 itemstack.setTag(this.readCompoundTag());
             }
 
-            return itemstack;
+            /*
+             * 服务器发来的物品统一在这里过一遍：如果 ViaBackwards 把一个 1.17+ 的物品降级了，
+             * 而本地注册表里真有它，就换回本地那一个（NBT 原样保留）。连 1.16.4 及更老的
+             * 服务器时 ExtendedItemMapper.isActive() 为 false，这里是恒等操作。
+             */
+            return ExtendedItemMapper.remap(itemstack, i);
         }
     }
 
