@@ -40,7 +40,7 @@ WTF
 
 Star项目谢谢喵
 
-# Let's to new versuon
+# Let's to new version
 We might stop updating the current version of the project.
 
 NEW VERSION: https://github.com/Zis30axs/Sigma-Modern
