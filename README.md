@@ -28,6 +28,8 @@ This project itself is licensed under **GPL-3.0**, while the original MIT-licens
 
 和其他绕过
 
+人生有梦，各自精彩
+
 # haha
 
 wait for weekends
