@@ -40,6 +40,11 @@ WTF
 
 Star项目谢谢喵
 
+# Let's to new versuon
+We might stop updating the current version of the project.
+
+NEW VERSION: https://github.com/Zis30axs/Sigma-Modern
+
 # 待更新待完善待修复
 musicplayer优化
 
