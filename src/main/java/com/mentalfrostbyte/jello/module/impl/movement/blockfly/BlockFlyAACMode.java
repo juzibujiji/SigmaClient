@@ -52,6 +52,8 @@ public class BlockFlyAACMode extends Module {
     private final NumberSetting<Float> vrotationSpeed;
     private final NumberSetting<Float> hrotationSpeed;
     private final BooleanSetting useRotationSpeed;
+    private final BooleanSetting recoverrot;
+    private final BooleanSetting recoverrotsprint;
 
     public BlockFlyAACMode() {
         super(ModuleCategory.MOVEMENT, "AAC", "Places block underneath if it is in hand");
@@ -60,6 +62,8 @@ public class BlockFlyAACMode extends Module {
         this.registerSetting(this.useRotationSpeed = new BooleanSetting("Use Rotation Speed", "Max rotation change per tick.", true));
         this.registerSetting(this.hrotationSpeed = new NumberSetting<>("Rotation HSpeed", "Max rotation change per tick.", 6.0F, 6.0F, 360, 6F));
         this.registerSetting(this.vrotationSpeed = new NumberSetting<>("Rotation VSpeed", "Max rotation change per tick.", 6.0F, 6.0F, 360, 6F));
+        this.registerSetting(this.recoverrot = new BooleanSetting("RecoverRotUseSpeed","use rotspeed too",false));
+        this.registerSetting(this.recoverrotsprint = new BooleanSetting("RecoverRotSprint","",false));
     }
 
     @Override
@@ -285,11 +289,13 @@ public class BlockFlyAACMode extends Module {
                 }
             }
             if (this.getBooleanValueFromSettingName("Telly") && mc.player.isOnGround()) {
-                if (useRotationSpeed.getCurrentValue()) {
-                    //Rotation limitrot = RotationUtils.limitAngleChange(new Rotation(RotationCore.lastYaw, RotationCore.lastPitch), new Rotation(mc.player.rotationYaw, this.pitch), rotationSpeed.getCurrentValue(), rotationSpeed.getCurrentValue());
-                    //RotationManager.setRotations(limitrot.yaw, limitrot.pitch);
-                } else {
-                    //RotationManager.setRotations(mc.player.rotationYaw, this.pitch);
+                if (recoverrot.getCurrentValue()) {
+                    if (useRotationSpeed.getCurrentValue()) {
+                        Rotation limitrot = RotationUtils.limitAngleChange(new Rotation(RotationCore.lastYaw, RotationCore.lastPitch), new Rotation(mc.player.rotationYaw, this.pitch), hrotationSpeed.getCurrentValue(), vrotationSpeed.getCurrentValue());
+                        RotationManager.setRotations(limitrot.yaw, limitrot.pitch);
+                    } else {
+                        RotationManager.setRotations(mc.player.rotationYaw, this.pitch);
+                    }
                 }
             } else {
                 if (useRotationSpeed.getCurrentValue()) {
@@ -305,7 +311,17 @@ public class BlockFlyAACMode extends Module {
             }
 
             if (this.getBooleanValueFromSettingName("Telly") && mc.player.isOnGround() && MovementUtil.isMoving()) {
-                mc.gameSettings.keyBindJump.setPressed(true);
+                if (recoverrotsprint.getCurrentValue()) {
+                    if (mc.player.isSprinting()) {
+                        mc.gameSettings.keyBindJump.setPressed(true);
+                    } else {
+                        if (GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {
+                            mc.gameSettings.keyBindJump.setPressed(false);
+                        }
+                    }
+                } else {
+                    mc.gameSettings.keyBindJump.setPressed(true);
+                }
             }
 
             if (this.getBooleanValueFromSettingName("Telly") && !MovementUtil.isMoving() && GLFW.glfwGetKey(mc.getMainWindow().getHandle(), mc.gameSettings.keyBindJump.keyCode.getKeyCode()) != 1) {

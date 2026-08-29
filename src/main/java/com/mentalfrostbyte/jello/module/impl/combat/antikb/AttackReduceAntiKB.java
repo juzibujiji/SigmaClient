@@ -38,12 +38,12 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class AttackReduceAntiKB extends Module {
     private final BooleanSetting usec0b = new BooleanSetting("UseC0B","UserC0BPacket Sprint", false);
     private final NumberSetting<Integer> keepattacktick = new NumberSetting<>("KeepAttackTick", "KeepAttackReduceTick", 5, 1, 10, 1);
-    private final NumberSetting<Integer> oncecount = new NumberSetting<>("Once Count", "Attack once AttackCount", 1, 1, 5, 1);
+    private final NumberSetting<Integer> oncecount = new NumberSetting<>("Once Count", "Attack once AttackCount", 1, 0, 5, 1);
     //攻击的时候alink
     private final BooleanSetting alink = new BooleanSetting("Attacking Alink","Alink in Attack",false);
     //空中被攻击先alink后释放击退
     private final BooleanSetting alinkinair = new BooleanSetting("Alink If hurt Air","Alink If hurt in air,can use OnGround JumpReset together", false);
-
+    private final NumberSetting<Integer> airalinkdelay = new NumberSetting<>("AirAlinkDelay(MS)","Max Delay timer",1000,50,3000,50);
     private final BooleanSetting autosprint = new BooleanSetting("AutoSprint" ,"LegitSprint",false);
     private final BooleanSetting onlysprint = new BooleanSetting("Only Sprint","Only Sprint", true);
     //地面上时跳跃重置
@@ -55,13 +55,14 @@ public class AttackReduceAntiKB extends Module {
     private static final BooleanSetting disonuse = new BooleanSetting("Disable on use","Disable on use",true);
     public AttackReduceAntiKB() {
         super(ModuleCategory.COMBAT, "AttackReduce", "AttackReduce");
-        this.registerSetting(usec0b,keepattacktick,oncecount,alink,alinkinair,autosprint,onlysprint,ongroundjump,raytrace,disonuse,debug);
+        this.registerSetting(usec0b,keepattacktick,oncecount,alink,alinkinair,airalinkdelay,autosprint,onlysprint,ongroundjump,raytrace,disonuse,debug);
     }
     private final LinkedBlockingQueue<IPacket<?>> alinkpackets = new LinkedBlockingQueue<>();
     public int attackTick = 0;
     private boolean canattack = false;
     private boolean velpacket = false;
     private boolean playerinairalink = false;
+    private long airalinkStartTime = 0L;
 
     private void debugLog(String message) {
         if (debug.getCurrentValue()) {
@@ -74,13 +75,15 @@ public class AttackReduceAntiKB extends Module {
         debugLog("Disabled");
         attackTick = 0;
         canattack = false;
+        playerinairalink = false;
         releaseAlinkPacket();
     }
 
     @EventTarget
     public void onUpdate(EventMovePacketAfter event) {
         if (mc.world != null && mc.player != null && this.isEnabled()) {
-            if (playerinairalink && mc.player.onGround) {
+            if (playerinairalink && (mc.player.onGround || System.currentTimeMillis() - airalinkStartTime >= airalinkdelay.getCurrentValue())) {
+                boolean landed = mc.player.onGround;
                 playerinairalink = false;
                 releaseAlinkPacket();
                 canattack = true;
@@ -88,6 +91,7 @@ public class AttackReduceAntiKB extends Module {
                     velpacket = true;
                 }
                 attackTick = (int) keepattacktick.getCurrentValue().intValue();
+                debugLog(landed ? "Landed, released air-alink packets" : "Air-alink max delay " + airalinkdelay.getCurrentValue() + "ms reached, released packets");
             }
             if (attackTick == 0 && !alinkinair.getCurrentValue()){
                 releaseAlinkPacket();
@@ -115,6 +119,7 @@ public class AttackReduceAntiKB extends Module {
                         alinkpackets.add(event.packet);
                         event.cancelled = true;
                         playerinairalink = true;
+                        airalinkStartTime = System.currentTimeMillis();
                         return;
                     }
                 }
@@ -241,6 +246,7 @@ public class AttackReduceAntiKB extends Module {
         if (this.isEnabled()) {
             attackTick = 0;
             canattack = false;
+            playerinairalink = false;
             alinkpackets.clear();
         }
     }
