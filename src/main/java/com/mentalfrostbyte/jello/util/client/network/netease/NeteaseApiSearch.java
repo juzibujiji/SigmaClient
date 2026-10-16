@@ -715,7 +715,7 @@ public class NeteaseApiSearch {
 
      * @param songId 歌曲 ID
 
-     * @return 歌词文本（LRC 格式），失败返回 null
+     * @return 歌词文本：优先 YRC 逐词格式，无逐词数据时为普通 LRC；失败返回 null
 
      */
 
@@ -730,6 +730,11 @@ public class NeteaseApiSearch {
             data.addProperty("lv", -1);
 
             data.addProperty("tv", -1);
+
+            // yv/ytv：逐词（YRC）歌词版本。不传这两个参数时响应里根本不会有 yrc 字段
+            data.addProperty("yv", -1);
+
+            data.addProperty("ytv", -1);
 
             data.addProperty("csrf_token", "");
 

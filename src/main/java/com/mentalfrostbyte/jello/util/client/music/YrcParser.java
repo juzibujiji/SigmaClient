@@ -9,17 +9,17 @@ import java.util.regex.Pattern;
 /**
  * 网易云 YRC 逐词歌词解析器。
  *
- * <p>YRC 格式示例：
+ * <p>网易云 yrc（{@code /weapi/song/lyric} 带 {@code yv} 返回）格式示例：
  * <pre>
- * [22380,2760]晚安 [25140,420]好运 [25560,420]再来
+ * [24080,5080](24080,280,0)半(24360,210,0)夜(24570,560,0)睡
  * </pre>
- * 每行由多个 {@code [start_ms,duration_ms]word} 片段组成，
- * 每个词有独立的开始时间和持续时间，实现逐词高亮。
+ * 每行以 {@code [行start,行dur]} 开头，随后每个词的时间戳 {@code (词start,词dur,标志)}
+ * 在其文本<b>之前</b>，实现逐词高亮。
  *
- * <p>兼容两种 YRC 变体：
+ * <p>兼容两种逐词格式：
  * <ul>
- *   <li>标准文本格式：{@code [start,duration]word} 逐词标注</li>
- *   <li>JSON 数组格式：网易云部分接口返回 {@code [{"t":ms,"c":[{"tx":"word","s":ms,"d":ms}]}]}</li>
+ *   <li>网易云 yrc：{@code [行start,行dur](词start,词dur,标志)词文本} 时间戳前置</li>
+ *   <li>词前缀格式：{@code [start,duration]word} 逐词标注（旧版 YRC）</li>
  * </ul>
  *
  * <p>另外支持 QQ 音乐 QRC 逐词格式（{@link #parseQrc(String)}），
@@ -67,6 +67,10 @@ public class YrcParser {
     private static final Pattern WORD_PATTERN =
             Pattern.compile("\\[(\\d+),(\\d+)]([^\\[]*)");
 
+    // 网易云 yrc 的逐词时间戳：(词start,词dur,标志)，位于词文本之前
+    private static final Pattern NETEASE_WORD_TS =
+            Pattern.compile("\\((\\d+),(\\d+)(?:,\\d+)?\\)");
+
     /**
      * 解析 YRC 文本格式歌词。
      *
@@ -84,27 +88,27 @@ public class YrcParser {
         for (String rawLine : rawLines) {
             if (rawLine == null || rawLine.trim().isEmpty()) continue;
 
-            List<YrcWord> words = new ArrayList<>();
-            StringBuilder contentBuilder = new StringBuilder();
-            long lineStart = -1;
-
-            Matcher matcher = WORD_PATTERN.matcher(rawLine);
-            while (matcher.find()) {
-                long start = Long.parseLong(matcher.group(1));
-                long duration = Long.parseLong(matcher.group(2));
-                String word = matcher.group(3);
-
-                if (word == null || word.isEmpty()) continue;
-
-                if (lineStart < 0) lineStart = start;
-                words.add(new YrcWord(start, duration, word));
-                contentBuilder.append(word);
-            }
+            // 网易云 yrc 的时间戳前置于词文本；若整行没有这类时间戳，回退到词前缀格式
+            List<YrcWord> words = NETEASE_WORD_TS.matcher(rawLine).find()
+                    ? parseTimestampFirstWords(rawLine)
+                    : parseWordPrefixWords(rawLine);
 
             if (!words.isEmpty()) {
+                // 首词若带前导空白（如 " 作曲 : ..."），去掉后词拼接才与 trim 后的整行一致，
+                // 保证 {行内容}.equals(拼接结果) 的逐字高亮不发生整体偏移
+                YrcWord first = words.get(0);
+                String trimmedLeading = first.text.replaceFirst("^\\s+", "");
+                if (!trimmedLeading.isEmpty()) {
+                    first.text = trimmedLeading;
+                }
+
+                StringBuilder contentBuilder = new StringBuilder();
+                for (YrcWord word : words) {
+                    contentBuilder.append(word.text);
+                }
                 String content = contentBuilder.toString().trim();
                 if (!content.isEmpty()) {
-                    lines.add(new YrcLine(lineStart, content, words));
+                    lines.add(new YrcLine(words.get(0).start, content, words));
                 }
             }
         }
@@ -114,13 +118,69 @@ public class YrcParser {
     }
 
     /**
+     * 解析网易云 yrc 的逐词行：{@code [行start,行dur](词start,词dur,标志)词文本...}。
+     * 时间戳在词文本之前，词文本延伸到下一个时间戳（或行尾）。
+     */
+    private static List<YrcWord> parseTimestampFirstWords(String rawLine) {
+        // 去掉行首 [行start,行dur]
+        String body = rawLine;
+        Matcher header = QRC_LINE_HEADER_PATTERN.matcher(body);
+        if (header.find()) {
+            body = body.substring(header.end());
+        }
+
+        List<YrcWord> words = new ArrayList<>();
+        Matcher matcher = NETEASE_WORD_TS.matcher(body);
+        long pendingStart = -1L;
+        long pendingDuration = 0L;
+        int textStart = 0;
+
+        while (matcher.find()) {
+            if (pendingStart >= 0L) {
+                String word = body.substring(textStart, matcher.start());
+                if (!word.isEmpty()) {
+                    words.add(new YrcWord(pendingStart, pendingDuration, word));
+                }
+            }
+            pendingStart = Long.parseLong(matcher.group(1));
+            pendingDuration = Long.parseLong(matcher.group(2));
+            textStart = matcher.end();
+        }
+
+        if (pendingStart >= 0L) {
+            String word = body.substring(textStart);
+            if (!word.isEmpty()) {
+                words.add(new YrcWord(pendingStart, pendingDuration, word));
+            }
+        }
+        return words;
+    }
+
+    /** 解析词前缀格式的逐词行：{@code [start,duration]word}。 */
+    private static List<YrcWord> parseWordPrefixWords(String rawLine) {
+        List<YrcWord> words = new ArrayList<>();
+        Matcher matcher = WORD_PATTERN.matcher(rawLine);
+        while (matcher.find()) {
+            long start = Long.parseLong(matcher.group(1));
+            long duration = Long.parseLong(matcher.group(2));
+            String word = matcher.group(3);
+
+            if (word == null || word.isEmpty()) continue;
+
+            words.add(new YrcWord(start, duration, word));
+        }
+        return words;
+    }
+
+    /**
      * 判断文本是否为 YRC 格式（而非普通 LRC）。
      * YRC 行包含 {@code [数字,数字]word} 模式，LRC 只有 {@code [mm:ss.ms]}。
      */
     public static boolean isYrc(String text) {
         if (text == null || text.isEmpty()) return false;
-        // YRC 的特征：[数字,数字] 后面紧跟非空白字符
-        return WORD_PATTERN.matcher(text).find();
+        // YRC 的特征：[数字,数字] 后面紧跟非空白字符，或网易云的 (词start,词dur,标志) 时间戳
+        return WORD_PATTERN.matcher(text).find()
+                || NETEASE_WORD_TS.matcher(text).find();
     }
 
     // ==================== QQ 音乐 QRC 解析 ====================

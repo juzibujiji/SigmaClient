@@ -21,6 +21,10 @@ public class QQMusicMatcher {
     // 综合得分低于此阈值视为未匹配
     private static final double MIN_ACCEPT_SCORE = 0.55;
 
+    // 双方时长均已知且相差超过此值时，直接剔除该候选：
+    // 时长差这么大基本是不同的版本（Live/remix/翻唱/剪辑），逐词歌词贴错反而更糟
+    private static final long MAX_DURATION_DIFF_MS = 15000L;
+
     /** 匹配结果：命中的候选 + 其综合得分。 */
     public static class MatchResult {
         public final QQMusicApi.QQTrack track;
@@ -51,6 +55,9 @@ public class QQMusicMatcher {
         double bestScore = -1.0;
 
         for (QQMusicApi.QQTrack c : candidates) {
+            if (isDurationMismatch(c, targetDurMs)) {
+                continue;
+            }
             double score = score(c, targetName, targetArtist, targetDurMs);
             if (score > bestScore) {
                 bestScore = score;
@@ -62,6 +69,12 @@ public class QQMusicMatcher {
             return null;
         }
         return new MatchResult(best, bestScore);
+    }
+
+    /** 双方时长均已知且相差过大：视为不同版本，候选直接出局。 */
+    private static boolean isDurationMismatch(QQMusicApi.QQTrack c, long targetDurMs) {
+        return targetDurMs > 0 && c.durationMs > 0
+                && Math.abs(targetDurMs - c.durationMs) >= MAX_DURATION_DIFF_MS;
     }
 
     private static double score(QQMusicApi.QQTrack c,
@@ -100,14 +113,18 @@ public class QQMusicMatcher {
     }
 
     /**
-     * 归一化：转小写、去除括号备注（(Live)/（伴奏）等）、去除空白与常见标点，
-     * 以便"歌名 (Live版)" 与 "歌名" 能高相似度匹配。
+     * 归一化：转小写、去除括号备注（(Live)/（伴奏）等）、去除 feat 合作标注
+     * （"feat. xx"/"ft. xx"/"featuring xx" 及之后内容）、去除空白与常见标点，
+     * 以便"歌名 (Live版)"、"歌名feat. 某某" 与 "歌名" 都能高相似度匹配。
      */
     private static String normalize(String s) {
         if (s == null) return "";
         String t = s.toLowerCase(Locale.ROOT);
         // 去掉圆/方括号及其内容（中英文括号）
         t = t.replaceAll("[\\(（\\[【].*?[\\)）\\]】]", "");
+        // 去掉 feat 合作标注及之后的内容。要求 feat/ft/featuring 前有分隔符或行首，
+        // 避免误伤 "soft" 这类词内部的 ft
+        t = t.replaceAll("(?i)(?:^|[\\s\\-_/])(?:feat|ft|featuring)\\.?\\s*.*$", "");
         // 去掉空白与常见分隔标点
         t = t.replaceAll("[\\s\\-_·,，.。!！?？'\"]", "");
         return t.trim();

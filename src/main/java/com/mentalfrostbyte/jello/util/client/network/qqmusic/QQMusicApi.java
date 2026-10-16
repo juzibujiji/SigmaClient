@@ -34,8 +34,14 @@ import java.util.List;
  */
 public class QQMusicApi {
 
+    // 搜索走老版移动端 CP 接口：结构简单、无需登录。
+    // 注意 web 端 client_search_cp 已下线（直接 500），桌面 musicu.fcg 搜索已要求登录
+    // （响应 feedbackURL 指向登录页、结果恒为空），不要再用这两个。
     private static final String SEARCH_URL =
-            "https://c.y.qq.com/soso/fcgi-bin/client_search_cp";
+            "https://c.y.qq.com/soso/fcgi-bin/search_for_qq_cp";
+    // 备用搜索：搜索联想接口，主搜索结果为空时兜底（不返回时长/专辑）
+    private static final String SMARTBOX_URL =
+            "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg";
     // 逐词 QRC 接口（老版 PC 客户端接口）：返回 XML，内含 hex 编码的 3DES+zlib 加密逐词歌词。
     // 注意此接口只认数字 musicid，不认 songmid。
     private static final String LYRIC_URL =
@@ -100,6 +106,58 @@ public class QQMusicApi {
                     + "&w=" + urlEncode(keyword.trim());
 
             String response = getRequest(url);
+            if (response != null && !response.isEmpty()) {
+                tracks = parseSearchResponse(response);
+            }
+        } catch (Exception e) {
+            System.err.println("[QQMusicApi] search failed: " + e.getMessage());
+        }
+
+        // 主搜索无结果时用搜索联想接口兜底，避免单个接口变动导致逐词歌词整体失效
+        if (tracks.isEmpty()) {
+            tracks = searchSuggest(keyword.trim(), limit);
+        }
+        return tracks;
+    }
+
+    /** 解析 CP 搜索接口响应（data.song.list[]，与旧版 client_search_cp 结构一致）。 */
+    private static List<QQTrack> parseSearchResponse(String response) {
+        List<QQTrack> tracks = new ArrayList<>();
+        JsonObject json = JsonParser.parseString(response).getAsJsonObject();
+        if (!json.has("data")) {
+            return tracks;
+        }
+        JsonObject data = json.getAsJsonObject("data");
+        if (data == null || !data.has("song")) {
+            return tracks;
+        }
+        JsonObject song = data.getAsJsonObject("song");
+        if (song == null || !song.has("list")) {
+            return tracks;
+        }
+
+        JsonArray list = song.getAsJsonArray("list");
+        for (JsonElement elem : list) {
+            QQTrack track = parseSongObject(elem.getAsJsonObject());
+            if (track != null) {
+                tracks.add(track);
+            }
+        }
+        return tracks;
+    }
+
+    /**
+     * 兜底搜索：搜索联想接口（data.song.itemlist[]）。
+     * 该接口只返回歌名/歌手/ID，不返回时长与专辑——时长缺失由
+     * {@link QQMusicMatcher} 的中性打分容忍，因此仍可用于逐词歌词匹配。
+     */
+    private static List<QQTrack> searchSuggest(String keyword, int limit) {
+        List<QQTrack> tracks = new ArrayList<>();
+        try {
+            String url = SMARTBOX_URL
+                    + "?format=json&key=" + urlEncode(keyword);
+
+            String response = getRequest(url);
             if (response == null || response.isEmpty()) {
                 return tracks;
             }
@@ -113,19 +171,26 @@ public class QQMusicApi {
                 return tracks;
             }
             JsonObject song = data.getAsJsonObject("song");
-            if (song == null || !song.has("list")) {
+            if (song == null || !song.has("itemlist")) {
                 return tracks;
             }
 
-            JsonArray list = song.getAsJsonArray("list");
-            for (JsonElement elem : list) {
-                QQTrack track = parseSongObject(elem.getAsJsonObject());
-                if (track != null) {
-                    tracks.add(track);
+            for (JsonElement elem : song.getAsJsonArray("itemlist")) {
+                JsonObject item = elem.getAsJsonObject();
+                long songId = item.has("id") ? item.get("id").getAsLong() : 0L;
+                if (songId <= 0L) {
+                    continue;
+                }
+                String mid = item.has("mid") ? item.get("mid").getAsString() : "";
+                String name = item.has("name") ? item.get("name").getAsString() : "";
+                String singer = item.has("singer") ? item.get("singer").getAsString() : "";
+                tracks.add(new QQTrack(songId, mid, name, singer, "", 0L));
+                if (tracks.size() >= Math.max(1, limit)) {
+                    break;
                 }
             }
         } catch (Exception e) {
-            System.err.println("[QQMusicApi] search failed: " + e.getMessage());
+            System.err.println("[QQMusicApi] suggest search failed: " + e.getMessage());
         }
         return tracks;
     }
