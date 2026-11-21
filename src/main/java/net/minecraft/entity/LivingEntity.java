@@ -8,6 +8,7 @@ import com.google.common.collect.Maps;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.player.LivingDeathEvent;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventJump;
+import com.mentalfrostbyte.jello.event.impl.player.movement.EventMoveMath;
 import com.mentalfrostbyte.jello.module.impl.player.AutoSprint;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
@@ -2174,6 +2175,10 @@ public abstract class LivingEntity extends Entity {
 
     public void travel(Vector3d travelVector) {
         this.travelSwimHopCandidate = false;
+
+        EventMoveMath event = new EventMoveMath();
+        EventBus.call(event);
+        if(event.cancelled) return;
 
         if (this.isServerWorld() || this.canPassengerSteer()) {
             final boolean use1_21Movement = ModernMovementPhysics.shouldUseVanilla1_21MovementPhysics();

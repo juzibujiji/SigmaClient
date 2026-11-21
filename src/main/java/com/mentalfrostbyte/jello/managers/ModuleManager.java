@@ -209,6 +209,7 @@ public class ModuleManager {
         this.register(new Phase());
         this.register(new VClip());
         this.register(new Strafe());
+        this.register(new Stuck());
         this.register(new EntitySpeed());
 
         this.sortBySuffixAndRegisterEvents();

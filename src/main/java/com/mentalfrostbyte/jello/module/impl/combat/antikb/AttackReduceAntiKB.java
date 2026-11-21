@@ -31,6 +31,8 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.math.EntityRayTraceResult;
 import net.minecraft.util.math.RayTraceResult;
 import team.sdhq.eventBus.annotations.EventTarget;
+import team.sdhq.eventBus.annotations.priority.LowerPriority;
+import team.sdhq.eventBus.annotations.priority.LowestPriority;
 
 import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -176,8 +178,9 @@ public class AttackReduceAntiKB extends Module {
     }
 
     @EventTarget
-    public void onPlaceEvent(EventRunTicks event) {
-        if ((canattack || attackTick > 0) && mc.world != null && mc.player != null && this.isEnabled() && event.isPre()) {
+    @LowestPriority
+    public void onUpdateEvent(EventUpdate event) {
+        if ((canattack || attackTick > 0) && mc.world != null && mc.player != null && this.isEnabled()) {
             debugLog("Update: canattack=" + canattack + ", attackTick=" + attackTick);
             Entity entity = null;
             if (mc.objectMouseOver != null && mc.objectMouseOver.getType() == RayTraceResult.Type.ENTITY) {
