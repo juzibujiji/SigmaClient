@@ -2,6 +2,7 @@ package com.mentalfrostbyte.jello.util.game.world.blocks;
 
 import com.google.common.collect.ImmutableList;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
+import com.mentalfrostbyte.jello.util.game.player.MovementPredictor;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 import com.mentalfrostbyte.jello.util.game.player.combat.RotationUtil;
 import com.mentalfrostbyte.jello.util.game.world.pathing.BlockCache;
@@ -469,6 +470,16 @@ public class BlockUtil {
     }
 
     public static float[] rotationsToBlock(BlockPos bp, Direction dir) {
+        return rotationsToBlock(bp, dir, false);
+    }
+
+    /**
+     * predict 为 false 时就是原来的 rotationsToBlock：从当前眼睛位置瞄面上一点。
+     * predict 为 true 时从这一 tick 移动后的眼睛位置瞄（Strict Predict）：这一 tick 的 C03 是移动完才发的。
+     * 转头会经 movefix 改变这一 tick 的移动，移动又改变眼睛位置，所以反复「按这个 yaw 预测移动后的眼睛 → 重新瞄」，
+     * 直到 yaw 不再变化；最后确认按这个转头移动之后能打中 dir 这个面。
+     */
+    public static float[] rotationsToBlock(BlockPos bp, Direction dir, boolean predict) {
         float offsetX = 0.0F;
         float offsetZ = 0.0F;
         float offsetY = (float) (0.4F + Math.random() * 0.1F);
@@ -499,19 +510,73 @@ public class BlockUtil {
             offsetY = (float) (0.6F - Math.sin((double) (System.currentTimeMillis() - 500L) / 1600.0) * 0.2);
         }
 
-        double diffX = (double) bp.getX() + 0.5 - Minecraft.getInstance().player.getPosX() + (double) offsetX;
-        double diffY = (double) bp.getY()
-                - 0.02
-                - (Minecraft.getInstance().player.getPosY() + (double) Minecraft.getInstance().player.getEyeHeight())
-                + (double) offsetY;
-        double diffZ = (double) bp.getZ() + 0.5 - Minecraft.getInstance().player.getPosZ() + (double) offsetZ;
+        Vector3d point = new Vector3d((double) bp.getX() + 0.5 + (double) offsetX,
+                (double) bp.getY() - 0.02 + (double) offsetY,
+                (double) bp.getZ() + 0.5 + (double) offsetZ);
+        return rotationsToPoint(point, bp, dir, predict);
+    }
+
+    /** 和 rotationsToBlock(bp, dir, predict) 一样，只是瞄的是给定的点 point（bp 的 dir 面上的一点） */
+    public static float[] rotationsToPoint(Vector3d point, BlockPos bp, Direction dir, boolean predict) {
+        float[] rotation = rotationFrom(Minecraft.getInstance().player.getEyePosition(1.0F), point);
+        if (predict) {
+            float[] verified = null;
+            for (int i = 0; i < 5; i++) {
+                Vector3d eyes = MovementPredictor.predictEyes(rotation[0]);
+                if (hitsFace(eyes, rotation, bp, dir)) {
+                    verified = rotation;
+                }
+
+                float[] next = rotationFrom(eyes, point);
+                boolean converged = Math.abs(MathHelper.wrapDegrees(next[0] - rotation[0])) < 0.1F
+                        && Math.abs(next[1] - rotation[1]) < 0.1F;
+                rotation = next;
+                if (converged) {
+                    break;
+                }
+            }
+
+            // yaw 卡在两个 movefix 八向的分界上来回跳、最后那个打不中时，用迭代里确认过能打中的那个
+            if (verified != null && !hitsFace(MovementPredictor.predictEyes(rotation[0]), rotation, bp, dir)) {
+                rotation = verified;
+            }
+        }
+
+        return unwrap(rotation);
+    }
+
+    /** 从 eyes 瞄 point 的转头 */
+    public static float[] rotationTo(Vector3d eyes, Vector3d point) {
+        return unwrap(rotationFrom(eyes, point));
+    }
+
+    /** 展开到离玩家当前视角最近的那一圈 */
+    private static float[] unwrap(float[] rotation) {
+        return new float[]{
+                Minecraft.getInstance().player.rotationYaw + MathHelper.wrapDegrees(rotation[0] - Minecraft.getInstance().player.rotationYaw),
+                Minecraft.getInstance().player.rotationPitch + MathHelper.wrapDegrees(rotation[1] - Minecraft.getInstance().player.rotationPitch)
+        };
+    }
+
+    /** 从 eyes 瞄 point，返回没展开的 {yaw, pitch} */
+    private static float[] rotationFrom(Vector3d eyes, Vector3d point) {
+        double diffX = point.x - eyes.x;
+        double diffY = point.y - eyes.y;
+        double diffZ = point.z - eyes.z;
         double horizontalDist = MathHelper.sqrt(diffX * diffX + diffZ * diffZ);
         float yaw = (float) (Math.atan2(diffZ, diffX) * 180.0 / Math.PI) - 90.0F;
         float pitch = (float) (-(Math.atan2(diffY, horizontalDist) * 180.0 / Math.PI));
-        return new float[]{
-                Minecraft.getInstance().player.rotationYaw + MathHelper.wrapDegrees(yaw - Minecraft.getInstance().player.rotationYaw),
-                Minecraft.getInstance().player.rotationPitch + MathHelper.wrapDegrees(pitch - Minecraft.getInstance().player.rotationPitch)
-        };
+        return new float[]{yaw, pitch};
+    }
+
+    /** 从 eyes 按 rotation 打方块射线，是否打中 bp 的 dir 面 */
+    public static boolean hitsFace(Vector3d eyes, float[] rotation, BlockPos bp, Direction dir) {
+        Vector3d look = mc.player.getLookCustom(1.0F, rotation[0], rotation[1]);
+        double reach = mc.playerController.getBlockReachDistance();
+        BlockRayTraceResult hit = mc.world.rayTraceBlocks(new RayTraceContext(eyes,
+                eyes.add(look.x * reach, look.y * reach, look.z * reach),
+                RayTraceContext.BlockMode.OUTLINE, RayTraceContext.FluidMode.NONE, mc.player));
+        return hit.getType() == RayTraceResult.Type.BLOCK && hit.getPos().equals(bp) && hit.getFace() == dir;
     }
 
     /**

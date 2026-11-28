@@ -88,6 +88,8 @@ public final class ExtendedItemMapper {
 
     private static volatile Chain chain;
     private static volatile ProtocolVersion chainVersion;
+    /** 不按当前版本裁剪的完整降级链，给 {@link #serverItem} 用。 */
+    private static volatile Chain fullChain;
 
     /** 本地 raw item id -> Via 原本给的降级 id。{@link #UNKNOWN} 表示没见过。 */
     private static volatile int[] wireIdCache = new int[0];
@@ -138,7 +140,7 @@ public final class ExtendedItemMapper {
              */
             ExtendedEnchantmentRestorer.restore(tag);
 
-            Resolved resolved = resolve(tag);
+            Resolved resolved = resolve(tag, getChain());
             if (resolved == null || resolved.item == stack.getItem()) {
                 return stack;
             }
@@ -207,6 +209,30 @@ public final class ExtendedItemMapper {
         return tag != null && hasViaIdTag(tag) ? wireId : nativeId;
     }
 
+    /**
+     * 服务器那边这一格实际是什么物品，不管当前连的是哪个版本。
+     *
+     * <p>连 1.17+ 时 {@link #remap} 已经换好了，就是 stack 自己的物品。连 1.8 / 1.12 时
+     * {@link #remap} 不生效，手里是降级后的物品；但服务器端的 ViaBackwards 降级时照样写了
+     * {@code "VB|...|id"}（重锤：{@code VB|Protocol1_20_5To1_20_3|id} = 1093，到 1.8 是一把叫
+     * "1.21 Mace" 的钻石斧），这里用完整的降级链还原一次。链只到 1.17→1.16.4，所以只认
+     * 1.17 以后新增的物品；还原不出来返回 stack 自己的物品。
+     */
+    public static Item serverItem(ItemStack stack) {
+        Item item = stack.getItem();
+        CompoundNBT tag = stack.getTag();
+        if (tag == null || tag.isEmpty() || ModernRegistry.isExtended(item)) {
+            return item;
+        }
+
+        try {
+            Resolved resolved = resolve(tag, getFullChain());
+            return resolved == null ? item : resolved.item;
+        } catch (Throwable t) {
+            return item;
+        }
+    }
+
     public static boolean isDebugEnabled() {
         return Boolean.getBoolean(DEBUG_PROPERTY);
     }
@@ -215,8 +241,7 @@ public final class ExtendedItemMapper {
     // 还原
     // ------------------------------------------------------------------
 
-    private static Resolved resolve(CompoundNBT tag) {
-        Chain current = getChain();
+    private static Resolved resolve(CompoundNBT tag, Chain current) {
         if (current.isEmpty()) {
             return null;
         }
@@ -231,7 +256,7 @@ public final class ExtendedItemMapper {
             }
 
             Step step = current.byTagKey.get(key);
-            // 链上越新的步骤越接近服务器真正发出的那个物品：mace 在 1.21→1.20.5 就被换成
+            // 链上越新的步骤越接近服务器真正发出的那个物品：mace 在 1.20.5→1.20.3 就被换成
             // netherite_axe，之后的步骤只是在搬运 netherite_axe。取 index 最小的那个。
             if (step != null && (best == null || step.index < best.index)) {
                 best = step;
@@ -426,6 +451,21 @@ public final class ExtendedItemMapper {
             LOGGER.info("[ExtendedItem] Loaded {} item-mapping steps for {}", current.byTagKey.size(),
                     target.getName());
             return current;
+        }
+    }
+
+    /** 和版本无关，建一次就够。 */
+    private static Chain getFullChain() {
+        Chain current = fullChain;
+        if (current != null) {
+            return current;
+        }
+
+        synchronized (ExtendedItemMapper.class) {
+            if (fullChain == null) {
+                fullChain = buildChain(ProtocolVersion.v1_21_11);
+            }
+            return fullChain;
         }
     }
 

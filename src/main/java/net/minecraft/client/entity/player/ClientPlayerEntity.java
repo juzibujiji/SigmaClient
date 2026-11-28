@@ -11,6 +11,7 @@ import com.mentalfrostbyte.jello.event.impl.player.movement.EventMovePacketAfter
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventSlowDown;
 import com.mentalfrostbyte.jello.event.impl.player.movement.EventMotion;
 import com.mentalfrostbyte.jello.gui.base.JelloPortal;
+import com.mentalfrostbyte.jello.util.game.player.rotation.RotationCore;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.Minecraft;
@@ -113,6 +114,9 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     private boolean prevOnGround;
     private boolean prevHorizontalCollision;
 
+    /** 放置角度反算值和 C03 角度的差在这个范围内（度）就视为同一个角度 */
+    private static final float PLACEMENT_ROTATION_EPSILON = 0.05F;
+
     /**
      * 1.8.x RotationPlace consistency state. The 1.8.9 block-placement packet
      * (C08 via CPlayerTryUseItemOnBlockPacket) carries no yaw/pitch, so Grim
@@ -128,6 +132,8 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
     private boolean hasPendingPlacementRotation;
     private float pendingPlacementYaw;
     private float pendingPlacementPitch;
+    /** 这次放置用的是上一个 C03 的位置和角度（Strict Predict）：C08 之前那个 C03 已经对上了 */
+    private boolean pendingPlacementFromReported;
     private boolean isCrouching;
     private boolean clientSneakState;
 
@@ -347,6 +353,15 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
         this.pendingPlacementPitch = MathHelper.wrapDegrees(
                 (float) (-Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)))));
         this.hasPendingPlacementRotation = true;
+
+        double rx = hitPoint.x - this.lastReportedPosX;
+        double ry = hitPoint.y - (this.lastReportedPosY + (double) this.getEyeHeight());
+        double rz = hitPoint.z - this.lastReportedPosZ;
+        float reportedYaw = (float) (Math.toDegrees(Math.atan2(rz, rx)) - 90.0D);
+        float reportedPitch = (float) (-Math.toDegrees(Math.atan2(ry, Math.sqrt(rx * rx + rz * rz))));
+        this.pendingPlacementFromReported =
+                Math.abs(MathHelper.wrapDegrees(reportedYaw - this.lastReportedYaw)) <= PLACEMENT_ROTATION_EPSILON
+                        && Math.abs(reportedPitch - this.lastReportedPitch) <= PLACEMENT_ROTATION_EPSILON;
     }
 
     /** Debug-only view of the last recorded 1.8.x placement rotation. */
@@ -454,8 +469,23 @@ public class ClientPlayerEntity extends AbstractClientPlayerEntity {
             // diverged the EventMotion rotation from the ray that produced the
             // placement, so this tick's C03 is forced back to the placement's
             // true rotation (eye -> hit point).
-            yaw = this.pendingPlacementYaw;
-            pitch = this.pendingPlacementPitch;
+            if (this.pendingPlacementFromReported) {
+                // 放置用的是上一个 C03 的位置和角度（Strict Predict）：只把 pitch 保持在上一个 C03，
+                // yaw 不动，这一 tick 的移动是按这个 yaw 做的 movefix。Grim 1.8 会试「lastYaw + 当前 pitch」。
+                pitch = this.lastReportedPitch;
+                RotationCore.lastPitch = pitch;
+            } else {
+                // 差值在查表/浮点误差以内时，放置射线本来就是用这个角度打的，保留原角度，不换成反算出的近似值。
+                // 需要覆盖时把 yaw 展开到当前 yaw 的连续区间：反算值是 wrapDegrees 过的，
+                // 直接用会在 |yaw| > 180 时让 yaw 跳 ±360°，下一 tick 再跳回来。
+                float yawDelta = MathHelper.wrapDegrees(this.pendingPlacementYaw - yaw);
+                if (Math.abs(yawDelta) > PLACEMENT_ROTATION_EPSILON
+                        || Math.abs(this.pendingPlacementPitch - pitch) > PLACEMENT_ROTATION_EPSILON) {
+                    yaw += yawDelta;
+                    pitch = this.pendingPlacementPitch;
+                }
+            }
+
             this.hasPendingPlacementRotation = false;
         }
 

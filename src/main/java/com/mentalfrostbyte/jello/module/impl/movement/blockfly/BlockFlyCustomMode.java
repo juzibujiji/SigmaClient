@@ -14,6 +14,7 @@ import com.mentalfrostbyte.jello.module.impl.movement.BlockFly;
 import com.mentalfrostbyte.jello.module.settings.impl.BooleanSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.ModeSetting;
 import com.mentalfrostbyte.jello.module.settings.impl.NumberSetting;
+import com.mentalfrostbyte.jello.util.game.player.MovementPredictor;
 import com.mentalfrostbyte.jello.util.game.player.MovementUtil;
 import com.mentalfrostbyte.jello.util.game.player.constructor.Rotation;
 import com.mentalfrostbyte.jello.util.game.player.rotation.util.RotationUtils;
@@ -130,6 +131,9 @@ public class BlockFlyCustomMode extends Module {
     private final BooleanSetting snap;
     private final BooleanSetting hideSnap;
     private final BooleanSetting renderItemSpoof;
+    private final BooleanSetting strictPredict;
+    /** Strict Predict 瞄准射线的起点（这一 tick 移动后的眼睛位置），null 时用当前眼睛位置 */
+    private Vector3d aimEyes;
     private BlockPos pos;
     private int oldSlot = -1;
     private int lastSneakTicks;
@@ -163,6 +167,13 @@ public class BlockFlyCustomMode extends Module {
             }
         });
         this.registerSetting(this.renderItemSpoof = new BooleanSetting("Render Item Spoof", "Render the pre-scaffold hotbar item while blocks are selected.", true));
+        this.registerSetting(this.strictPredict = new BooleanSetting("Strict Predict",
+                "Place with the last sent C03, aim from the predicted post-move position.", false) {
+            @Override
+            public boolean isHidden() {
+                return BlockFlyCustomMode.this.grim1_17rot.getCurrentValue();
+            }
+        });
     }
 
     @Override
@@ -273,17 +284,43 @@ public class BlockFlyCustomMode extends Module {
             return;
         }
 
+        this.placedJump = false;
+        this.selectHotbarBlock();
 
-        this.onPreMotion();
-        this.placeBlock();
+        // Strict Predict：先放，放置射线用上一个 C03 的位置和角度；转头按这一 tick 移动后的眼睛位置瞄。
+        // Grim1.17Rot 自己发转头包，开着时走原逻辑
+        boolean strict = this.strictPredict.getCurrentValue() && !grim1_17rot.getCurrentValue();
+        if (strict && !this.placeReported() && MovementPredictor.mustPlaceNow()) {
+            // 这一 tick 不放、移动后就会落进空格子：按原逻辑当场放
+            strict = false;
+        }
+
+        this.onPreMotion(strict);
+        if (!strict) {
+            this.placeBlock();
+        }
+
         if (grim1_17rot.getCurrentValue()) {
             mc.getConnection().getNetworkManager().sendPacket(new CPlayerPacket.PositionRotationPacket(mc.player.getPosX(), mc.player.getPosY(), mc.player.getPosZ(), mc.player.rotationYaw, mc.player.rotationPitch, mc.player.onGround));
         }
     }
 
-    private void onPreMotion() {
-        this.placedJump = false;
-        this.selectHotbarBlock();
+    private void onPreMotion(boolean predict) {
+        boolean holdingJump = this.isActuallyKeyDown(mc.gameSettings.keyBindJump);
+        this.handleSneakPulse();
+
+        if (this.isTellyBridgeMode() || this.isKeepYMode()) {
+            mc.gameSettings.keyBindJump.setPressed(this.hasMovementInput() || holdingJump);
+        } else {
+            if (this.eagle.getCurrentValue()) {
+                mc.gameSettings.keyBindSneak.setPressed(mc.player.isOnGround() && this.isOnBlockEdge(0.3F));
+            }
+
+            mc.gameSettings.keyBindJump.setPressed(holdingJump);
+        }
+
+        // 按键定好之后再瞄：预测移动要用这一 tick 的跳跃/潜行键
+        this.aimEyes = predict ? MovementPredictor.predictEyes(mc.player.rotationYaw - 180.0F) : null;
         this.pos = this.getBlockPos();
 
         if (this.pos != null) {
@@ -301,31 +338,13 @@ public class BlockFlyCustomMode extends Module {
             this.rots.pitch = this.correctRotation.pitch;
         }
 
-        boolean holdingJump = this.isActuallyKeyDown(mc.gameSettings.keyBindJump);
-        this.handleSneakPulse();
-
-        if (this.isTellyBridgeMode()) {
-            mc.gameSettings.keyBindJump.setPressed(this.hasMovementInput() || holdingJump);
-            if (mc.player.isOnGround() && this.hasMovementInput()) {
-                this.rots.yaw = RotationUtils.updateRotation(this.rots.yaw, mc.player.rotationYaw, 180.0F);
-                this.publishRotations();
-                this.lastRots = new Rotation(this.rots.yaw, this.rots.pitch);
-                return;
-            }
-        } else if (this.isKeepYMode()) {
-            mc.gameSettings.keyBindJump.setPressed(this.hasMovementInput() || holdingJump);
-        } else {
-            if (this.eagle.getCurrentValue()) {
-                mc.gameSettings.keyBindSneak.setPressed(mc.player.isOnGround() && this.isOnBlockEdge(0.3F));
-            }
-
-            if (this.snap.getCurrentValue() && !holdingJump) {
-                this.doSnap();
-            }
-
-            mc.gameSettings.keyBindJump.setPressed(holdingJump);
+        if (this.isTellyBridgeMode() && mc.player.isOnGround() && this.hasMovementInput()) {
+            this.rots.yaw = RotationUtils.updateRotation(this.rots.yaw, mc.player.rotationYaw, 180.0F);
+        } else if (this.isNormalMode() && this.snap.getCurrentValue() && !holdingJump) {
+            this.doSnap();
         }
 
+        this.aimEyes = null;
         this.publishRotations();
         this.lastRots = new Rotation(this.rots.yaw, this.rots.pitch);
     }
@@ -389,6 +408,27 @@ public class BlockFlyCustomMode extends Module {
             return;
         }
 
+        this.placeHit(position);
+    }
+
+    /** Strict Predict 的放置：射线用上一个 C03 的位置和角度（服务端已知的状态），返回是否放成 */
+    private boolean placeReported() {
+        if (this.pos == null || !isValidStack(mc.player.getHeldItemMainhand())) {
+            return false;
+        }
+
+        BlockRayTraceResult position = BlockUtil.rayTrace(mc.player.lastReportedYaw, mc.player.lastReportedPitch, 0.0F);
+        if (position.getType() != RayTraceResult.Type.BLOCK) {
+            return false;
+        }
+
+        // placeHit 拿 lastRots 判断"上一个角度是否也对着这个方块"；这次放置用的就是上一个 C03 的角度
+        this.lastRots = new Rotation(mc.player.lastReportedYaw, mc.player.lastReportedPitch);
+        this.placeHit(position);
+        return this.placedJump;
+    }
+
+    private void placeHit(BlockRayTraceResult position) {
         boolean holdingJump = this.isActuallyKeyDown(mc.gameSettings.keyBindJump);
         if (!position.getPos().equals(this.pos)
                 || (position.getFace() == Direction.UP
@@ -649,7 +689,7 @@ public class BlockFlyCustomMode extends Module {
     }
 
     private BlockRayTraceResult rayCast(float partialTicks, Rotation rotations) {
-        Vector3d eyes = mc.player.getEyePosition(partialTicks);
+        Vector3d eyes = this.aimEyes != null ? this.aimEyes : mc.player.getEyePosition(partialTicks);
         float yaw = (float) Math.toRadians(rotations.yaw);
         float pitch = (float) Math.toRadians(rotations.pitch);
         float x = -MathHelper.sin(yaw) * MathHelper.cos(pitch);

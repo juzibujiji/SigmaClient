@@ -3,6 +3,7 @@ package com.mentalfrostbyte.jello.module.impl.combat;
 import com.mentalfrostbyte.Client;
 import com.mentalfrostbyte.jello.event.impl.game.render.EventRender3D;
 import com.mentalfrostbyte.jello.event.impl.player.EventUpdate;
+import com.mentalfrostbyte.jello.util.game.inventory.ExtendedItemMapper;
 import com.mentalfrostbyte.jello.util.game.player.combat.CombatUtil;
 import com.mentalfrostbyte.jello.util.game.world.pathing.PathFinder;
 import com.mentalfrostbyte.jello.util.system.math.vector.Vector3d;
@@ -19,6 +20,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.item.ArmorStandEntity;
 import net.minecraft.entity.item.BoatEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.MaceItem;
 import net.minecraft.item.SwordItem;
 import net.minecraft.network.play.client.CInputPacket;
 import net.minecraft.network.play.client.CMoveVehiclePacket;
@@ -147,11 +149,14 @@ public class InfiniteAura extends Module {
     public void moveToThingy(List<Vector3d> steps, boolean criticalsEnabled) {
         Entity var5 = mc.player.getRidingEntity();
         Vector3d lastPos = null;
+        // 拿着重锤时发 onGround=false，保留下落距离给重锤砸击；其它物品照旧发 true。
+        // 连 1.8 时手里是降级后的钻石斧，serverItem 按 NBT 里 Via 的标签认出它原来是重锤
+        boolean onGround = !(ExtendedItemMapper.serverItem(mc.player.getHeldItemMainhand()) instanceof MaceItem);
 
         for (Vector3d pos : steps) {
             lastPos = pos;
             if (var5 == null) {
-                mc.getConnection().sendPacket(new CPlayerPacket.PositionPacket(pos.getX(), pos.getY(), pos.getZ(), true));
+                mc.getConnection().sendPacket(new CPlayerPacket.PositionPacket(pos.getX(), pos.getY(), pos.getZ(), onGround));
             } else {
                 var5.setPosition(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
                 mc.getConnection().sendPacket(new CSteerBoatPacket(false, false));
